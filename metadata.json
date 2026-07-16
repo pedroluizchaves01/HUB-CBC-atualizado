@@ -1,0 +1,6 @@
+{
+  "name": "Centro de Custo - Chaves Brites Correa",
+  "description": "Ecossistema de gerenciamento de custos para obras e projetos da Chaves Brites Correa | Arquitetura e Engenharia.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

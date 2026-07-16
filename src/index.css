@@ -1,0 +1,636 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600;700&family=Poppins:wght@300;400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+:root {
+  --bg: #07090E;
+  --ink: #F8FAFC;
+  --accent: #FF5A35;
+  --accent-purple: #7C3AED;
+  --ink-dim: rgba(248, 250, 252, 0.65);
+  --ink-faint: rgba(248, 250, 252, 0.03);
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--ink);
+  font-family: "Plus Jakarta Sans", "Poppins", sans-serif;
+  overflow-x: hidden;
+}
+
+/* Elegant scrollbar styling matching Convox dark SaaS design */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #090D16;
+}
+::-webkit-scrollbar-thumb {
+  background: #1F293D;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+.grid-bg {
+  position: fixed;
+  inset: 0;
+  background-image: 
+      linear-gradient(to right, rgba(255, 90, 53, 0.015) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(124, 58, 237, 0.015) 1px, transparent 1px);
+  background-size: 50px 50px;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* Subtle background glow effect behind elements, highly characteristic of Convox */
+.bg-glow-orange {
+  position: absolute;
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(255, 90, 53, 0.08) 0%, rgba(255, 90, 53, 0) 70%);
+  filter: blur(40px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.bg-glow-purple {
+  position: absolute;
+  width: 450px;
+  height: 450px;
+  background: radial-gradient(circle, rgba(124, 58, 237, 0.06) 0%, rgba(124, 58, 237, 0) 70%);
+  filter: blur(50px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Premium translucent card styling (Glassmorphism) */
+.glass-card {
+  background: rgba(17, 22, 37, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.glass-card-hover:hover {
+  border-color: rgba(255, 90, 53, 0.25);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3), 0 0 15px rgba(255, 90, 53, 0.05);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", "Poppins", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Poppins", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-oswald: "Plus Jakarta Sans", sans-serif;
+  --color-brand-accent: #FF5A35;
+  --color-brand-bg: #07090E;
+  --color-brand-ink: #F8FAFC;
+}
+
+@media print {
+  /* Set A4 landscape and appropriate page margins */
+  @page {
+    size: A4 landscape;
+    margin: 1.2cm;
+  }
+
+  /* Reset default backgrounds and text color */
+  body {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /* Force background colors and borders to print properly */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* Ensure page breaks do not interrupt rows */
+  tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  /* Hide regular UI blocks */
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* Display printable root */
+  .print\:block {
+    display: block !important;
+  }
+
+  /* Force absolute positioning on the printable container to override any parent overflow clipping */
+  #printable-schedule-root {
+    display: block !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    z-index: 9999999 !important;
+    background-color: #ffffff !important;
+  }
+}
+
+/* --- CONVOX PREMIUM SAAS STYLING MAPS (LIGHT-TO-DARK GLOSS OVERRIDES) --- */
+@media screen {
+  /* Cards, containers, modals, headers */
+  .bg-white,
+  div[class*="bg-white"],
+  div[class*="bg-stone-50"],
+  section[class*="bg-white"],
+  div[class*="bg-[#FAF9F6]"],
+  div[class*="bg-[#F8F7F4]"] {
+    background-color: rgba(13, 17, 28, 0.7) !important;
+    background-image: none !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border-color: rgba(255, 255, 255, 0.06) !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4) !important;
+    color: #F8FAFC !important;
+    border-radius: 1rem !important; /* Make card borders more rounded */
+  }
+
+  /* Specific header elements inside cards */
+  div[class*="bg-stone-100"],
+  div[class*="bg-stone-200/50"],
+  div[class*="border-b-stone-200"] {
+    border-color: rgba(255, 255, 255, 0.05) !important;
+    background-color: rgba(255, 255, 255, 0.02) !important;
+  }
+
+  /* Input fields, search fields, textareas, selectors */
+  input[type="text"],
+  input[type="number"],
+  input[type="date"],
+  input[type="email"],
+  input[type="password"],
+  select,
+  textarea {
+    background-color: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    color: #FFFFFF !important;
+    border-radius: 0.75rem !important;
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.75rem !important;
+    font-family: "Plus Jakarta Sans", sans-serif !important;
+  }
+  input:focus, select:focus, textarea:focus {
+    border-color: #FF5A35 !important;
+    background-color: rgba(255, 255, 255, 0.06) !important;
+    outline: none !important;
+    box-shadow: 0 0 10px rgba(255, 90, 53, 0.15) !important;
+  }
+
+  /* Scrollable list items, rows, hover items */
+  tr, li, [class*="hover:bg-stone-"], [class*="hover:bg-slate-"] {
+    transition: all 0.2s ease !important;
+  }
+  tr:hover, li:hover, .hover\:bg-stone-50:hover, .hover\:bg-stone-100:hover {
+    background-color: rgba(255, 255, 255, 0.04) !important;
+  }
+
+  /* Headings & general text color adaptations */
+  h1, h2, h3, h4, h5, h6,
+  span[class*="text-stone-900"],
+  span[class*="text-stone-800"],
+  div[class*="text-stone-900"],
+  p[class*="text-stone-900"],
+  p[class*="text-stone-800"],
+  span[class*="text-slate-900"] {
+    color: #FFFFFF !important;
+  }
+
+  /* Subheadings & body text adaptations */
+  p, span, td, th,
+  span[class*="text-stone-500"],
+  p[class*="text-stone-500"],
+  div[class*="text-stone-500"],
+  span[class*="text-stone-600"] {
+    color: #94A3B8 !important;
+  }
+
+  /* Force strong colors for highlighting */
+  strong, b {
+    color: #FFFFFF !important;
+  }
+
+  /* Badge colors */
+  span[class*="bg-stone-100"] {
+    background-color: rgba(255, 255, 255, 0.06) !important;
+    color: #E2E8F0 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 9999px !important;
+  }
+
+  /* Specific accents and border adaptations */
+  .border,
+  div[class*="border-stone-"],
+  div[class*="border-slate-"],
+  section[class*="border-"],
+  table[class*="border-"] {
+    border-color: rgba(255, 255, 255, 0.05) !important;
+  }
+
+  /* Highlight borders or active state markers */
+  div[class*="border-l-4"] {
+    border-left-color: #FF5A35 !important;
+  }
+
+  /* Overriding default black/ink buttons to Convox coral orange gradients */
+  button[class*="bg-black"],
+  button[class*="bg-[#1C1C1C]"],
+  button[class*="bg-[#1E1E1E]"],
+  button[class*="bg-stone-900"] {
+    background: linear-gradient(135deg, #FF5A35 0%, #E04824 100%) !important;
+    color: #FFFFFF !important;
+    border: none !important;
+    border-radius: 0.75rem !important;
+    font-weight: 600 !important;
+    box-shadow: 0 4px 15px rgba(255, 90, 53, 0.2) !important;
+    transition: all 0.3s ease !important;
+  }
+  button[class*="bg-black"]:hover,
+  button[class*="bg-[#1C1C1C]"]:hover,
+  button[class*="bg-[#1E1E1E]"]:hover {
+    background: linear-gradient(135deg, #ff6e4d 0%, #FF5A35 100%) !important;
+    box-shadow: 0 6px 20px rgba(255, 90, 53, 0.35) !important;
+    transform: translateY(-1px) !important;
+  }
+
+  /* Gray/Neutral outline buttons to Glass outlines */
+  button[class*="border-stone-"],
+  button[class*="border-black/"],
+  button[class*="border-[#1C1C1C]"],
+  button[class*="border-stone-300"] {
+    background-color: rgba(255, 255, 255, 0.02) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    color: #E2E8F0 !important;
+    border-radius: 0.75rem !important;
+    transition: all 0.3s ease !important;
+  }
+  button[class*="border-stone-"]:hover,
+  button[class*="border-stone-300"]:hover {
+    background-color: rgba(255, 255, 255, 0.06) !important;
+    border-color: rgba(255, 90, 53, 0.3) !important;
+    color: #FFFFFF !important;
+  }
+
+  /* Specific page banners or alerts */
+  .bg-blue-50,
+  div[class*="bg-blue-50"],
+  div[class*="bg-blue-500/10"] {
+    background-color: rgba(59, 130, 246, 0.08) !important;
+    border: 1px solid rgba(59, 130, 246, 0.15) !important;
+    color: #93C5FD !important;
+    border-radius: 1rem !important;
+  }
+
+  .bg-amber-50,
+  div[class*="bg-amber-50"],
+  div[class*="bg-amber-500/10"] {
+    background-color: rgba(245, 158, 11, 0.08) !important;
+    border: 1px solid rgba(245, 158, 11, 0.15) !important;
+    color: #FCD34D !important;
+    border-radius: 1rem !important;
+  }
+
+  .bg-red-50,
+  div[class*="bg-red-50"] {
+    background-color: rgba(239, 68, 68, 0.08) !important;
+    border: 1px solid rgba(239, 68, 68, 0.15) !important;
+    color: #FCA5A5 !important;
+    border-radius: 1rem !important;
+  }
+
+  /* Table specific adjustments */
+  th {
+    background-color: rgba(255, 255, 255, 0.02) !important;
+    color: #F8FAFC !important;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.06) !important;
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+    font-size: 0.7rem !important;
+    letter-spacing: 0.05em !important;
+  }
+  td {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03) !important;
+    color: #E2E8F0 !important;
+  }
+}
+
+/* ============================================================== */
+/* --- THEME LIGHT (LOGGED-IN PREMIUM OFF-WHITE / SAAS STYLE) --- */
+/* ============================================================== */
+.theme-light {
+  background-color: #F4F6FA !important;
+  color: #0F172A !important;
+}
+
+/* Background grid refinement for light mode */
+.theme-light .grid-bg {
+  background-image: 
+      linear-gradient(to right, rgba(15, 23, 42, 0.025) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(15, 23, 42, 0.025) 1px, transparent 1px) !important;
+  background-size: 50px 50px !important;
+  opacity: 1 !important;
+}
+
+/* Soft atmospheric glowing spots (Convox SaaS theme style) */
+.theme-light .bg-glow-orange {
+  background: radial-gradient(circle, rgba(255, 90, 53, 0.08) 0%, rgba(255, 90, 53, 0) 70%) !important;
+  opacity: 0.8 !important;
+}
+
+.theme-light .bg-glow-purple {
+  background: radial-gradient(circle, rgba(124, 58, 237, 0.06) 0%, rgba(124, 58, 237, 0) 70%) !important;
+  opacity: 0.8 !important;
+}
+
+/* Milky translucent glass cards in light mode */
+.theme-light .glass-card,
+.theme-light .bg-white,
+.theme-light div[class*="bg-white"],
+.theme-light div[class*="bg-stone-50"],
+.theme-light section[class*="bg-white"],
+.theme-light div[class*="bg-[#FAF9F6]"],
+.theme-light div[class*="bg-[#F8F7F4]"] {
+  background-color: rgba(255, 255, 255, 0.75) !important;
+  background-image: none !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(15, 23, 42, 0.06) !important;
+  box-shadow: 0 10px 40px -10px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.02) !important;
+  color: #1E293B !important;
+  border-radius: 1.25rem !important;
+}
+
+/* Hovering card effects */
+.theme-light .glass-card-hover:hover {
+  border-color: rgba(255, 90, 53, 0.3) !important;
+  box-shadow: 0 12px 40px rgba(255, 90, 53, 0.06), 0 1px 3px rgba(15, 23, 42, 0.03) !important;
+}
+
+/* Specific sidebar elements */
+.theme-light aside {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border-right: 1px solid rgba(15, 23, 42, 0.06) !important;
+  color: #1E293B !important;
+}
+
+.theme-light aside h1 {
+  color: #0F172A !important;
+}
+
+.theme-light aside p {
+  color: #64748B !important;
+}
+
+.theme-light aside .bg-white\/\[0\.02\] {
+  background-color: rgba(15, 23, 42, 0.02) !important;
+  border-color: rgba(15, 23, 42, 0.05) !important;
+}
+
+.theme-light aside .border-t-white\/5,
+.theme-light aside .border-t {
+  border-top-color: rgba(15, 23, 42, 0.06) !important;
+}
+
+/* Navigation button styling inside sidebar */
+.theme-light aside button {
+  color: #475569 !important;
+  border-radius: 0.75rem !important;
+}
+
+.theme-light aside button:hover {
+  background-color: rgba(15, 23, 42, 0.025) !important;
+  color: #0F172A !important;
+}
+
+.theme-light aside button[class*="bg-gradient-to-r"] {
+  background: linear-gradient(to right, rgba(255, 90, 53, 0.08), rgba(124, 58, 237, 0.02)) !important;
+  color: #FF5A35 !important;
+  border-left: 2px solid #FF5A35 !important;
+}
+
+.theme-light aside button[class*="bg-gradient-to-r"] span {
+  color: #FF5A35 !important;
+  font-weight: 700 !important;
+}
+
+.theme-light aside button[class*="bg-gradient-to-r"] svg {
+  color: #FF5A35 !important;
+}
+
+/* Headers inside layouts */
+.theme-light header {
+  background-color: rgba(255, 255, 255, 0.5) !important;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.05) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+}
+
+.theme-light header h2, .theme-light header h1 {
+  color: #0F172A !important;
+}
+
+.theme-light header span[class*="bg-white"] {
+  background-color: rgba(15, 23, 42, 0.03) !important;
+  border-color: rgba(15, 23, 42, 0.06) !important;
+  color: #475569 !important;
+}
+
+/* Typographic overrides for Light Mode */
+.theme-light h1, .theme-light h2, .theme-light h3, .theme-light h4, .theme-light h5, .theme-light h6,
+.theme-light span[class*="text-stone-900"],
+.theme-light span[class*="text-stone-800"],
+.theme-light div[class*="text-stone-900"],
+.theme-light p[class*="text-stone-900"],
+.theme-light p[class*="text-stone-800"],
+.theme-light span[class*="text-slate-900"],
+.theme-light span[class*="text-slate-800"],
+.theme-light .text-white {
+  color: #0F172A !important;
+}
+
+.theme-light p, .theme-light span, .theme-light td, .theme-light th,
+.theme-light span[class*="text-stone-500"],
+.theme-light p[class*="text-stone-500"],
+.theme-light div[class*="text-stone-500"],
+.theme-light span[class*="text-stone-600"],
+.theme-light span[class*="text-slate-400"],
+.theme-light p[class*="text-slate-400"] {
+  color: #64748B !important;
+}
+
+.theme-light strong, .theme-light b {
+  color: #0F172A !important;
+}
+
+/* Light / Soft gradients on action buttons with blur effects ("gradiente claro nos botoes com efeito desfoque gradiente") */
+.theme-light button[class*="bg-black"],
+.theme-light button[class*="bg-[#1C1C1C]"],
+.theme-light button[class*="bg-[#1E1E1E]"],
+.theme-light button[class*="bg-stone-900"],
+.theme-light button[class*="bg-stone-800"] {
+  background: linear-gradient(135deg, rgba(255, 90, 53, 0.09) 0%, rgba(255, 90, 53, 0.03) 100%) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  border: 1px solid rgba(255, 90, 53, 0.18) !important;
+  color: #FF5A35 !important;
+  box-shadow: 0 4px 20px -4px rgba(255, 90, 53, 0.08) !important;
+  text-shadow: none !important;
+  font-weight: 600 !important;
+  border-radius: 0.75rem !important;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.theme-light button[class*="bg-black"]:hover,
+.theme-light button[class*="bg-[#1C1C1C]"]:hover,
+.theme-light button[class*="bg-[#1E1E1E]"]:hover,
+.theme-light button[class*="bg-stone-900"]:hover {
+  background: linear-gradient(135deg, rgba(255, 90, 53, 0.15) 0%, rgba(255, 90, 53, 0.06) 100%) !important;
+  border-color: rgba(255, 90, 53, 0.3) !important;
+  box-shadow: 0 6px 24px -2px rgba(255, 90, 53, 0.18), 0 0 0 3px rgba(255, 90, 53, 0.04) !important;
+  transform: translateY(-1px) !important;
+  color: #E04824 !important;
+}
+
+/* Light Glass outline buttons */
+.theme-light button[class*="border-stone-"],
+.theme-light button[class*="border-white/10"],
+.theme-light button[class*="border-black/"],
+.theme-light button[class*="border-[#1C1C1C]"],
+.theme-light button[class*="border-stone-300"] {
+  background-color: rgba(255, 255, 255, 0.5) !important;
+  border: 1px solid rgba(15, 23, 42, 0.08) !important;
+  color: #475569 !important;
+  border-radius: 0.75rem !important;
+  transition: all 0.3s ease !important;
+}
+
+.theme-light button[class*="border-stone-"]:hover,
+.theme-light button[class*="border-stone-300"]:hover,
+.theme-light button[class*="border-white/10"]:hover {
+  background-color: rgba(255, 255, 255, 0.9) !important;
+  border-color: rgba(255, 90, 53, 0.25) !important;
+  color: #FF5A35 !important;
+}
+
+/* Form Inputs in Light Mode */
+.theme-light input[type="text"],
+.theme-light input[type="number"],
+.theme-light input[type="date"],
+.theme-light input[type="email"],
+.theme-light input[type="password"],
+.theme-light select,
+.theme-light textarea {
+  background-color: rgba(15, 23, 42, 0.02) !important;
+  border: 1px solid rgba(15, 23, 42, 0.06) !important;
+  color: #0F172A !important;
+  border-radius: 0.75rem !important;
+}
+
+.theme-light input:focus, .theme-light select:focus, .theme-light textarea:focus {
+  border-color: #FF5A35 !important;
+  background-color: #FFFFFF !important;
+  box-shadow: 0 0 0 3px rgba(255, 90, 53, 0.1) !important;
+}
+
+/* Table rows and borders inside Light Mode */
+.theme-light .border,
+.theme-light div[class*="border-stone-"],
+.theme-light div[class*="border-slate-"],
+.theme-light section[class*="border-"],
+.theme-light table[class*="border-"] {
+  border-color: rgba(15, 23, 42, 0.05) !important;
+}
+
+.theme-light tr:hover, .theme-light li:hover {
+  background-color: rgba(15, 23, 42, 0.02) !important;
+}
+
+.theme-light th {
+  background-color: rgba(15, 23, 42, 0.02) !important;
+  color: #475569 !important;
+  border-bottom: 2px solid rgba(15, 23, 42, 0.05) !important;
+}
+
+.theme-light td {
+  border-bottom: 1px solid rgba(15, 23, 42, 0.03) !important;
+  color: #334155 !important;
+}
+
+/* Badge customizations */
+.theme-light span[class*="bg-stone-100"],
+.theme-light span[class*="bg-slate-100"] {
+  background-color: rgba(15, 23, 42, 0.04) !important;
+  color: #475569 !important;
+  border: 1px solid rgba(15, 23, 42, 0.05) !important;
+}
+
+/* Banners inside light mode */
+.theme-light .bg-blue-50,
+.theme-light div[class*="bg-blue-50"],
+.theme-light div[class*="bg-blue-500/10"] {
+  background-color: rgba(59, 130, 246, 0.05) !important;
+  border: 1px solid rgba(59, 130, 246, 0.1) !important;
+  color: #1E40AF !important;
+}
+
+.theme-light .bg-amber-50,
+.theme-light div[class*="bg-amber-50"],
+.theme-light div[class*="bg-amber-500/10"] {
+  background-color: rgba(245, 158, 11, 0.05) !important;
+  border: 1px solid rgba(245, 158, 11, 0.1) !important;
+  color: #92400E !important;
+}
+
+.theme-light .bg-red-50,
+.theme-light div[class*="bg-red-50"] {
+  background-color: rgba(239, 68, 68, 0.05) !important;
+  border: 1px solid rgba(239, 68, 68, 0.1) !important;
+  color: #991B1B !important;
+}
+
+/* --- FOCUS MODE CUSTOM STYLES --- */
+div#root:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(4) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > button:nth-of-type(1) {
+  color: #ffffff !important;
+}
+div#root:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(4) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > button:nth-of-type(1) > span:nth-of-type(1) {
+  color: #64748b !important;
+}
+div#root:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(4) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > span:nth-of-type(1) {
+  color: #ff3232 !important;
+}
+div#root:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(4) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > span:nth-of-type(1) {
+  color: #ff0000 !important;
+}
+
+div#root:nth-of-type(1) > div:nth-of-type(1) > aside:nth-of-type(1) {
+  background-color: #ffffff !important;
+}
+
+div#root:nth-of-type(1) > div#login_container:nth-of-type(1) > div#root:nth-of-type(4) > div:nth-of-type(2) > form:nth-of-type(1) > button:nth-of-type(1) > span:nth-of-type(1) {
+  color: #1e2126 !important;
+}
+
+div#root:nth-of-type(1) > div#login_container:nth-of-type(1) > div#root:nth-of-type(4) > div:nth-of-type(2) > form:nth-of-type(1) > button:nth-of-type(1) {
+  background-color: #ffffff !important;
+}
+
+
+
