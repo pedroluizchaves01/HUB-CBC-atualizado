@@ -1,0 +1,21 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ==========================================================================
+    // ACESSO DIRETO PELO CLIENTE: TOTALMENTE BLOQUEADO (default-deny real).
+    //
+    // Este app usa o padrão "backend guardião": TODO acesso a dados passa pelo
+    // servidor Express, que autentica a sessão e usa o Firebase Admin SDK.
+    // O Admin SDK IGNORA estas regras (acesso privilegiado de servidor), portanto
+    // o backend continua funcionando normalmente.
+    //
+    // O navegador NUNCA fala direto com o Firestore. Assim, negar tudo aqui é o
+    // comportamento correto e seguro: qualquer tentativa de acesso direto (via SDK
+    // web, REST, ou console) com as credenciais públicas do Firebase é rejeitada.
+    // ==========================================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

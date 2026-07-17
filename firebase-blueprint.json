@@ -1,0 +1,432 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User account used for local authentication and role-based routing",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string" },
+        "passwordHash": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "client", "marketing"] },
+        "name": { "type": "string" },
+        "clientId": { "type": "string" }
+      },
+      "required": ["id", "username", "passwordHash", "role", "name"]
+    },
+    "Client": {
+      "title": "Client",
+      "description": "Information about customers of Chaves Brites Correa Construtora",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "cpfCnpj": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "username": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "username", "createdAt"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "A construction or office project details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "clientId": { "type": "string" },
+        "type": { "type": "string", "enum": ["obra", "reforma", "projeto"] },
+        "status": { "type": "string", "enum": ["planejamento", "execucao", "concluido"] },
+        "budget": { "type": "number" },
+        "startDate": { "type": "string" },
+        "location": { "type": "string" },
+        "area": { "type": "number" },
+        "description": { "type": "string" }
+      },
+      "required": ["id", "name", "clientId", "status"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Financial records of a project (materials, labor, etc)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string", "enum": ["materiais", "mao_de_obra", "equipamentos", "impostos", "outros"] },
+        "value": { "type": "number" },
+        "date": { "type": "string" },
+        "supplier": { "type": "string" },
+        "status": { "type": "string", "enum": ["pago", "pendente"] },
+        "notes": { "type": "string" },
+        "receiptName": { "type": "string" }
+      },
+      "required": ["id", "projectId", "description", "category", "value", "date", "status"]
+    },
+    "ProjectDocument": {
+      "title": "ProjectDocument",
+      "description": "Files, blueprints, receipts and files uploaded for projects",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "class": { "type": "string" },
+        "fileName": { "type": "string" },
+        "uploadedAt": { "type": "string" },
+        "status": { "type": "string", "enum": ["desenvolvimento", "aprovado", "revisado"] }
+      },
+      "required": ["id", "projectId", "name", "uploadedAt"]
+    },
+    "Material": {
+      "title": "Material",
+      "description": "Materials requested or estimated for a project",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "name": { "type": "string" },
+        "quantity": { "type": "number" },
+        "unit": { "type": "string" },
+        "estimatedValue": { "type": "number" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "name", "quantity"]
+    },
+    "DailyLog": {
+      "title": "DailyLog",
+      "description": "Daily reports recorded for construction follow-up",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "date": { "type": "string" },
+        "weather": { "type": "string" },
+        "activities": { "type": "string" },
+        "observations": { "type": "string" },
+        "workersCount": { "type": "number" }
+      },
+      "required": ["id", "projectId", "date"]
+    },
+    "TimelinePhase": {
+      "title": "TimelinePhase",
+      "description": "Phases of construction work used to follow timelines",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "name": { "type": "string" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "progress": { "type": "number" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "projectId", "name", "progress"]
+    },
+    "PunchList": {
+      "title": "PunchList",
+      "description": "Quality assurance and outstanding work checklist items",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "item": { "type": "string" },
+        "responsible": { "type": "string" },
+        "status": { "type": "string", "enum": ["pendente", "concluido"] }
+      },
+      "required": ["id", "projectId", "item", "status"]
+    },
+    "RegulatoryStep": {
+      "title": "RegulatoryStep",
+      "description": "Regulatory milestones, certificates, and approvals",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "title": { "type": "string" },
+        "status": { "type": "string", "enum": ["pendente", "analise", "concluido"] },
+        "description": { "type": "string" }
+      },
+      "required": ["id", "projectId", "title", "status"]
+    },
+    "WeeklyLog": {
+      "title": "WeeklyLog",
+      "description": "Weekly follow-up notes and milestones",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "weekEnding": { "type": "string" },
+        "summary": { "type": "string" },
+        "goals": { "type": "string" }
+      },
+      "required": ["id", "projectId", "weekEnding"]
+    },
+    "OfficeTransaction": {
+      "title": "OfficeTransaction",
+      "description": "Internal general transactions of Chaves Brites Correa administrative office",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "value": { "type": "number" },
+        "date": { "type": "string" },
+        "type": { "type": "string", "enum": ["receita", "despesa"] }
+      },
+      "required": ["id", "description", "value", "date", "type"]
+    },
+    "OfficeLead": {
+      "title": "OfficeLead",
+      "description": "Prospective clients (leads) tracked in the office CRM",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "status": { "type": "string" },
+        "value": { "type": "number" },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "name", "status"]
+    },
+    "LaborContract": {
+      "title": "LaborContract",
+      "description": "Subcontractor and workforce contracts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "workerName": { "type": "string" },
+        "role": { "type": "string" },
+        "value": { "type": "number" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "workerName", "value"]
+    },
+    "LaborPayment": {
+      "title": "LaborPayment",
+      "description": "Subcontractor payment schedules and executions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "contractId": { "type": "string" },
+        "value": { "type": "number" },
+        "date": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "contractId", "value", "date"]
+    },
+    "UnifiedSupplier": {
+      "title": "UnifiedSupplier",
+      "description": "Consolidated supplier contact directory",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "city": { "type": "string" },
+        "cnpj": { "type": "string" },
+        "category": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "UnifiedMaterial": {
+      "title": "UnifiedMaterial",
+      "description": "Consolidated master catalog of materials and parts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "unit": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "QuotationMap": {
+      "title": "QuotationMap",
+      "description": "Comparative bidding spreadsheets/maps for supplier offers",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "date": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "title"]
+    },
+    "MarketingCampaign": {
+      "title": "MarketingCampaign",
+      "description": "Marketing campaign records including budgets and results",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "platform": { "type": "string" },
+        "budget": { "type": "number" },
+        "spent": { "type": "number" },
+        "leadsCount": { "type": "number" },
+        "status": { "type": "string", "enum": ["planejado", "ativo", "concluido"] },
+        "startDate": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "name", "platform", "budget", "spent", "leadsCount", "status", "startDate"]
+    },
+    "MarketingPost": {
+      "title": "MarketingPost",
+      "description": "Social media post or content publication schedule",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "platform": { "type": "string" },
+        "publishDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["a_fazer", "em_producao", "revisao", "agendado", "publicado"] },
+        "caption": { "type": "string" },
+        "images": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["id", "title", "platform", "publishDate", "status"]
+    },
+    "MarketingOutbound": {
+      "title": "MarketingOutbound",
+      "description": "Outbound and prospecting actions, event organization, and gifts management",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["captacao", "contato", "evento", "brinde"] },
+        "contact": { "type": "string" },
+        "date": { "type": "string" },
+        "status": { "type": "string", "enum": ["planejado", "em_andamento", "realizado", "cancelado"] },
+        "cost": { "type": "number" },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "name", "type", "date", "status"]
+    },
+    "MarketingPress": {
+      "title": "MarketingPress",
+      "description": "Press relations, articles, and coverage tracking",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "vehicle": { "type": "string" },
+        "date": { "type": "string" },
+        "status": { "type": "string", "enum": ["rascunho", "enviado", "revisao", "publicado"] },
+        "url": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "title", "vehicle", "date", "status"]
+    },
+    "MarketingSettings": {
+      "title": "MarketingSettings",
+      "description": "External resource link fallbacks for marketing integration",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "outboundUrl": { "type": "string" },
+        "socialUrl": { "type": "string" },
+        "pressUrl": { "type": "string" }
+      },
+      "required": ["id"]
+    }
+  },
+  "firestore": {
+    "users": {
+      "schema": "User",
+      "description": "User credentials collection"
+    },
+    "clients": {
+      "schema": "Client",
+      "description": "Clients collection"
+    },
+    "projects": {
+      "schema": "Project",
+      "description": "Construction and other active projects"
+    },
+    "transactions": {
+      "schema": "Transaction",
+      "description": "General financial ledger"
+    },
+    "documents": {
+      "schema": "ProjectDocument",
+      "description": "Project-associated files"
+    },
+    "materials": {
+      "schema": "Material",
+      "description": "Project estimated and needed materials"
+    },
+    "daily_logs": {
+      "schema": "DailyLog",
+      "description": "Daily site reports"
+    },
+    "timeline_phases": {
+      "schema": "TimelinePhase",
+      "description": "Gantt timeline milestones and status"
+    },
+    "punch_lists": {
+      "schema": "PunchList",
+      "description": "Work checklists and quality management"
+    },
+    "regulatory_steps": {
+      "schema": "RegulatoryStep",
+      "description": "Official city permits, certificates and blueprints milestones"
+    },
+    "weekly_logs": {
+      "schema": "WeeklyLog",
+      "description": "Weekly contractor journals and goals"
+    },
+    "office_transactions": {
+      "schema": "OfficeTransaction",
+      "description": "Office general and administrative transactions"
+    },
+    "office_leads": {
+      "schema": "OfficeLead",
+      "description": "CRM leads for office sales funnel"
+    },
+    "labor_contracts": {
+      "schema": "LaborContract",
+      "description": "Workforce planning agreements"
+    },
+    "labor_payments": {
+      "schema": "LaborPayment",
+      "description": "Contractor pay history and plan"
+    },
+    "unified_suppliers": {
+      "schema": "UnifiedSupplier",
+      "description": "Supplier contacts unified database"
+    },
+    "unified_materials": {
+      "schema": "UnifiedMaterial",
+      "description": "Master materials catalog"
+    },
+    "quotation_maps": {
+      "schema": "QuotationMap",
+      "description": "Comparative cost estimations from multiple suppliers"
+    },
+    "marketing_campaigns": {
+      "schema": "MarketingCampaign",
+      "description": "Marketing campaign budgets, spend and results"
+    },
+    "marketing_posts": {
+      "schema": "MarketingPost",
+      "description": "Social media scheduled posts and publications"
+    },
+    "marketing_outbound": {
+      "schema": "MarketingOutbound",
+      "description": "Outbound prospecting actions, events, and gift logs"
+    },
+    "marketing_press": {
+      "schema": "MarketingPress",
+      "description": "Press releases, articles and PR schedule"
+    },
+    "marketing_settings": {
+      "schema": "MarketingSettings",
+      "description": "Fallback URL shortcuts for external tools"
+    }
+  }
+}

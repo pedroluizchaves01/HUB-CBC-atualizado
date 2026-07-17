@@ -1,0 +1,28 @@
+# Estágio de Build e Execução para o Backend
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copia os arquivos de dependências
+COPY package*.json ./
+
+# Instala todas as dependências (necessário devDependencies para o build do esbuild/typescript)
+RUN npm ci
+
+# Copia todo o código-fonte
+COPY . .
+
+# Executa o build (vite build + esbuild server.ts)
+RUN npm run build
+
+# Remove as devDependencies para economizar espaço e otimizar a imagem de produção
+RUN npm prune --production
+
+# Define as variáveis de ambiente necessárias
+ENV NODE_ENV=production
+ENV PORT=3000
+
+EXPOSE 3000
+
+# Comando para iniciar o servidor express
+CMD ["npm", "run", "start"]

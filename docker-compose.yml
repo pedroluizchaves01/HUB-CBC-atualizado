@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  # Servidor Backend Express (com inteligência artificial Gemini, parser de planilhas/PDFs, etc.)
+  crm-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: cbc-crm-api
+    # NÃO publicamos a porta 3000 no host: o backend é acessado apenas internamente pela rede
+    # docker (o nginx do serviço 'frontend' faz proxy para crm-api:3000). O único entrypoint
+    # público é o nginx na porta 80, evitando dupla exposição e conflito de portas no host.
+    expose:
+      - "3000"
+    environment:
+      - NODE_ENV=production
+      - GEMINI_API_KEY=${GEMINI_API_KEY} # Puxa da variável de ambiente configurada no Coolify ou arquivo .env
+    restart: always
+
+  # Servidor Frontend Nginx para servir arquivos estáticos e encaminhar requisições da API para o backend
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: cbc-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - crm-api
+    restart: always
