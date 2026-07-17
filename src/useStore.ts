@@ -103,10 +103,20 @@ export function useStore() {
   };
 
   const editClient = async (updatedClient: Client, newPassword?: string) => {
+    const cleanUsername = updatedClient.username.trim().toLowerCase();
+    const linkedUser = users.find(u => u.clientId === updatedClient.id);
+
+    // Valida duplicidade: nenhum OUTRO usuário (id != linkedUser.id) pode usar o mesmo username.
+    const usernameTaken = users.some(
+      u => u.id !== linkedUser?.id && u.username.trim().toLowerCase() === cleanUsername
+    );
+    if (usernameTaken) {
+      throw new Error(`O usuário "${updatedClient.username}" já está cadastrado.`);
+    }
+
     await saveDoc('clients', updatedClient.id, updatedClient);
 
     // Atualiza o usuário vinculado. A senha (se informada) é hasheada no backend.
-    const linkedUser = users.find(u => u.clientId === updatedClient.id);
     if (linkedUser) {
       await apiSend('/api/users/upsert', 'POST', {
         id: linkedUser.id,
@@ -120,32 +130,47 @@ export function useStore() {
     }
   };
 
+  // Remoção defensiva: ignora falhas de "item já inexistente" para não abortar a cascata.
+  // Erros reais (rede/permissão) continuam sendo logados.
+  const safeRemove = async (collection: string, id: string) => {
+    try {
+      await removeDoc(collection, id);
+    } catch (err) {
+      console.warn(`Falha ao remover ${collection}/${id} na cascata (ignorado):`, err);
+    }
+  };
+
+  // LIMITAÇÃO CONHECIDA: a cascata abaixo é calculada a partir do estado LOCAL (users/projects/
+  // transactions/documents), que pode estar desatualizado em relação ao backend. Itens criados por
+  // outro cliente/aba após a última sincronização podem NÃO ser incluídos na cascata, deixando órfãos.
+  // A solução robusta seria uma Cloud Function fazendo a cascata server-side; por ora, tornamos a
+  // remoção defensiva (safeRemove) para não falhar quando um item já não existir.
   const deleteClient = async (clientId: string) => {
     const clientToDelete = clients.find(c => c.id === clientId);
     if (!clientToDelete) return;
 
-    await removeDoc('clients', clientId);
+    await safeRemove('clients', clientId);
 
     const linkedUser = users.find(u => u.clientId === clientId);
     if (linkedUser) {
-      await removeDoc('users', linkedUser.id);
+      await safeRemove('users', linkedUser.id);
     }
 
     const clientProjects = projects.filter(p => p.clientId === clientId);
     const clientProjectIds = clientProjects.map(p => p.id);
 
     for (const p of clientProjects) {
-      await removeDoc('projects', p.id);
+      await safeRemove('projects', p.id);
     }
 
     const transactionsToDelete = transactions.filter(t => clientProjectIds.includes(t.projectId));
     for (const t of transactionsToDelete) {
-      await removeDoc('transactions', t.id);
+      await safeRemove('transactions', t.id);
     }
 
     const documentsToDelete = documents.filter(d => clientProjectIds.includes(d.projectId));
     for (const d of documentsToDelete) {
-      await removeDoc('documents', d.id);
+      await safeRemove('documents', d.id);
     }
   };
 
@@ -157,17 +182,20 @@ export function useStore() {
     await saveDoc('projects', updatedProject.id, updatedProject);
   };
 
+  // LIMITAÇÃO CONHECIDA: assim como em deleteClient, a cascata usa o estado LOCAL de transactions/
+  // documents, que pode estar defasado em relação ao backend, podendo deixar órfãos. A cascata usa
+  // safeRemove para permanecer defensiva (não falha se um item já não existir).
   const deleteProject = async (projectId: string) => {
-    await removeDoc('projects', projectId);
+    await safeRemove('projects', projectId);
 
     const transactionsToDelete = transactions.filter(t => t.projectId === projectId);
     for (const t of transactionsToDelete) {
-      await removeDoc('transactions', t.id);
+      await safeRemove('transactions', t.id);
     }
 
     const documentsToDelete = documents.filter(d => d.projectId === projectId);
     for (const d of documentsToDelete) {
-      await removeDoc('documents', d.id);
+      await safeRemove('documents', d.id);
     }
   };
 

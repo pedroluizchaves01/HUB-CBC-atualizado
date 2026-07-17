@@ -155,6 +155,8 @@ export function MarketingManagement() {
   // Editing structures
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [tempRowData, setTempRowData] = useState<Partial<MarketingOutbound>>({});
+  // Id da linha recém-criada via "Adicionar Linha" (ainda não confirmada/salva pelo usuário).
+  const [newlyAddedRowId, setNewlyAddedRowId] = useState<string | null>(null);
 
   // Settings Link edits
   const [editingLinks, setEditingLinks] = useState(false);
@@ -349,9 +351,30 @@ export function MarketingManagement() {
       alert('O nome do contato ou ação de outbound é obrigatório!');
       return;
     }
-    await saveDoc('marketing_outbound', id, tempRowData);
+    // Usa o objeto atual do state (não um stale) e evita gravar campos vazios que zerariam dados existentes.
+    const original = outbounds.find(o => o.id === id);
+    const merged: MarketingOutbound = {
+      ...(original || ({} as MarketingOutbound)),
+      ...tempRowData,
+      id
+    } as MarketingOutbound;
+    // Se a data ficou vazia por engano, mantém a original (ou fallback) em vez de zerar.
+    if (!merged.date) {
+      merged.date = original?.date || selectedDate || '2026-07-15';
+    }
+    await saveDoc('marketing_outbound', id, merged);
     setEditingRowId(null);
+    setNewlyAddedRowId(null);
     showNotification('Ação Outbound salva com sucesso!');
+  };
+
+  // Cancela a edição inline; se a linha era recém-criada e ainda não confirmada, remove-a do banco.
+  const handleCancelRowInline = async (id: string) => {
+    setEditingRowId(null);
+    if (newlyAddedRowId === id) {
+      setNewlyAddedRowId(null);
+      await removeDoc('marketing_outbound', id);
+    }
   };
 
   const handleDeleteOutbound = async (id: string) => {
@@ -376,6 +399,7 @@ export function MarketingManagement() {
     await saveDoc('marketing_outbound', id, newRow);
     setEditingRowId(id);
     setTempRowData(newRow);
+    setNewlyAddedRowId(id);
     showNotification('Nova linha criada na planilha!');
   };
 
@@ -1234,7 +1258,7 @@ export function MarketingManagement() {
                                     <CheckCircle2 size={14} />
                                   </button>
                                   <button
-                                    onClick={() => setEditingRowId(null)}
+                                    onClick={() => handleCancelRowInline(item.id)}
                                     className="p-1 text-stone-400 hover:bg-stone-100 rounded"
                                     title="Cancelar"
                                   >

@@ -122,7 +122,7 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
       current.setMonth(current.getMonth() + 1);
     }
 
-    return periods.slice(0, 18); // Max 18 months for performance
+    return periods; // Retorna todos os meses; a truncagem visual é feita em displayPeriods
   };
 
   const getPhaseMonths = (startStr: string, endStr: string) => {
@@ -154,14 +154,17 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
     return months;
   };
 
+  // Todos os meses do projeto (usados para agregados financeiros e Curva S).
   const periods = getProjectPeriods(activeProjectPhases);
+  // Subconjunto exibido nas tabelas (máx. 18 colunas por desempenho/layout).
+  const displayPeriods = periods.slice(0, 18);
 
   const getPhaseDistributionForMonth = (phase: any, year: number, month: number) => {
     const start = new Date(phase.startDate + 'T00:00:00');
     const end = new Date(phase.endDate + 'T23:59:59');
     
     if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) {
-      return { planned: 0, realized: 0, percent: 0, realizedPercent: 0 };
+      return { planned: 0, realized: 0, percent: 0, realizedPercent: 0, plannedPhysicalPercent: 0 };
     }
 
     const monthStart = new Date(year, month, 1, 0, 0, 0);
@@ -177,19 +180,29 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
       
       const key = `${year}-${String(month + 1).padStart(2, '0')}`;
       const hasMonthlyData = phase.monthlyProgress && phase.monthlyProgress[key] !== undefined;
-      
-      const realizedPercent = hasMonthlyData ? phase.monthlyProgress[key] : (phase.progress * ratio);
-      const realized = hasMonthlyData ? (realizedPercent / 100) * phase.costPrev : (phase.costReal * ratio);
+
+      // Progresso físico PLANEJADO do mês (distribuição informada ou proporcional aos dias).
+      const plannedPhysicalPercent = hasMonthlyData ? phase.monthlyProgress[key] : (ratio * 100);
+      // Peso do mês na duração da fase (usado para ratear o custo realizado, sem sobrescrevê-lo).
+      const monthWeight = hasMonthlyData ? (plannedPhysicalPercent / 100) : ratio;
+
+      // Custo planejado do mês.
+      const planned = phase.costPrev * monthWeight;
+      // Custo realizado do mês: rateado a partir do costReal informado (NÃO do progresso planejado).
+      const realized = phase.costReal * monthWeight;
+      // Percentual de custo realizado do mês (acumulado tende a costReal/costPrev).
+      const realizedPercent = phase.costPrev > 0 ? (realized / phase.costPrev) * 100 : 0;
 
       return {
-        planned: phase.costPrev * ratio,
+        planned: planned,
         realized: realized,
         percent: ratio * 100,
-        realizedPercent: realizedPercent
+        realizedPercent: realizedPercent,
+        plannedPhysicalPercent: plannedPhysicalPercent
       };
     }
 
-    return { planned: 0, realized: 0, percent: 0, realizedPercent: 0 };
+    return { planned: 0, realized: 0, percent: 0, realizedPercent: 0, plannedPhysicalPercent: 0 };
   };
 
   const monthlyTotals = periods.map(period => {
@@ -204,7 +217,8 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
       totalRealized += dist.realized;
 
       if (dist.planned > 0) {
-        weightedProgressSum += phase.progress * dist.planned;
+        // Média ponderada usa o progresso físico DO MÊS, não o total da fase.
+        weightedProgressSum += dist.plannedPhysicalPercent * dist.planned;
         totalWeight += dist.planned;
       }
     });
@@ -221,7 +235,8 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
 
   let cumulativePlanned = 0;
   let cumulativeRealized = 0;
-  const monthlyTotalsWithCumulative = monthlyTotals.map(item => {
+  // Acumulados calculados sobre TODOS os meses, para a Curva S fechar 100%.
+  const monthlyTotalsWithCumulativeAll = monthlyTotals.map(item => {
     cumulativePlanned += item.planned;
     cumulativeRealized += item.realized;
     return {
@@ -230,6 +245,8 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
       cumulativeRealized
     };
   });
+  // Apenas os meses exibidos nas tabelas (mantém acumulados corretos até cada coluna).
+  const monthlyTotalsWithCumulative = monthlyTotalsWithCumulativeAll.slice(0, 18);
 
   const totalProjectPlanned = activeProjectPhases.reduce((sum, ph) => sum + ph.costPrev, 0);
   const totalProjectRealized = activeProjectPhases.reduce((sum, ph) => sum + ph.costReal, 0);
@@ -268,12 +285,14 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
     if (files && files.length > 0) {
       const file = files[0];
       const validExtensions = ['.pdf', '.xlsx', '.xls'];
+      const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif', '.gif', '.bmp'];
       const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
-      if (validExtensions.includes(ext) || file.type === 'application/pdf') {
+      const isImage = file.type.startsWith('image/') || imageExtensions.includes(ext);
+      if (validExtensions.includes(ext) || file.type === 'application/pdf' || isImage) {
         setAiPlanningFile(file);
         setAiPlanningError(null);
       } else {
-        setAiPlanningError('Formato inválido. Envie apenas arquivos PDF ou Excel (.pdf, .xlsx, .xls)');
+        setAiPlanningError('Formato inválido. Envie um PDF, Excel (.pdf, .xlsx, .xls) ou uma imagem (foto)');
         setAiPlanningFile(null);
       }
     }
@@ -316,9 +335,17 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
       const base64Data = await filePromise;
       let mimeType = aiPlanningFile.type;
       if (!mimeType) {
-        if (aiPlanningFile.name.endsWith('.pdf')) mimeType = 'application/pdf';
-        else if (aiPlanningFile.name.endsWith('.xlsx')) mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-        else if (aiPlanningFile.name.endsWith('.xls')) mimeType = 'application/vnd.ms-excel';
+        const lowerName = aiPlanningFile.name.toLowerCase();
+        if (lowerName.endsWith('.pdf')) mimeType = 'application/pdf';
+        else if (lowerName.endsWith('.xlsx')) mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        else if (lowerName.endsWith('.xls')) mimeType = 'application/vnd.ms-excel';
+        else if (lowerName.endsWith('.png')) mimeType = 'image/png';
+        else if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) mimeType = 'image/jpeg';
+        else if (lowerName.endsWith('.webp')) mimeType = 'image/webp';
+        else if (lowerName.endsWith('.heic') || lowerName.endsWith('.heif')) mimeType = 'image/heic';
+        else if (lowerName.endsWith('.gif')) mimeType = 'image/gif';
+        else if (lowerName.endsWith('.bmp')) mimeType = 'image/bmp';
+        else mimeType = 'application/octet-stream';
       }
 
       setPlanningDriveFile(null);
@@ -367,15 +394,46 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
     }
   };
 
+  // Normaliza datas vindas da IA para o formato ISO 'YYYY-MM-DD' usado nos cálculos.
+  // Aceita 'DD/MM/YYYY', 'YYYY-MM-DD' e datetimes ISO; retorna fallback quando inválida.
+  const normalizeAiDate = (raw: any, fallback: string): string => {
+    if (typeof raw !== 'string') return fallback;
+    const value = raw.trim();
+    if (!value) return fallback;
+
+    // Já em ISO (aceita datetime, mantém apenas a parte da data).
+    const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) {
+      const iso = `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+      return isNaN(new Date(iso + 'T00:00:00').getTime()) ? fallback : iso;
+    }
+
+    // Formato brasileiro DD/MM/YYYY (ou com '-' / '.' como separador).
+    const brMatch = value.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+    if (brMatch) {
+      const day = brMatch[1].padStart(2, '0');
+      const month = brMatch[2].padStart(2, '0');
+      let year = brMatch[3];
+      if (year.length === 2) year = `20${year}`;
+      const iso = `${year}-${month}-${day}`;
+      return isNaN(new Date(iso + 'T00:00:00').getTime()) ? fallback : iso;
+    }
+
+    return fallback;
+  };
+
   const handleApplyAiPhases = (shouldReplace: boolean) => {
     if (!extractedPhases) return;
+
+    const defaultStart = new Date().toISOString().split('T')[0];
+    const defaultEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
     const newPhases = extractedPhases.map((p, idx) => ({
       id: `phase-ai-${Date.now()}-${idx}`,
       projectId: cronogramaProjectId,
       name: p.name || 'Fase sem nome',
-      startDate: p.startDate || new Date().toISOString().split('T')[0],
-      endDate: p.endDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      startDate: normalizeAiDate(p.startDate, defaultStart),
+      endDate: normalizeAiDate(p.endDate, defaultEnd),
       progress: p.progress !== undefined ? Number(p.progress) : 0,
       costPrev: p.costPrev !== undefined ? Number(p.costPrev) : 0,
       costReal: p.costReal !== undefined ? Number(p.costReal) : 0,
@@ -945,7 +1003,7 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
                             <th className="border-r border-stone-200 p-2.5 text-center w-28">Prazos Limites</th>
                             <th className="border-r border-stone-200 p-2.5 text-center w-16">Progresso</th>
                             <th className="border-r border-stone-200 p-2.5 text-right w-24">Custo Previsto</th>
-                            {periods.map(period => (
+                            {displayPeriods.map(period => (
                               <th key={period.key} className="border-r border-stone-200 p-2 text-center min-w-[100px] bg-stone-50">
                                 {period.label}
                               </th>
@@ -979,7 +1037,7 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
                                   {formatCurrency(phase.costPrev)}
                                 </td>
                                 
-                                {periods.map(period => {
+                                {displayPeriods.map(period => {
                                   const dist = getPhaseDistributionForMonth(phase, period.year, period.month);
                                   return (
                                     <td key={period.key} className="border-r border-stone-200 p-2 text-center bg-stone-50/20 font-mono text-[10px]">
@@ -1044,7 +1102,7 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
                         <thead>
                           <tr className="bg-stone-150 border-b border-stone-200 text-[8px] font-mono uppercase text-stone-600 text-left">
                             <th className="p-3 w-64">Métricas de Planejamento Mensal</th>
-                            {periods.map(period => (
+                            {displayPeriods.map(period => (
                               <th key={period.key} className="p-3 text-center bg-stone-50">
                                 {period.label}
                               </th>
@@ -1323,7 +1381,7 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
                       <th className="p-3 text-center w-36">Prazos</th>
                       <th className="p-3 text-center w-20">Progresso</th>
                       <th className="p-3 text-right w-28">Custo Previsto</th>
-                      {periods.map(period => (
+                      {displayPeriods.map(period => (
                         <th key={period.key} className="p-3 text-center min-w-[110px] bg-stone-50">
                           {period.label}
                         </th>
@@ -1340,7 +1398,7 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
                         </td>
                         <td className="p-3 text-center font-mono font-bold">{phase.progress}%</td>
                         <td className="p-3 text-right font-mono font-semibold">{formatCurrency(phase.costPrev)}</td>
-                        {periods.map(period => {
+                        {displayPeriods.map(period => {
                           const dist = getPhaseDistributionForMonth(phase, period.year, period.month);
                           return (
                             <td key={period.key} className="p-3 text-center bg-stone-50/10 font-mono">

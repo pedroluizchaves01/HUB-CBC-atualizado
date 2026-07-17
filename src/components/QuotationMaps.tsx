@@ -1204,21 +1204,30 @@ export default function QuotationMaps({
     setIsFetchingContacts(true);
     setContactsError(null);
     try {
-      const url = 'https://people.googleapis.com/v1/people/me/connections?personFields=names,emailAddresses,phoneNumbers&pageSize=1000';
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${activeToken}`,
-          'Accept': 'application/json'
+      // Itera por todas as páginas via nextPageToken para não truncar em ~1000 contatos.
+      const connections: any[] = [];
+      let nextPageToken: string | undefined = undefined;
+      do {
+        const baseUrl = 'https://people.googleapis.com/v1/people/me/connections?personFields=names,emailAddresses,phoneNumbers&pageSize=1000';
+        const url = nextPageToken ? `${baseUrl}&pageToken=${encodeURIComponent(nextPageToken)}` : baseUrl;
+        const response = await fetch(url, {
+          headers: {
+            'Authorization': `Bearer ${activeToken}`,
+            'Accept': 'application/json'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`Erro API People: ${response.status} ${response.statusText}`);
         }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Erro API People: ${response.status} ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      const connections = data.connections || [];
-      
+
+        const data = await response.json();
+        if (data.connections) {
+          connections.push(...data.connections);
+        }
+        nextPageToken = data.nextPageToken || undefined;
+      } while (nextPageToken);
+
       const formatted: GoogleContact[] = connections.map((conn: any) => {
         const resourceName = conn.resourceName;
         const nameObj = conn.names?.[0];
@@ -1399,6 +1408,13 @@ export default function QuotationMaps({
     let minTotal = Infinity;
     let bestSupplier: QuotationSupplier | null = null;
     map.suppliers.forEach(sup => {
+      // Elegível apenas o fornecedor que cotou TODOS os itens (preço > 0).
+      // Fornecedores com itens não cotados (preço 0/ausente) ficam incompletos e nunca são recomendados.
+      const cotouTodos = map.items.length > 0 && map.items.every(item => {
+        const p = sup.itemPrices[item.id];
+        return p !== undefined && p > 0;
+      });
+      if (!cotouTodos) return;
       const { total } = getSupplierTotal(map, sup);
       if (total < minTotal) {
         minTotal = total;

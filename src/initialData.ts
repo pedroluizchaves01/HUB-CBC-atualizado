@@ -8,32 +8,35 @@ export const INITIAL_USERS: User[] = [
   { id: 'admin-1', username: 'CHAVES BRITES CORREA', passwordHash: '', role: 'admin', name: 'Chaves Brites Correa' },
   { id: 'user-marketing-1', username: 'MKTCBC', passwordHash: '', role: 'marketing', name: 'Equipe de Marketing' },
   { id: 'user-client-1', username: 'oralmed', passwordHash: '', role: 'client', name: 'Clínica OralMed', clientId: 'client-1' },
-  { id: 'user-client-2', username: 'roberto', passwordHash: '', role: 'client', name: 'Dr. Roberto Guimarães', clientId: 'client-2' },
+  { id: 'user-client-2', username: 'roberto', passwordHash: '', role: 'client', name: 'Cliente Exemplo 2', clientId: 'client-2' },
   { id: 'user-client-3', username: 'bosque', passwordHash: '', role: 'client', name: 'Residencial Bosque', clientId: 'client-3' }
 ];
 
+// DADOS DE EXEMPLO — fictícios. E-mails em domínios .example e telefones no padrão de
+// documentação para deixar claro que NÃO são dados reais (minimização, LGPD art. 12).
+// Ao usar em produção, substitua pelos dados reais dos clientes via o painel admin.
 export const INITIAL_CLIENTS: Client[] = [
   {
     id: 'client-1',
-    name: 'Clínica Odontológica OralMed Ltd.',
-    email: 'financeiro@oralmed.com.br',
-    phone: '(11) 98765-4321',
+    name: 'Cliente Exemplo — Clínica',
+    email: 'contato@cliente-exemplo.example',
+    phone: '(11) 40000-0001',
     username: 'oralmed',
     createdAt: '2026-02-10'
   },
   {
     id: 'client-2',
-    name: 'Dr. Roberto Guimarães Castro',
-    email: 'roberto.castro@gmail.com',
-    phone: '(21) 99888-7766',
+    name: 'Cliente Exemplo — Residencial',
+    email: 'contato2@cliente-exemplo.example',
+    phone: '(11) 40000-0002',
     username: 'roberto',
     createdAt: '2026-03-15'
   },
   {
     id: 'client-3',
-    name: 'Condomínio Residencial Bosque das Palmeiras',
-    email: 'sindico@bosquepalmeiras.com.br',
-    phone: '(11) 3456-7890',
+    name: 'Cliente Exemplo — Condomínio',
+    email: 'contato3@cliente-exemplo.example',
+    phone: '(11) 40000-0003',
     username: 'bosque',
     createdAt: '2026-05-02'
   }
@@ -54,7 +57,7 @@ export const INITIAL_PROJECTS: Project[] = [
   },
   {
     id: 'project-2',
-    name: 'Casa de Campo - Roberto Guimarães',
+    name: 'Casa de Campo - Cliente Exemplo',
     clientId: 'client-2',
     type: 'obra',
     status: 'execucao',
@@ -190,7 +193,7 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
     receiptName: 'orcamento_luminarias_led_embutidas.pdf'
   },
 
-  // Roberto Guimarães - Casa de Campo (project-2) - Budget 1.250.000
+  // Cliente Exemplo - Casa de Campo (project-2) - Budget 1.250.000
   {
     id: 'tx-201',
     projectId: 'project-2',
@@ -264,7 +267,7 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
     receiptName: 'guia_recolhimento_cetesb_ok.pdf'
   },
 
-  // Roberto Guimarães - Projetos Executivos Detalhamento (project-3) - Budget 65.000
+  // Cliente Exemplo - Projetos Executivos Detalhamento (project-3) - Budget 65.000
   {
     id: 'tx-301',
     projectId: 'project-3',
@@ -368,7 +371,7 @@ export const INITIAL_DOCUMENTS: ProjectDocument[] = [
     status: 'revisao'
   },
 
-  // project-2: Casa de Campo - Roberto Guimarães
+  // project-2: Casa de Campo - Cliente Exemplo
   {
     id: 'doc-201',
     projectId: 'project-2',

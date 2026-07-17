@@ -94,18 +94,30 @@ export default function AcompanhamentoFisico({
   // ----------------------------------------------------
   // S-CURVE CRONOGRAMA FÍSICO-FINANCEIRO CALCULATION
   // ----------------------------------------------------
-  
+
+  // Retorna a data LOCAL no formato 'YYYY-MM-DD' (evita deslocamento de fuso do toISOString)
+  const toLocalISODate = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   // Calculate planned progress for a given date
   const getPlannedProgressAtDate = (dateStr: string) => {
     if (activePhases.length === 0) return 0;
-    
+
     const targetDate = new Date(dateStr + 'T00:00:00');
+    // Se a data alvo for inválida, não há como calcular o previsto
+    if (isNaN(targetDate.getTime())) return 0;
     let weightedSum = 0;
     let totalWeight = 0;
 
     activePhases.forEach(phase => {
       const start = new Date(phase.startDate + 'T00:00:00');
       const end = new Date(phase.endDate + 'T00:00:00');
+      // Datas de fase inválidas/ausentes produziriam NaN; ignora esta fase
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) return;
       const weight = Number(phase.costPrev) || 1; // Fallback weight
       totalWeight += weight;
 
@@ -124,7 +136,9 @@ export default function AcompanhamentoFisico({
       }
     });
 
-    return totalWeight > 0 ? weightedSum / totalWeight : 0;
+    const result = totalWeight > 0 ? weightedSum / totalWeight : 0;
+    // Garante um número finito mesmo diante de dados inconsistentes
+    return Number.isFinite(result) ? result : 0;
   };
 
   // Calculate actual progress based on a specific log
@@ -228,12 +242,14 @@ export default function AcompanhamentoFisico({
   const chartData = generateChartData();
 
   // Current statistics
-  const currentPlanned = activePhases.length > 0 ? getPlannedProgressAtDate(new Date().toISOString().split('T')[0]) : 0;
+  const currentPlanned = activePhases.length > 0 ? getPlannedProgressAtDate(toLocalISODate(new Date())) : 0;
   
   const latestLog = activeLogs.length > 0 ? activeLogs[activeLogs.length - 1] : null;
   const currentActual = latestLog ? getActualProgressFromLog(latestLog) : 0;
   
   const progressDeviation = currentActual - currentPlanned; // Positive is advance, negative is delay
+  // Desvio arredondado: decide rótulo/cor pelo valor exibido para evitar '+0%'/'-0%' com rótulo contraditório
+  const roundedDeviation = Math.round(progressDeviation);
 
   // ----------------------------------------------------
   // COMPARATIVO FÍSICO-FINANCEIRO CALCULATION
@@ -354,7 +370,7 @@ export default function AcompanhamentoFisico({
 
       // 5. Reset Form
       setNewLog({
-        date: new Date().toISOString().split('T')[0],
+        date: toLocalISODate(new Date()),
         weekLabel: '',
         description: '',
         phaseProgressions: {},
@@ -381,9 +397,11 @@ export default function AcompanhamentoFisico({
             <span>Acompanhamento Físico e Relatório Fotográfico Semanal</span>
             {isCollapsed && (
               <span className={`font-mono text-[11px] px-2 py-0.5 font-bold border uppercase tracking-wider ${
-                progressDeviation >= 0 
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
-                  : 'bg-rose-50 text-rose-800 border-rose-200'
+                roundedDeviation > 0
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  : roundedDeviation < 0
+                  ? 'bg-rose-50 text-rose-800 border-rose-200'
+                  : 'bg-stone-50 text-stone-700 border-stone-200'
               }`}>
                 Físico: {Math.round(currentActual)}% (Previsto: {Math.round(currentPlanned)}%)
               </span>
@@ -471,22 +489,29 @@ export default function AcompanhamentoFisico({
                   <div className="bg-[#FAF9F6] border border-stone-200 p-4">
                     <span className="block text-[8px] font-mono uppercase text-stone-400 font-bold">Desvio de Cronograma</span>
                     <div className="flex items-baseline gap-1.5 mt-1">
-                      {progressDeviation >= 0 ? (
+                      {roundedDeviation > 0 ? (
                         <>
-                          <span className="font-mono font-bold text-emerald-700 text-xl">+{Math.round(progressDeviation)}%</span>
+                          <span className="font-mono font-bold text-emerald-700 text-xl">+{roundedDeviation}%</span>
                           <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1 font-bold font-mono">Adiantado</span>
+                        </>
+                      ) : roundedDeviation < 0 ? (
+                        <>
+                          <span className="font-mono font-bold text-red-700 text-xl">{roundedDeviation}%</span>
+                          <span className="text-[9px] bg-red-100 text-red-800 px-1 font-bold font-mono">Atrasado</span>
                         </>
                       ) : (
                         <>
-                          <span className="font-mono font-bold text-red-700 text-xl">{Math.round(progressDeviation)}%</span>
-                          <span className="text-[9px] bg-red-100 text-red-800 px-1 font-bold font-mono">Atrasado</span>
+                          <span className="font-mono font-bold text-stone-700 text-xl">0%</span>
+                          <span className="text-[9px] bg-stone-150 text-stone-700 px-1 font-bold font-mono">No prazo</span>
                         </>
                       )}
                     </div>
                     <p className="text-[9px] text-stone-500 mt-2 font-sans">
-                      {progressDeviation >= 0 
-                        ? 'Excelente! A obra física está com avanço superior ao planejado.' 
-                        : 'Atenção: A obra física apresenta atraso em relação ao planejado.'}
+                      {roundedDeviation > 0
+                        ? 'Excelente! A obra física está com avanço superior ao planejado.'
+                        : roundedDeviation < 0
+                        ? 'Atenção: A obra física apresenta atraso em relação ao planejado.'
+                        : 'A obra física está exatamente no prazo planejado.'}
                     </p>
                   </div>
                 </div>
@@ -642,7 +667,7 @@ export default function AcompanhamentoFisico({
                   <div className="space-y-3">
                     {activePhases.map(phase => {
                       // Calculate planned progress for today for this specific phase
-                      const today = new Date().toISOString().split('T')[0];
+                      const today = toLocalISODate(new Date());
                       const start = new Date(phase.startDate + 'T00:00:00');
                       const end = new Date(phase.endDate + 'T00:00:00');
                       const now = new Date(today + 'T00:00:00');

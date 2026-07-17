@@ -44,11 +44,12 @@ export async function uploadBase64ToFirebase(
           error: `Telegram offline. O arquivo foi salvo diretamente em base64 no banco de dados temporariamente. Por favor, verifique a conexão com seu bot do Telegram.` 
         };
       } else {
-        const blob = base64ToBlob(base64Str, mimeType);
-        const fallbackUrl = URL.createObjectURL(blob);
-        return { 
-          url: fallbackUrl, 
-          error: `O arquivo é muito grande para o banco de dados e o Telegram falhou. Verifique se o Bot Token e Chat ID do Telegram estão corretos.` 
+        // Não usar blob: URL como valor persistente: URL.createObjectURL gera uma URL que só é
+        // válida na sessão atual do navegador e vaza memória se nunca revogada. Como este 'url'
+        // é salvo no banco, falhamos explicitamente pedindo reconfiguração do Telegram.
+        return {
+          url: '',
+          error: `O arquivo é muito grande para ser salvo em base64 no banco e o Telegram falhou. Configure corretamente o Bot Token e o Chat ID do Telegram e tente novamente.`
         };
       }
     } catch (e: any) {
@@ -95,10 +96,12 @@ export async function uploadFileToFirebase(
           error: `Telegram offline. O arquivo foi salvo diretamente em base64 no banco de dados temporariamente. Por favor, verifique a conexão com seu bot do Telegram.` 
         };
       } else {
-        const fallbackUrl = URL.createObjectURL(file);
-        return { 
-          url: fallbackUrl, 
-          error: `O arquivo é muito grande para o banco de dados e o Telegram falhou. Verifique se o Bot Token e Chat ID do Telegram estão corretos.` 
+        // Não usar blob: URL como valor persistente: URL.createObjectURL gera uma URL que só é
+        // válida na sessão atual do navegador e vaza memória se nunca revogada. Como este 'url'
+        // é salvo no banco, falhamos explicitamente pedindo reconfiguração do Telegram.
+        return {
+          url: '',
+          error: `O arquivo é muito grande para ser salvo em base64 no banco e o Telegram falhou. Configure corretamente o Bot Token e o Chat ID do Telegram e tente novamente.`
         };
       }
     } catch (e: any) {

@@ -139,23 +139,47 @@ export function OfficeManagement({ clients, onAddClient }: OfficeManagementProps
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  // Ref do MediaStream ativo e do timeout de abertura da câmera (evita vazamento se desmontar)
+  const streamRef = React.useRef<MediaStream | null>(null);
+  const startCameraTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMountedRef = React.useRef(true);
+  // Guarda o resultado do upload já realizado para reutilizar em retries da IA (evita reenvio duplicado)
+  const uploadedReceiptRef = React.useRef<{ base64: string; url: string; fileId: string; name: string } | null>(null);
 
   const analyzeAndUploadReceiptBase64 = async (base64: string, mimeType: string, fileName: string) => {
     setIsAnalyzing(true);
 
+    // Se já existe um upload deste mesmo arquivo (retry após falha da IA), reutiliza-o em vez de reenviar.
+    let uploadResult: { url: string; error: string | null } = { url: '', error: null };
+    if (uploadedReceiptRef.current && uploadedReceiptRef.current.base64 === base64) {
+      uploadResult = { url: uploadedReceiptRef.current.url, error: null };
+    }
+
     try {
-      // 1. Upload to Firebase Storage (Requirement 1)
-      const config = await getTelegramConfig();
-      const formattedName = buildTelegramFileName(config.fileNamePattern, {
-        centro: 'Escritório CBC',
-        data: txForm.date || new Date().toISOString().split('T')[0],
-        fornecedor: 'Recibo',
-        descricao: txForm.description || fileName || 'Recibo',
-        valor: txForm.value ? parseFloat(txForm.value) : '',
-        extension: fileName
-      });
-      const storagePath = `office_receipts/${formattedName}`;
-      const uploadResult = await uploadBase64ToFirebase(base64, storagePath, mimeType);
+      // 1. Upload to Firebase Storage (Requirement 1) — só reenvia se ainda não houver upload deste arquivo
+      if (!(uploadedReceiptRef.current && uploadedReceiptRef.current.base64 === base64)) {
+        const config = await getTelegramConfig();
+        const formattedName = buildTelegramFileName(config.fileNamePattern, {
+          centro: 'Escritório CBC',
+          data: txForm.date || new Date().toISOString().split('T')[0],
+          fornecedor: 'Recibo',
+          descricao: txForm.description || fileName || 'Recibo',
+          valor: txForm.value ? parseFloat(txForm.value) : '',
+          extension: fileName
+        });
+        const storagePath = `office_receipts/${formattedName}`;
+        uploadResult = await uploadBase64ToFirebase(base64, storagePath, mimeType);
+
+        // Guarda o resultado do upload para reutilizar caso a IA falhe e o usuário tente novamente.
+        if (uploadResult.url) {
+          uploadedReceiptRef.current = {
+            base64,
+            url: uploadResult.url,
+            fileId: '',
+            name: fileName
+          };
+        }
+      }
 
       // 2. Analyze with Gemini
       const token = await getAccessToken();
@@ -188,16 +212,17 @@ export function OfficeManagement({ clients, onAddClient }: OfficeManagementProps
       }
 
       const receipt = data.receiptData;
+      // Preenche apenas os campos ainda vazios para não sobrescrever o que o usuário já digitou (evita race com isAnalyzing)
       setTxForm(prev => ({
         ...prev,
-        description: receipt.description || prev.description,
-        type: (receipt.type === 'entrada' || receipt.type === 'saida') ? receipt.type : prev.type,
-        category: receipt.category || prev.category,
-        value: receipt.value ? receipt.value.toString() : prev.value,
-        date: receipt.date || prev.date,
-        payerName: receipt.payerName || prev.payerName,
-        receiverName: receipt.receiverName || prev.receiverName,
-        documentNumber: receipt.documentNumber || prev.documentNumber,
+        description: prev.description || receipt.description || prev.description,
+        type: prev.type ? prev.type : ((receipt.type === 'entrada' || receipt.type === 'saida') ? receipt.type : prev.type),
+        category: prev.category || receipt.category || prev.category,
+        value: prev.value || (receipt.value ? receipt.value.toString() : prev.value),
+        date: prev.date || receipt.date || prev.date,
+        payerName: prev.payerName || receipt.payerName || prev.payerName,
+        receiverName: prev.receiverName || receipt.receiverName || prev.receiverName,
+        documentNumber: prev.documentNumber || receipt.documentNumber || prev.documentNumber,
         receiptUrl: uploadResult.url || data.driveFile?.webViewLink || prev.receiptUrl,
         receiptName: fileName,
         receiptFileId: data.driveFile?.id || prev.receiptFileId
@@ -220,6 +245,14 @@ export function OfficeManagement({ clients, onAddClient }: OfficeManagementProps
 
     } catch (err: any) {
       console.error("Erro na análise/upload:", err);
+      // Se o upload já ocorreu, preserva o comprovante anexado mesmo que a análise da IA falhe.
+      if (uploadResult.url) {
+        setTxForm(prev => ({
+          ...prev,
+          receiptUrl: prev.receiptUrl || uploadResult.url,
+          receiptName: prev.receiptName || fileName
+        }));
+      }
       alert("Falha ao analisar comprovante: " + (err.message || "Erro desconhecido"));
     } finally {
       setIsAnalyzing(false);
@@ -231,7 +264,7 @@ export function OfficeManagement({ clients, onAddClient }: OfficeManagementProps
     setCameraError(null);
     setCameraStream(null);
 
-    setTimeout(async () => {
+    startCameraTimeoutRef.current = setTimeout(async () => {
       try {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
           throw new Error('Acesso à câmera não é suportado pelo seu navegador atual. Use o botão de câmera nativa do celular abaixo.');
@@ -241,6 +274,13 @@ export function OfficeManagement({ clients, onAddClient }: OfficeManagementProps
           video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
         });
 
+        // Se o componente desmontou (ou a câmera foi fechada) enquanto o getUserMedia resolvia, para o stream imediatamente.
+        if (!isMountedRef.current) {
+          stream.getTracks().forEach(track => track.stop());
+          return;
+        }
+
+        streamRef.current = stream;
         setCameraStream(stream);
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
@@ -262,6 +302,14 @@ export function OfficeManagement({ clients, onAddClient }: OfficeManagementProps
   };
 
   const stopCamera = () => {
+    if (startCameraTimeoutRef.current) {
+      clearTimeout(startCameraTimeoutRef.current);
+      startCameraTimeoutRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
     if (cameraStream) {
       cameraStream.getTracks().forEach(track => track.stop());
     }
@@ -295,15 +343,25 @@ export function OfficeManagement({ clients, onAddClient }: OfficeManagementProps
         type: 'image/jpeg',
         base64: base64Data
       });
+    } else {
+      // Contexto 2D indisponível: encerra a câmera e orienta o usuário a usar a câmera nativa.
+      stopCamera();
+      setCameraError('Não foi possível processar a imagem da câmera neste dispositivo. Use o botão de câmera nativa do celular.');
+      alert('Não foi possível capturar a foto pela câmera do navegador. Por favor, use o botão de câmera nativa do celular.');
     }
   };
 
   const handleCameraFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const input = e.target;
+    const file = input.files?.[0];
+    if (!file) {
+      input.value = '';
+      return;
+    }
 
     if (file.size > 5 * 1024 * 1024) {
       alert("O arquivo excede o limite permitido de 5MB.");
+      input.value = '';
       return;
     }
 
@@ -318,10 +376,23 @@ export function OfficeManagement({ clients, onAddClient }: OfficeManagementProps
       });
     };
     reader.readAsDataURL(file);
+    // Permite reanexar o mesmo arquivo posteriormente.
+    input.value = '';
   };
 
+  // Cleanup ao desmontar: marca desmontado, limpa o timeout e para o stream do ref (evita vazamento de MediaStream).
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
+      isMountedRef.current = false;
+      if (startCameraTimeoutRef.current) {
+        clearTimeout(startCameraTimeoutRef.current);
+        startCameraTimeoutRef.current = null;
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
       if (cameraStream) {
         cameraStream.getTracks().forEach(track => track.stop());
       }
@@ -346,11 +417,13 @@ export function OfficeManagement({ clients, onAddClient }: OfficeManagementProps
     { id: 'otx-7', description: 'Imposto Simples Nacional (Competência Junho)', type: 'saida', category: 'impostos', value: 1850, date: '2026-07-20', status: 'pendente' }
   ];
 
+  // Dados de exemplo — contatos FICTÍCIOS (e-mails .example / telefones de documentação).
+  // Substitua pelos leads reais no CRM; não versione dados pessoais de terceiros (LGPD).
   const INITIAL_OFFICE_LEADS = [
-    { id: 'olead-1', name: 'Reforma Cobertura Duplex Itaim', contactPerson: 'Marcos Villela', email: 'marcos@villela.com.br', phone: '(11) 98822-1144', status: 'negociacao', estimatedValue: 45000, description: 'Projeto de interiores completo e gestão de reforma em cobertura duplex de 220m².', createdAt: '2026-06-25' },
-    { id: 'olead-2', name: 'Residência Quinta da Baroneza II', contactPerson: 'Clara Mendonça', email: 'clara@mendonca.com', phone: '(11) 97722-5566', status: 'proposta', estimatedValue: 180000, description: 'Estudo preliminar e conceitual de arquitetura para casa de campo de alto padrão.', createdAt: '2026-06-28' },
-    { id: 'olead-3', name: 'Consultório Dermatologia Jardins', contactPerson: 'Dra. Patrícia Neves', email: 'dra.patricia@nevesdermato.com', phone: '(11) 96655-3311', status: 'prospeccao', estimatedValue: 28000, description: 'Adequação de layout clínico com 3 consultórios e recepção sob normas ANVISA.', createdAt: '2026-07-02' },
-    { id: 'olead-4', name: 'Edifício Comercial Pinheiros (Lobby)', contactPerson: 'Roberto Carlos (Síndico)', email: 'condominio.pinheiros@lobby.com', phone: '(11) 95533-0099', status: 'fechado', estimatedValue: 65000, description: 'Revitalização do hall social do edifício de escritórios.', createdAt: '2026-06-18' }
+    { id: 'olead-1', name: 'Reforma Cobertura Duplex Itaim', contactPerson: 'Contato Exemplo 1', email: 'lead1@exemplo.example', phone: '(11) 40000-1001', status: 'negociacao', estimatedValue: 45000, description: 'Projeto de interiores completo e gestão de reforma em cobertura duplex de 220m².', createdAt: '2026-06-25' },
+    { id: 'olead-2', name: 'Residência Quinta da Baroneza II', contactPerson: 'Contato Exemplo 2', email: 'lead2@exemplo.example', phone: '(11) 40000-1002', status: 'proposta', estimatedValue: 180000, description: 'Estudo preliminar e conceitual de arquitetura para casa de campo de alto padrão.', createdAt: '2026-06-28' },
+    { id: 'olead-3', name: 'Consultório Dermatologia Jardins', contactPerson: 'Contato Exemplo 3', email: 'lead3@exemplo.example', phone: '(11) 40000-1003', status: 'prospeccao', estimatedValue: 28000, description: 'Adequação de layout clínico com 3 consultórios e recepção sob normas ANVISA.', createdAt: '2026-07-02' },
+    { id: 'olead-4', name: 'Edifício Comercial Pinheiros (Lobby)', contactPerson: 'Contato Exemplo 4', email: 'lead4@exemplo.example', phone: '(11) 40000-1004', status: 'fechado', estimatedValue: 65000, description: 'Revitalização do hall social do edifício de escritórios.', createdAt: '2026-06-18' }
   ];
 
   useEffect(() => {
@@ -612,13 +685,14 @@ export function OfficeManagement({ clients, onAddClient }: OfficeManagementProps
         });
         const storagePath = `office_receipts/${formattedName}`;
         const uploadResult = await uploadBase64ToFirebase(selectedOfficeFile.base64, storagePath, selectedOfficeFile.type);
-        
-        if (uploadResult.url) {
+
+        if (uploadResult.error) {
+          // Espelha o tratamento do fluxo de IA: informa o usuário e não marca o comprovante como anexado com sucesso.
+          console.error("Erro no upload do comprovante manual:", uploadResult.error);
+          alert(`Não foi possível anexar o comprovante com segurança: ${uploadResult.error}`);
+        } else if (uploadResult.url) {
           finalReceiptUrl = uploadResult.url;
           finalReceiptName = selectedOfficeFile.name;
-        }
-        if (uploadResult.error) {
-          console.error("Erro no upload do comprovante manual:", uploadResult.error);
         }
       }
 

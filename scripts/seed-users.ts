@@ -21,7 +21,7 @@ const SEED_USERS: SeedUser[] = [
   { id: "admin-1", username: "CHAVES BRITES CORREA", role: "admin", name: "Chaves Brites Correa", passwordEnv: "ADMIN_PASSWORD" },
   { id: "user-marketing-1", username: "MKTCBC", role: "marketing", name: "Equipe de Marketing", passwordEnv: "MARKETING_PASSWORD" },
   { id: "user-client-1", username: "oralmed", role: "client", name: "Clínica OralMed", clientId: "client-1", passwordEnv: "CLIENT_ORALMED_PASSWORD" },
-  { id: "user-client-2", username: "roberto", role: "client", name: "Dr. Roberto Guimarães", clientId: "client-2", passwordEnv: "CLIENT_ROBERTO_PASSWORD" },
+  { id: "user-client-2", username: "roberto", role: "client", name: "Cliente Exemplo 2", clientId: "client-2", passwordEnv: "CLIENT_ROBERTO_PASSWORD" },
   { id: "user-client-3", username: "bosque", role: "client", name: "Residencial Bosque", clientId: "client-3", passwordEnv: "CLIENT_BOSQUE_PASSWORD" },
 ];
 

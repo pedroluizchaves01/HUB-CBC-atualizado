@@ -136,49 +136,20 @@ export const PlanningLaborPayments: React.FC<PlanningLaborPaymentsProps> = ({
     }
   }, [projects, laborProjectId, setLaborProjectId]);
 
-  // Ensure mock data matches project IDs dynamically if needed
-  useEffect(() => {
-    if (projects.length > 0) {
-      const firstId = projects[0].id;
-      const secondId = projects[1]?.id || firstId;
-
-      setContracts(prev => {
-        let updated = false;
-        const mapped = prev.map(c => {
-          if (c.projectId === 'proj-1' && firstId !== 'proj-1') {
-            updated = true;
-            return { ...c, projectId: firstId };
-          }
-          if (c.projectId === 'proj-2' && secondId !== 'proj-2') {
-            updated = true;
-            return { ...c, projectId: secondId };
-          }
-          return c;
-        });
-        return updated ? mapped : prev;
-      });
-
-      setPayments(prev => {
-        let updated = false;
-        const mapped = prev.map(p => {
-          if (p.projectId === 'proj-1' && firstId !== 'proj-1') {
-            updated = true;
-            return { ...p, projectId: firstId };
-          }
-          if (p.projectId === 'proj-2' && secondId !== 'proj-2') {
-            updated = true;
-            return { ...p, projectId: secondId };
-          }
-          return p;
-        });
-        return updated ? mapped : prev;
-      });
-    }
-  }, [projects]);
+  // Mapeamento derivado dos projectId dos mocks para os ids efetivos dos projetos.
+  // Feito no momento de filtrar (sem mutar o state, que o snapshot sobrescreveria).
+  const resolveProjectId = (projectId: string) => {
+    if (projects.length === 0) return projectId;
+    const firstId = projects[0].id;
+    const secondId = projects[1]?.id || firstId;
+    if (projectId === 'proj-1' && firstId !== 'proj-1') return firstId;
+    if (projectId === 'proj-2' && secondId !== 'proj-2') return secondId;
+    return projectId;
+  };
 
   // Filtering variables
-  const activeContracts = contracts.filter(c => c.projectId === laborProjectId);
-  const activePayments = payments.filter(p => p.projectId === laborProjectId);
+  const activeContracts = contracts.filter(c => resolveProjectId(c.projectId) === laborProjectId);
+  const activePayments = payments.filter(p => resolveProjectId(p.projectId) === laborProjectId);
 
   // Forms state
   const [isContractFormOpen, setIsContractFormOpen] = useState(false);
@@ -626,7 +597,7 @@ export const PlanningLaborPayments: React.FC<PlanningLaborPaymentsProps> = ({
 
                           {/* Date */}
                           <td className="p-3 text-center font-mono text-stone-600">
-                            {new Date(p.paymentDate).toLocaleDateString('pt-BR')}
+                            {new Date(p.paymentDate + 'T00:00:00').toLocaleDateString('pt-BR')}
                           </td>
 
                           {/* Payment Value */}
@@ -839,7 +810,7 @@ export const PlanningLaborPayments: React.FC<PlanningLaborPaymentsProps> = ({
                   {(() => {
                     const selectedContract = contracts.find(c => c.id === paymentForm.contractId);
                     const valNum = parseFloat(paymentForm.value) || 0;
-                    if (selectedContract && valNum > 0) {
+                    if (selectedContract && valNum > 0 && selectedContract.contractValue > 0) {
                       const percent = (valNum / selectedContract.contractValue) * 100;
                       return (
                         <span className="text-[10px] text-emerald-600 block mt-1 font-mono">
@@ -1093,7 +1064,7 @@ export const PlanningLaborPayments: React.FC<PlanningLaborPaymentsProps> = ({
                     <tbody className="divide-y divide-stone-200">
                       {activePayments.map((p, idx) => {
                         const contract = getContractForPayment(p);
-                        const percent = contract ? (p.value / contract.contractValue) * 100 : 0;
+                        const percent = contract && contract.contractValue > 0 ? (p.value / contract.contractValue) * 100 : 0;
                         return (
                           <tr key={p.id} className="align-middle">
                             <td className="p-1.5 text-center border-r border-stone-200 font-mono text-stone-500">
@@ -1101,7 +1072,7 @@ export const PlanningLaborPayments: React.FC<PlanningLaborPaymentsProps> = ({
                             </td>
                             <td className="p-1.5 border-r border-stone-200 font-medium">{p.supplier}</td>
                             <td className="p-1.5 border-r border-stone-200">{p.description}</td>
-                            <td className="p-1.5 text-center border-r border-stone-200 font-mono">{new Date(p.paymentDate).toLocaleDateString('pt-BR')}</td>
+                            <td className="p-1.5 text-center border-r border-stone-200 font-mono">{new Date(p.paymentDate + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                             <td className="p-1.5 text-right font-mono font-bold border-r border-stone-200">{formatCurrency(p.value)}</td>
                             <td className="p-1.5 text-right font-mono">{contract ? `${percent.toFixed(1)}%` : '-'}</td>
                           </tr>

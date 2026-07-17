@@ -508,12 +508,9 @@ export const PlanningMaterials: React.FC<PlanningMaterialsProps> = ({
   // Summary Metrics
   const totalItems = activeMaterials.length;
   const totalValue = activeMaterials.reduce((sum, m) => {
-    // If we have custom unitValue and parsed quantity, calculate it, otherwise use fallback estimatedValue
-    if (m.unitValue !== undefined) {
-      const parsedQty = parseQuantityStr(m.quantity);
-      return sum + (parsedQty.value * m.unitValue);
-    }
-    return sum + m.estimatedValue;
+    // Fonte única de verdade: usa item.estimatedValue (igual à coluna "Valor Total" da tabela),
+    // sem reparsear a string de quantidade, para o card não divergir do total da tabela.
+    return sum + (m.estimatedValue || 0);
   }, 0);
 
   const currentProject = projects.find(p => p.id === materiaisProjectId);

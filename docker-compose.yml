@@ -7,8 +7,11 @@ services:
       context: .
       dockerfile: Dockerfile.backend
     container_name: cbc-crm-api
-    ports:
-      - "3000:3000"
+    # NÃO publicamos a porta 3000 no host: o backend é acessado apenas internamente pela rede
+    # docker (o nginx do serviço 'frontend' faz proxy para crm-api:3000). O único entrypoint
+    # público é o nginx na porta 80, evitando dupla exposição e conflito de portas no host.
+    expose:
+      - "3000"
     environment:
       - NODE_ENV=production
       - GEMINI_API_KEY=${GEMINI_API_KEY} # Puxa da variável de ambiente configurada no Coolify ou arquivo .env

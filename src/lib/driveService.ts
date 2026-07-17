@@ -95,10 +95,14 @@ export const DRIVE_FOLDERS = {
 } as const;
 
 /**
- * Sobe um documento para a pasta correta no Drive do usuário autenticado.
- * Se não houver accessToken, retorna driveError em vez de lançar exceção
- * (a extração por IA deve continuar funcionando mesmo sem Drive conectado).
+ * DESATIVADO: a integração com o Google Drive está desligada — o armazenamento é feito
+ * exclusivamente via Telegram. Esta função é mantida apenas para compatibilidade de assinatura
+ * com os endpoints que ainda a chamam (não remover os parâmetros, mesmo sem uso).
+ *
+ * Retorna SEMPRE { driveFile: null, driveError: null }, de forma consistente, para que a
+ * extração por IA continue funcionando normalmente sem Drive conectado.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function saveDocumentToDrive(
   accessToken: string | undefined,
   folderName: string,
@@ -106,6 +110,6 @@ export async function saveDocumentToDrive(
   mimeType: string,
   fileBase64: string
 ): Promise<{ driveFile: { id: string; webViewLink: string } | null; driveError: string | null }> {
-  // Google Drive deactivated - working exclusively with Telegram storage
+  // Google Drive desativado — armazenamento exclusivo via Telegram. Retorno consistente e neutro.
   return { driveFile: null, driveError: null };
 }

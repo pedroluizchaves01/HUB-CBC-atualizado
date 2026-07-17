@@ -9,6 +9,7 @@ import { createServer as createViteServer } from "vite";
 import * as XLSX from "xlsx";
 import { saveDocumentToDrive, DRIVE_FOLDERS } from "./src/lib/driveService";
 import { extractReceiptText } from "./src/lib/receiptOcr";
+import { validateBase64File, RECEIPT_MIMES } from "./src/lib/server/fileValidation";
 import { parseReceiptText } from "./src/lib/receiptParser";
 import { authenticate, createSessionToken } from "./src/lib/server/authService";
 import { requireAuth, requireRole } from "./src/lib/server/authMiddleware";
@@ -845,10 +846,12 @@ app.post("/api/office/analyze-receipt", requireAuth, aiLimiter, async (req, res)
       return res.status(400).json({ error: "Arquivo ou tipo MIME ausente para a análise de comprovante." });
     }
 
-    // Validation of supported formats (Images and PDFs only)
-    const isAllowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(mimeType);
-    if (!isAllowed) {
-      return res.status(400).json({ error: "Formato de arquivo não suportado para leitura automática. Envie uma foto (JPG/PNG) ou um PDF." });
+    // Valida tipo REAL por magic bytes e tamanho (não confia só no mimeType do cliente).
+    const check = validateBase64File(fileBase64, RECEIPT_MIMES);
+    if (!check.ok) {
+      return res.status(check.error?.includes("limite") ? 413 : 400).json({
+        error: check.error || "Formato de arquivo não suportado. Envie uma foto (JPG/PNG) ou um PDF.",
+      });
     }
 
     // Salva o documento original no Drive (não bloqueia a extração por IA se falhar)
@@ -1005,10 +1008,13 @@ app.post("/api/telegram/upload", requireAuth, async (req, res) => {
     if (!base64Str) return res.status(400).json({ error: "Conteúdo do arquivo ausente." });
 
     const clean = String(base64Str).includes("base64,") ? String(base64Str).split("base64,")[1] : String(base64Str);
-    // Limite de ~10MB por arquivo (base64 ≈ 4/3 do binário).
-    if (clean.length > 14_000_000) return res.status(413).json({ error: "Arquivo excede o limite de 10MB." });
 
-    const result = await telegram.sendDocument(clean, fileName || "arquivo.dat", mimeType || "application/octet-stream");
+    // Valida TIPO REAL (magic bytes) e tamanho — não confia no mimeType do cliente.
+    // Aceita imagens, PDF e planilhas (o Telegram é usado para comprovantes e planilhas).
+    const check = validateBase64File(clean, RECEIPT_MIMES, { allowSpreadsheet: true });
+    if (!check.ok) return res.status(check.error?.includes("limite") ? 413 : 400).json({ error: check.error });
+
+    const result = await telegram.sendDocument(clean, fileName || "arquivo.dat", check.detected || mimeType || "application/octet-stream");
     return res.json({ success: true, url: result.url, fileId: result.fileId, error: null });
   } catch (e: any) {
     console.error("Erro no upload do Telegram:", e);

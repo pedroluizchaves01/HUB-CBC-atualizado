@@ -6,9 +6,8 @@ import {
   FileText, 
   Loader2, 
   Paperclip, 
-  ExternalLink, 
-  Folder, 
-  Sparkles, 
+  ExternalLink,
+  Sparkles,
   Upload, 
   CheckCircle2, 
   AlertCircle,
@@ -237,30 +236,47 @@ export default function AcompanhamentoFinanceiro({
     }
   };
 
-  const handleSaveBulkTransactions = () => {
+  const handleSaveBulkTransactions = async () => {
     if (!bulkTransactions) return;
-    
+
     const selectedTxs = bulkTransactions.filter(t => t.selected);
     if (selectedTxs.length === 0) {
       alert('Nenhum lançamento selecionado para importação.');
       return;
     }
 
-    selectedTxs.forEach((t, index) => {
-      const newTx: Transaction = {
-        id: `tx-${Date.now()}-${index}`,
-        projectId,
-        supplier: t.supplier,
-        description: t.description,
-        value: t.value,
-        category: t.category,
-        date: t.date,
-        status: 'pago',
-        notes: t.notes ? t.notes.trim() : undefined,
-        invoiceNumber: t.invoiceNumber ? t.invoiceNumber.trim() : undefined,
-      };
-      addTransaction(newTx);
-    });
+    // Descarta linhas com valor inválido (não finito ou menor/igual a zero)
+    const validTxs = selectedTxs.filter(t => Number.isFinite(t.value) && t.value > 0);
+    const invalidCount = selectedTxs.length - validTxs.length;
+    if (validTxs.length === 0) {
+      alert('Nenhum lançamento com valor válido (maior que R$ 0,00) para importar.');
+      return;
+    }
+    if (invalidCount > 0) {
+      alert(`${invalidCount} lançamento(s) com valor inválido (≤ R$ 0,00) serão ignorados.`);
+    }
+
+    const newTxs: Transaction[] = validTxs.map((t, index) => ({
+      id: `tx-${Date.now()}-${index}`,
+      projectId,
+      supplier: t.supplier,
+      description: t.description,
+      value: t.value,
+      category: t.category,
+      date: t.date,
+      status: 'pago',
+      notes: t.notes ? t.notes.trim() : undefined,
+      invoiceNumber: t.invoiceNumber ? t.invoiceNumber.trim() : undefined,
+    }));
+
+    try {
+      // Aguarda todas as gravações antes de limpar o estado e sinalizar sucesso
+      await Promise.all(newTxs.map(tx => addTransaction(tx)));
+    } catch (err) {
+      console.error('Erro ao importar lançamentos em lote:', err);
+      alert('Ocorreu um erro ao importar os lançamentos. Nenhuma alteração foi confirmada. Tente novamente.');
+      return;
+    }
 
     setBulkFile(null);
     setBulkTransactions(null);
@@ -268,7 +284,7 @@ export default function AcompanhamentoFinanceiro({
     if (bulkFileInputRef.current) {
       bulkFileInputRef.current.value = '';
     }
-    alert(`${selectedTxs.length} lançamentos financeiros importados com sucesso!`);
+    alert(`${newTxs.length} lançamentos financeiros importados com sucesso!`);
   };
 
   const handleCancelBulk = () => {
@@ -512,6 +528,13 @@ export default function AcompanhamentoFinanceiro({
     e.preventDefault();
     if (!manualForm.supplier.trim() || !manualForm.value) return;
 
+    // Valida valor: precisa ser um número finito e maior que zero
+    const v = parseFloat(manualForm.value);
+    if (!Number.isFinite(v) || v <= 0) {
+      alert('Por favor, informe um valor maior que R$ 0,00.');
+      return;
+    }
+
     setIsSavingManual(true);
 
     try {
@@ -528,7 +551,7 @@ export default function AcompanhamentoFinanceiro({
           data: manualForm.date,
           fornecedor: manualForm.supplier,
           descricao: manualForm.description || 'Lançamento Manual',
-          valor: parseFloat(manualForm.value),
+          valor: v,
           extension: manualFile.name
         });
 
@@ -539,7 +562,8 @@ export default function AcompanhamentoFinanceiro({
             manualFile.type
           );
           firebaseStorageUrl = uploadResult.url;
-          receiptName = firebaseStorageUrl || 'Local: ' + formattedFilename;
+          // Guarda o nome legível do arquivo; a URL fica apenas em receiptUrl
+          receiptName = formattedFilename;
           receiptBase64 = (firebaseStorageUrl && firebaseStorageUrl.startsWith('http') && !firebaseStorageUrl.startsWith('blob:')) ? undefined : (manualFile.base64.length < 400000 ? manualFile.base64 : undefined);
           receiptUrl = firebaseStorageUrl || undefined;
           if (uploadResult.error) {
@@ -555,7 +579,7 @@ export default function AcompanhamentoFinanceiro({
           ...editingTransaction,
           supplier: manualForm.supplier.trim(),
           description: manualForm.description.trim() || 'Lançamento Manual',
-          value: parseFloat(manualForm.value),
+          value: v,
           category: manualForm.category,
           date: manualForm.date,
           notes: manualForm.notes.trim() || undefined,
@@ -577,7 +601,7 @@ export default function AcompanhamentoFinanceiro({
           projectId,
           supplier: manualForm.supplier.trim(),
           description: manualForm.description.trim() || 'Lançamento Manual',
-          value: parseFloat(manualForm.value),
+          value: v,
           category: manualForm.category,
           date: manualForm.date,
           status: 'pago',
@@ -621,7 +645,7 @@ export default function AcompanhamentoFinanceiro({
       alert('Por favor, informe o Fornecedor.');
       return;
     }
-    if (scannedData.value <= 0) {
+    if (!Number.isFinite(scannedData.value) || scannedData.value <= 0) {
       alert('Por favor, informe um valor maior que R$ 0,00.');
       return;
     }
@@ -664,7 +688,8 @@ export default function AcompanhamentoFinanceiro({
       status: 'pago',
       notes: scannedData.notes || undefined,
       invoiceNumber: scannedData.invoiceNumber || undefined,
-      receiptName: firebaseStorageUrl || 'Local: ' + formattedFilename,
+      // Guarda o nome legível do arquivo; a URL fica apenas em receiptUrl
+      receiptName: formattedFilename,
       receiptBase64: (firebaseStorageUrl && firebaseStorageUrl.startsWith('http') && !firebaseStorageUrl.startsWith('blob:')) ? undefined : (selectedFile.base64.length < 400000 ? selectedFile.base64 : undefined),
       receiptUrl: firebaseStorageUrl || undefined,
     };
@@ -1566,44 +1591,31 @@ export default function AcompanhamentoFinanceiro({
                       {formatCurrency(tx.value)}
                     </td>
                     <td className="p-3 text-center">
-                      {tx.receiptName ? (
-                        tx.receiptName.startsWith('http') ? (
-                          <a
-                            href={tx.receiptName}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-700 py-1 px-2 text-[9px] font-mono uppercase font-bold inline-flex items-center gap-1 cursor-pointer transition-all rounded-none"
-                            title="Ver Nota Fiscal / Comprovante"
-                          >
-                            <Folder size={10} className="text-stone-500" />
-                            Anexo ↗
-                          </a>
-                        ) : tx.receiptUrl ? (
-                          <a
-                            href={tx.receiptUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 py-1 px-2 text-[9px] font-mono uppercase font-bold inline-flex items-center gap-1 cursor-pointer transition-all rounded-none"
-                            title="Visualizar Nota Fiscal na Nuvem (Firebase)"
-                          >
-                            <Paperclip size={10} className="text-emerald-600" />
-                            Anexo Nuvem ↗
-                          </a>
-                        ) : tx.receiptBase64 ? (
-                          <a
-                            href={tx.receiptBase64}
-                            download={tx.receiptName ? tx.receiptName.replace('Local: ', '') : 'comprovante.pdf'}
-                            className="bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 py-1 px-2 text-[9px] font-mono uppercase font-bold inline-flex items-center gap-1 cursor-pointer transition-all rounded-none"
-                            title="Baixar ou Visualizar Arquivo Anexado"
-                          >
-                            <Paperclip size={10} className="text-amber-600" />
-                            Anexo ↗
-                          </a>
-                        ) : (
-                          <span className="text-[10px] text-stone-400 font-mono italic" title={tx.receiptName}>
-                            Simulado
-                          </span>
-                        )
+                      {tx.receiptUrl ? (
+                        <a
+                          href={tx.receiptUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 py-1 px-2 text-[9px] font-mono uppercase font-bold inline-flex items-center gap-1 cursor-pointer transition-all rounded-none"
+                          title="Visualizar Nota Fiscal na Nuvem (Firebase)"
+                        >
+                          <Paperclip size={10} className="text-emerald-600" />
+                          Anexo Nuvem ↗
+                        </a>
+                      ) : tx.receiptBase64 ? (
+                        <a
+                          href={tx.receiptBase64}
+                          download={tx.receiptName ? tx.receiptName.replace('Local: ', '') : 'comprovante.pdf'}
+                          className="bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 py-1 px-2 text-[9px] font-mono uppercase font-bold inline-flex items-center gap-1 cursor-pointer transition-all rounded-none"
+                          title="Baixar ou Visualizar Arquivo Anexado"
+                        >
+                          <Paperclip size={10} className="text-amber-600" />
+                          Anexo ↗
+                        </a>
+                      ) : tx.receiptName ? (
+                        <span className="text-[10px] text-stone-400 font-mono italic" title={tx.receiptName}>
+                          Simulado
+                        </span>
                       ) : (
                         <span className="text-[10px] text-stone-400 font-mono">
                           —
