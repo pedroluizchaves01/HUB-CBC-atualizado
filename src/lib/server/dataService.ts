@@ -2,7 +2,7 @@
 // Camada de dados do "backend guardião": todo CRUD do Firestore passa por aqui, via Admin SDK.
 // O frontend NUNCA acessa o Firestore direto — chama os endpoints /api/data/* que usam este módulo.
 
-import { getAdminDb } from "./firebaseAdmin";
+import { getAdminDb } from "./db";
 
 // Allowlist de coleções permitidas. Qualquer coleção fora desta lista é rejeitada,
 // para o endpoint genérico não virar um acesso arbitrário ao banco.

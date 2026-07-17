@@ -15,7 +15,7 @@ import { authenticate, createSessionToken } from "./src/lib/server/authService";
 import { requireAuth, requireRole } from "./src/lib/server/authMiddleware";
 import * as dataService from "./src/lib/server/dataService";
 import * as telegram from "./src/lib/server/telegramServer";
-import { isAdminConfigured } from "./src/lib/server/firebaseAdmin";
+import { isDbConfigured, ensureSchema } from "./src/lib/server/db";
 
 dotenv.config();
 
@@ -1046,9 +1046,9 @@ app.post("/api/telegram/test", requireAuth, requireRole("admin"), async (req, re
   }
 });
 
-// Health-check simples (sem sessão) — reporta se o Admin SDK está configurado.
-app.get("/api/health", (req, res) => {
-  return res.json({ ok: true, adminConfigured: isAdminConfigured() });
+// Health-check simples (sem sessão) — reporta se o banco está configurado e alcançável.
+app.get("/api/health", async (req, res) => {
+  return res.json({ ok: true, dbConfigured: await isDbConfigured() });
 });
 
 
@@ -1066,6 +1066,16 @@ async function startServer() {
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
+  }
+
+  // Cria as tabelas do banco no boot (idempotente). Se o banco não estiver acessível,
+  // apenas registra o aviso — o servidor sobe mesmo assim e cada request falha com erro
+  // claro, evitando um crash-loop no deploy.
+  try {
+    await ensureSchema();
+    console.log("Esquema do banco verificado/criado com sucesso.");
+  } catch (e: any) {
+    console.error("Aviso: não foi possível preparar o banco no boot:", e?.message || e);
   }
 
   app.listen(PORT, "0.0.0.0", () => {

@@ -1,15 +1,18 @@
-// scripts/seed-users.ts
-// Provisiona os usuários iniciais no banco (Postgres/Supabase) com senha HASHEADA (bcrypt).
-// As senhas vêm de variáveis de ambiente — nunca do código versionado.
+// scripts/setup-supabase.ts
+// Passo único de configuração do banco Supabase/Postgres:
+//   1) testa a conexão,
+//   2) cria todas as tabelas (ensureSchema),
+//   3) provisiona os usuários iniciais com senha hasheada (a partir das envs de senha).
 //
-// Uso:
+// Uso (Git Bash), tudo numa linha só:
 //   DATABASE_URL='postgresql://...' \
-//   ADMIN_PASSWORD='...' MARKETING_PASSWORD='...' CLIENT_ORALMED_PASSWORD='...' \
-//   npx tsx scripts/seed-users.ts
+//   ADMIN_PASSWORD='...' MARKETING_PASSWORD='...' \
+//   CLIENT_ORALMED_PASSWORD='...' CLIENT_ROBERTO_PASSWORD='...' CLIENT_BOSQUE_PASSWORD='...' \
+//   npx tsx scripts/setup-supabase.ts
 //
-// Se uma senha não for informada, o usuário correspondente é PULADO (não recebe senha fraca).
+// Não imprime a connection string nem senhas.
 
-import { getAdminDb } from "../src/lib/server/db";
+import { getAdminDb, ensureSchema, isDbConfigured } from "../src/lib/server/db";
 import { hashPassword } from "../src/lib/server/authService";
 
 interface SeedUser {
@@ -26,25 +29,37 @@ const SEED_USERS: SeedUser[] = [
 ];
 
 async function main() {
+  console.log("1) Testando conexão com o banco...");
+  const ok = await isDbConfigured();
+  if (!ok) {
+    console.error("   ❌ Não foi possível conectar. Confira a DATABASE_URL (senha, host, porta 6543).");
+    process.exit(1);
+  }
+  console.log("   ✅ Conexão OK.");
+
+  console.log("2) Criando as tabelas (idempotente)...");
+  await ensureSchema();
+  console.log("   ✅ Tabelas prontas.");
+
+  console.log("3) Provisionando usuários...");
   const db = getAdminDb();
   let created = 0, skipped = 0;
-
   for (const u of SEED_USERS) {
     const pw = process.env[u.passwordEnv];
     if (!pw || pw.trim().length < 6) {
-      console.warn(`PULADO ${u.username}: defina ${u.passwordEnv} (mínimo 6 caracteres) para provisionar.`);
+      console.warn(`   PULADO ${u.username}: defina ${u.passwordEnv} (mínimo 6 caracteres).`);
       skipped++;
       continue;
     }
     const doc: any = { id: u.id, username: u.username, role: u.role, name: u.name, passwordHash: await hashPassword(pw) };
     if (u.clientId) doc.clientId = u.clientId;
     await db.collection("users").doc(u.id).set(doc, { merge: true });
-    console.log(`OK ${u.username} (${u.role}) provisionado com senha hasheada.`);
+    console.log(`   OK ${u.username} (${u.role}) provisionado.`);
     created++;
   }
 
-  console.log(`\nConcluído: ${created} provisionados, ${skipped} pulados.`);
+  console.log(`\n✅ Concluído: ${created} usuários provisionados, ${skipped} pulados. Banco pronto para uso.`);
   process.exit(0);
 }
 
-main().catch((e) => { console.error("Falha no seed de usuários:", e); process.exit(1); });
+main().catch((e) => { console.error("❌ Falha na configuração:", e?.message || e); process.exit(1); });

@@ -2,7 +2,7 @@
 // Serviço do Telegram SOMENTE backend. O token do bot e o chat id vivem aqui (via env/Firestore),
 // NUNCA no bundle do frontend. Toda chamada à API do Telegram é feita a partir do servidor.
 
-import { getAdminDb } from "./firebaseAdmin";
+import { getAdminDb } from "./db";
 
 export interface TelegramConfig {
   botToken: string;

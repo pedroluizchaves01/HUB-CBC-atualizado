@@ -1,11 +1,11 @@
 // scripts/seed-data.ts
-// Semeia as coleções de dados de negócio (não-sensíveis) no Firestore, uma única vez.
-// Antes, o seeding acontecia no onSnapshot do frontend; com o backend guardião, ele passa
-// a ser um passo explícito e idempotente. Só grava se a coleção estiver vazia.
+// Semeia as coleções de dados de negócio (não-sensíveis) no banco (Postgres/Supabase),
+// uma única vez. Antes, o seeding acontecia no onSnapshot do frontend; com o backend
+// guardião, ele passa a ser um passo explícito e idempotente. Só grava se a tabela estiver vazia.
 //
-// Uso: FIREBASE_SERVICE_ACCOUNT='{...}' npx tsx scripts/seed-data.ts
+// Uso: DATABASE_URL='postgresql://...' npx tsx scripts/seed-data.ts
 
-import { getAdminDb } from "../src/lib/server/firebaseAdmin";
+import { getAdminDb } from "../src/lib/server/db";
 import {
   INITIAL_CLIENTS, INITIAL_PROJECTS, INITIAL_TRANSACTIONS, INITIAL_DOCUMENTS,
 } from "../src/initialData";
