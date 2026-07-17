@@ -29,8 +29,12 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
     container_name: cbc-frontend
-    ports:
-      - "80:80"
+    # No Coolify NÃO publicamos porta no host: o proxy dele (porta 80/443) rotearia em
+    # conflito. O domínio configurado no painel aponta para este serviço na porta 80
+    # interna. Para rodar fora do Coolify (docker compose puro), troque por:
+    #   ports: ["80:80"]
+    expose:
+      - "80"
     depends_on:
       - crm-api
     restart: always
