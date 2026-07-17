@@ -955,11 +955,11 @@ export default function ClientDashboard({ client, projects, transactions, docume
                       <FileText size={14} className="text-stone-400 flex-shrink-0" />
                       <span className="font-mono text-[10px] text-stone-600 truncate" title={selectedTx.receiptName}>{selectedTx.receiptName}</span>
                     </div>
-                    {selectedTx.receiptName.startsWith('http') ? (
-                      <a 
-                        href={selectedTx.receiptName} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
+                    {(selectedTx.receiptUrl || selectedTx.receiptBase64) ? (
+                      <a
+                        href={selectedTx.receiptUrl || selectedTx.receiptBase64}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="text-[9px] font-mono uppercase bg-stone-900 text-white px-2 py-1 font-bold hover:bg-stone-800 transition-all cursor-pointer"
                       >
                         Abrir Nota ↗

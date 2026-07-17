@@ -650,6 +650,9 @@ export function MarketingManagement() {
               <p className="text-lg font-bold text-stone-900">
                 {summaryStats.socialFinished} de {summaryStats.socialTotal} Publicados
               </p>
+              {summaryStats.socialScheduled > 0 && (
+                <p className="text-[10px] font-mono text-stone-500">{summaryStats.socialScheduled} agendado(s)</p>
+              )}
             </div>
             <div className="p-2.5 bg-stone-200/50 text-stone-600 rounded-none">
               <Instagram size={16} />
