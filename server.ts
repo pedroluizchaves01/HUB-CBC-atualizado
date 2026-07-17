@@ -5,6 +5,8 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 import * as XLSX from "xlsx";
 import { saveDocumentToDrive, DRIVE_FOLDERS } from "./src/lib/driveService";
+import { extractReceiptText } from "./src/lib/receiptOcr";
+import { parseReceiptText } from "./src/lib/receiptParser";
 
 dotenv.config();
 
@@ -762,6 +764,9 @@ Mapeie as informações com precisão:
     - "marketing" (para anúncios, divulgação, redes sociais)
     - "utilidades" (para energia elétrica, água, internet, telefone)
     - "outras_saidas" (caso nenhuma outra se ajuste)
+- payerName: O nome de quem pagou/enviou o dinheiro (pagador/origem/remetente/debitado de). Se houver CPF ou CNPJ visível do pagador, inclua entre parênteses após o nome. Use string vazia se não identificado.
+- receiverName: O nome de quem recebeu o dinheiro (recebedor/beneficiário/favorecido/destino/creditado). Se houver CPF ou CNPJ visível do recebedor, inclua entre parênteses após o nome. Use string vazia se não identificado.
+- documentNumber: O número/identificador do comprovante: ID da transação, E2E ID do PIX, código de autenticação, número do documento, controle ou protocolo. Use string vazia se não identificado.
 
 Retorne estritamente um objeto JSON com as chaves indicadas. Não inclua markdown adicional ou comentários.
 `;
@@ -783,20 +788,59 @@ Retorne estritamente um objeto JSON com as chaves indicadas. Não inclua markdow
         date: { type: Type.STRING, description: "Data no formato YYYY-MM-DD" },
         type: { type: Type.STRING, description: "Tipo de operação: 'entrada' ou 'saida'" },
         category: { type: Type.STRING, description: "ID exato da categoria selecionada" },
+        payerName: { type: Type.STRING, description: "Nome de quem pagou (com CPF/CNPJ entre parênteses, se visível)" },
+        receiverName: { type: Type.STRING, description: "Nome de quem recebeu (com CPF/CNPJ entre parênteses, se visível)" },
+        documentNumber: { type: Type.STRING, description: "Número/ID do comprovante ou transação (E2E, autenticação, protocolo)" },
       },
       required: ["description", "value", "date", "type", "category"],
     };
 
-    const receiptData = await callGeminiForJson({
-      model: "gemini-3.5-flash",
-      contents,
-      responseSchema,
-      context: "comprovante",
-    });
+    // Orquestração: usa o Gemini quando a chave está configurada (melhor qualidade em fotos ruins)
+    // e cai automaticamente para o motor interno (OCR Tesseract + parser) se a chave não existir
+    // ou se a chamada à IA falhar por qualquer motivo.
+    let receiptData: any = null;
+    let engine: "gemini" | "ocr-interno" = "ocr-interno";
+    let confidence = 0;
 
-    return res.json({ 
-      success: true, 
-      receiptData, 
+    if (process.env.GEMINI_API_KEY) {
+      try {
+        receiptData = await callGeminiForJson({
+          model: "gemini-3.5-flash",
+          contents,
+          responseSchema,
+          context: "comprovante",
+        });
+        engine = "gemini";
+        confidence = 0.95;
+      } catch (geminiError: any) {
+        console.warn("Análise via Gemini falhou; usando motor interno de OCR como fallback:", geminiError?.message || geminiError);
+      }
+    }
+
+    if (!receiptData) {
+      const rawText = await extractReceiptText(fileBase64, mimeType);
+      const parsed = parseReceiptText(rawText);
+      const joinNameDoc = (name: string | null, doc: string | null) =>
+        name ? (doc ? `${name} (${doc})` : name) : (doc || "");
+      receiptData = {
+        description: parsed.description,
+        value: parsed.value || 0,
+        date: parsed.date,
+        type: parsed.type,
+        category: parsed.category,
+        payerName: joinNameDoc(parsed.payerName, parsed.payerDoc),
+        receiverName: joinNameDoc(parsed.receiverName, parsed.receiverDoc),
+        documentNumber: parsed.documentNumber || "",
+      };
+      engine = "ocr-interno";
+      confidence = parsed.confidence;
+    }
+
+    return res.json({
+      success: true,
+      receiptData,
+      engine,
+      confidence,
       driveFile,
       driveError
     });

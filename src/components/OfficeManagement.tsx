@@ -52,6 +52,9 @@ export interface OfficeTransaction {
   receiptUrl?: string;
   receiptName?: string;
   receiptFileId?: string;
+  payerName?: string;      // Quem pagou (extraído do comprovante ou digitado)
+  receiverName?: string;   // Quem recebeu (extraído do comprovante ou digitado)
+  documentNumber?: string; // Nº do comprovante/transação (E2E, autenticação, protocolo)
 }
 
 export interface OfficeLead {
@@ -118,7 +121,10 @@ export function OfficeManagement({ clients, onAddClient }: OfficeManagementProps
     notes: '',
     receiptUrl: '',
     receiptName: '',
-    receiptFileId: ''
+    receiptFileId: '',
+    payerName: '',
+    receiverName: '',
+    documentNumber: ''
   });
 
   const [isGoogleLinked, setIsGoogleLinked] = useState(false);
@@ -189,6 +195,9 @@ export function OfficeManagement({ clients, onAddClient }: OfficeManagementProps
         category: receipt.category || prev.category,
         value: receipt.value ? receipt.value.toString() : prev.value,
         date: receipt.date || prev.date,
+        payerName: receipt.payerName || prev.payerName,
+        receiverName: receipt.receiverName || prev.receiverName,
+        documentNumber: receipt.documentNumber || prev.documentNumber,
         receiptUrl: uploadResult.url || data.driveFile?.webViewLink || prev.receiptUrl,
         receiptName: fileName,
         receiptFileId: data.driveFile?.id || prev.receiptFileId
@@ -196,10 +205,17 @@ export function OfficeManagement({ clients, onAddClient }: OfficeManagementProps
 
       setSelectedOfficeFile(null);
 
+      const engineLabel = data.engine === 'gemini'
+        ? 'lido pela IA Gemini'
+        : 'lido pelo motor interno de OCR (sem IA externa)';
+      const lowConfidenceWarning = (typeof data.confidence === 'number' && data.confidence < 0.6)
+        ? '\n\nAtenção: a leitura automática teve confiança baixa — confira os campos preenchidos antes de salvar.'
+        : '';
+
       if (uploadResult.error) {
-        alert(`Comprovante analisado pela IA com sucesso!\n\nNota de Armazenamento: ${uploadResult.error}`);
+        alert(`Comprovante ${engineLabel} com sucesso!${lowConfidenceWarning}\n\nNota de Armazenamento: ${uploadResult.error}`);
       } else {
-        alert("Comprovante analisado com sucesso pela IA e armazenado com segurança no Firebase Storage!");
+        alert(`Comprovante ${engineLabel} com sucesso e armazenado com segurança no Firebase Storage!${lowConfidenceWarning}`);
       }
 
     } catch (err: any) {
@@ -540,7 +556,10 @@ export function OfficeManagement({ clients, onAddClient }: OfficeManagementProps
       notes: '',
       receiptUrl: '',
       receiptName: '',
-      receiptFileId: ''
+      receiptFileId: '',
+      payerName: '',
+      receiverName: '',
+      documentNumber: ''
     });
     setIsTxModalOpen(true);
   };
@@ -558,7 +577,10 @@ export function OfficeManagement({ clients, onAddClient }: OfficeManagementProps
       notes: tx.notes || '',
       receiptUrl: tx.receiptUrl || '',
       receiptName: tx.receiptName || '',
-      receiptFileId: tx.receiptFileId || ''
+      receiptFileId: tx.receiptFileId || '',
+      payerName: tx.payerName || '',
+      receiverName: tx.receiverName || '',
+      documentNumber: tx.documentNumber || ''
     });
     setIsTxModalOpen(true);
   };
@@ -611,6 +633,9 @@ export function OfficeManagement({ clients, onAddClient }: OfficeManagementProps
           date: txForm.date,
           status: txForm.status,
           notes: txForm.notes,
+          payerName: txForm.payerName || undefined,
+          receiverName: txForm.receiverName || undefined,
+          documentNumber: txForm.documentNumber || undefined,
           receiptUrl: finalReceiptUrl || undefined,
           receiptName: finalReceiptName || undefined,
           receiptFileId: finalReceiptFileId || undefined
@@ -628,6 +653,9 @@ export function OfficeManagement({ clients, onAddClient }: OfficeManagementProps
           date: txForm.date,
           status: txForm.status,
           notes: txForm.notes,
+          payerName: txForm.payerName || undefined,
+          receiverName: txForm.receiverName || undefined,
+          documentNumber: txForm.documentNumber || undefined,
           receiptUrl: finalReceiptUrl || undefined,
           receiptName: finalReceiptName || undefined,
           receiptFileId: finalReceiptFileId || undefined
@@ -1086,6 +1114,18 @@ export function OfficeManagement({ clients, onAddClient }: OfficeManagementProps
                             {tx.notes && (
                               <span className="text-[10px] text-stone-400 block mt-0.5 max-w-sm truncate italic">
                                 {tx.notes}
+                              </span>
+                            )}
+                            {(tx.payerName || tx.receiverName) && (
+                              <span className="text-[9.5px] text-stone-500 block mt-0.5 max-w-sm truncate font-mono">
+                                {tx.payerName ? `Pagou: ${tx.payerName}` : ''}
+                                {tx.payerName && tx.receiverName ? ' • ' : ''}
+                                {tx.receiverName ? `Recebeu: ${tx.receiverName}` : ''}
+                              </span>
+                            )}
+                            {tx.documentNumber && (
+                              <span className="text-[9px] text-stone-400 block max-w-sm truncate font-mono" title={tx.documentNumber}>
+                                Comprovante nº {tx.documentNumber}
                               </span>
                             )}
                             {tx.receiptUrl && (
@@ -1547,7 +1587,7 @@ export function OfficeManagement({ clients, onAddClient }: OfficeManagementProps
                             Analisar com IA (Recomendado)
                           </span>
                           <span className="block text-[9.5px] text-stone-500 leading-normal">
-                            O Gemini preencherá automaticamente os campos em poucos segundos.
+                            Os campos serão preenchidos automaticamente: pela IA Gemini (quando configurada no servidor) ou pelo motor interno de OCR, que funciona sem IA externa.
                           </span>
                         </div>
                       </button>
@@ -1699,6 +1739,41 @@ export function OfficeManagement({ clients, onAddClient }: OfficeManagementProps
                     className="w-full bg-[#FBFBFA] border border-stone-300 focus:border-stone-900 p-2 text-xs focus:outline-none font-mono"
                   />
                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="block text-[9.5px] font-mono uppercase text-stone-500 font-bold">Quem Pagou</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: CBC Arquitetura LTDA..."
+                    value={txForm.payerName}
+                    onChange={(e) => setTxForm(prev => ({ ...prev, payerName: e.target.value }))}
+                    className="w-full bg-[#FBFBFA] border border-stone-300 focus:border-stone-900 p-2 text-xs focus:outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[9.5px] font-mono uppercase text-stone-500 font-bold">Quem Recebeu</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Fornecedor, prestador..."
+                    value={txForm.receiverName}
+                    onChange={(e) => setTxForm(prev => ({ ...prev, receiverName: e.target.value }))}
+                    className="w-full bg-[#FBFBFA] border border-stone-300 focus:border-stone-900 p-2 text-xs focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-[9.5px] font-mono uppercase text-stone-500 font-bold">Nº do Comprovante</label>
+                <input
+                  type="text"
+                  placeholder="ID da transação, E2E, autenticação, protocolo..."
+                  value={txForm.documentNumber}
+                  onChange={(e) => setTxForm(prev => ({ ...prev, documentNumber: e.target.value }))}
+                  className="w-full bg-[#FBFBFA] border border-stone-300 focus:border-stone-900 p-2 text-xs focus:outline-none font-mono"
+                />
               </div>
 
               <div className="space-y-1">
