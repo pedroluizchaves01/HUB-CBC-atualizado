@@ -1,44 +1,15 @@
 import { User, Client, Project, Transaction, ProjectDocument } from './types';
 
+// IMPORTANTE: nenhum passwordHash/senha é versionado aqui. As senhas são definidas
+// no backend (scripts/seed-users.ts, a partir de variáveis de ambiente) e guardadas
+// com hash bcrypt no Firestore. Este arquivo vai para o bundle público, então não
+// pode conter credencial alguma. O campo passwordHash fica vazio (nunca é usado no cliente).
 export const INITIAL_USERS: User[] = [
-  {
-    id: 'admin-1',
-    username: 'CHAVES BRITES CORREA',
-    passwordHash: 'Cbc*12345',
-    role: 'admin',
-    name: 'Chaves Brites Correa'
-  },
-  {
-    id: 'user-marketing-1',
-    username: 'MKTCBC',
-    passwordHash: 'Mkt*CBC',
-    role: 'marketing',
-    name: 'Equipe de Marketing'
-  },
-  {
-    id: 'user-client-1',
-    username: 'oralmed',
-    passwordHash: '123',
-    role: 'client',
-    name: 'Clínica OralMed',
-    clientId: 'client-1'
-  },
-  {
-    id: 'user-client-2',
-    username: 'roberto',
-    passwordHash: '123',
-    role: 'client',
-    name: 'Dr. Roberto Guimarães',
-    clientId: 'client-2'
-  },
-  {
-    id: 'user-client-3',
-    username: 'bosque',
-    passwordHash: '123',
-    role: 'client',
-    name: 'Residencial Bosque',
-    clientId: 'client-3'
-  }
+  { id: 'admin-1', username: 'CHAVES BRITES CORREA', passwordHash: '', role: 'admin', name: 'Chaves Brites Correa' },
+  { id: 'user-marketing-1', username: 'MKTCBC', passwordHash: '', role: 'marketing', name: 'Equipe de Marketing' },
+  { id: 'user-client-1', username: 'oralmed', passwordHash: '', role: 'client', name: 'Clínica OralMed', clientId: 'client-1' },
+  { id: 'user-client-2', username: 'roberto', passwordHash: '', role: 'client', name: 'Dr. Roberto Guimarães', clientId: 'client-2' },
+  { id: 'user-client-3', username: 'bosque', passwordHash: '', role: 'client', name: 'Residencial Bosque', clientId: 'client-3' }
 ];
 
 export const INITIAL_CLIENTS: Client[] = [

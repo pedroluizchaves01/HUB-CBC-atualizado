@@ -1,177 +1,21 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Pillar 1 & 4: Default-deny catch-all gate
+
+    // ==========================================================================
+    // ACESSO DIRETO PELO CLIENTE: TOTALMENTE BLOQUEADO (default-deny real).
+    //
+    // Este app usa o padrão "backend guardião": TODO acesso a dados passa pelo
+    // servidor Express, que autentica a sessão e usa o Firebase Admin SDK.
+    // O Admin SDK IGNORA estas regras (acesso privilegiado de servidor), portanto
+    // o backend continua funcionando normalmente.
+    //
+    // O navegador NUNCA fala direto com o Firestore. Assim, negar tudo aqui é o
+    // comportamento correto e seguro: qualquer tentativa de acesso direto (via SDK
+    // web, REST, ou console) com as credenciais públicas do Firebase é rejeitada.
+    // ==========================================================================
     match /{document=**} {
       allow read, write: if false;
-    }
-    
-    // Global helper definitions for static validation
-    function isValidId(id) {
-      return id is string && id.size() <= 128;
-    }
-    
-    // Match blocks for every collection identified in the blueprint
-    match /users/{userId} {
-      allow read: if true;
-      allow create, update: if isValidId(userId) 
-        && request.resource.data.keys().hasAll(['id', 'username', 'passwordHash', 'role', 'name'])
-        && request.resource.data.role in ['admin', 'client', 'marketing']
-        && request.resource.data.username is string && request.resource.data.username.size() <= 100;
-      allow delete: if true;
-    }
-    
-    match /clients/{clientId} {
-      allow read: if true;
-      allow create, update: if isValidId(clientId)
-        && request.resource.data.keys().hasAll(['id', 'name', 'username', 'createdAt'])
-        && request.resource.data.name is string && request.resource.data.name.size() <= 200;
-      allow delete: if true;
-    }
-    
-    match /projects/{projectId} {
-      allow read: if true;
-      allow create, update: if isValidId(projectId)
-        && request.resource.data.keys().hasAll(['id', 'name', 'clientId', 'status'])
-        && request.resource.data.status in ['planejamento', 'execucao', 'concluido']
-        && request.resource.data.name is string && request.resource.data.name.size() <= 200;
-      allow delete: if true;
-    }
-    
-    match /transactions/{transactionId} {
-      allow read: if true;
-      allow create, update: if isValidId(transactionId)
-        && request.resource.data.keys().hasAll(['id', 'projectId', 'description', 'category', 'value', 'date', 'status'])
-        && request.resource.data.status in ['pago', 'pendente']
-        && request.resource.data.value is number;
-      allow delete: if true;
-    }
-    
-    match /documents/{documentId} {
-      allow read: if true;
-      allow create, update: if isValidId(documentId)
-        && request.resource.data.keys().hasAll(['id', 'projectId', 'name', 'uploadedAt'])
-        && request.resource.data.name is string && request.resource.data.name.size() <= 250;
-      allow delete: if true;
-    }
-    
-    match /materials/{materialId} {
-      allow read: if true;
-      allow create, update: if isValidId(materialId);
-      allow delete: if true;
-    }
-    
-    match /daily_logs/{logId} {
-      allow read: if true;
-      allow create, update: if isValidId(logId)
-        && request.resource.data.keys().hasAll(['id', 'projectId', 'date']);
-      allow delete: if true;
-    }
-    
-    match /timeline_phases/{phaseId} {
-      allow read: if true;
-      allow create, update: if isValidId(phaseId)
-        && request.resource.data.keys().hasAll(['id', 'projectId', 'name', 'progress']);
-      allow delete: if true;
-    }
-    
-    match /punch_lists/{punchId} {
-      allow read: if true;
-      allow create, update: if isValidId(punchId);
-      allow delete: if true;
-    }
-    
-    match /regulatory_steps/{stepId} {
-      allow read: if true;
-      allow create, update: if isValidId(stepId);
-      allow delete: if true;
-    }
-    
-    match /weekly_logs/{logId} {
-      allow read: if true;
-      allow create, update: if isValidId(logId);
-      allow delete: if true;
-    }
-    
-    match /office_transactions/{txId} {
-      allow read: if true;
-      allow create, update: if isValidId(txId);
-      allow delete: if true;
-    }
-    
-    match /office_leads/{leadId} {
-      allow read: if true;
-      allow create, update: if isValidId(leadId);
-      allow delete: if true;
-    }
-    
-    match /labor_contracts/{contractId} {
-      allow read: if true;
-      allow create, update: if isValidId(contractId);
-      allow delete: if true;
-    }
-    
-    match /labor_payments/{paymentId} {
-      allow read: if true;
-      allow create, update: if isValidId(paymentId);
-      allow delete: if true;
-    }
-    
-    match /unified_suppliers/{supplierId} {
-      allow read: if true;
-      allow create, update: if isValidId(supplierId);
-      allow delete: if true;
-    }
-    
-    match /unified_materials/{materialId} {
-      allow read: if true;
-      allow create, update: if isValidId(materialId);
-      allow delete: if true;
-    }
-    
-    match /quotation_maps/{mapId} {
-      allow read: if true;
-      allow create, update: if isValidId(mapId);
-      allow delete: if true;
-    }
-    
-    match /marketing_campaigns/{campaignId} {
-      allow read: if true;
-      allow create, update: if isValidId(campaignId);
-      allow delete: if true;
-    }
-    
-    match /marketing_posts/{postId} {
-      allow read: if true;
-      allow create, update: if isValidId(postId);
-      allow delete: if true;
-    }
-
-    match /marketing_outbound/{outboundId} {
-      allow read: if true;
-      allow create, update: if isValidId(outboundId);
-      allow delete: if true;
-    }
-
-    match /marketing_press/{pressId} {
-      allow read: if true;
-      allow create, update: if isValidId(pressId);
-      allow delete: if true;
-    }
-
-    match /marketing_settings/{settingId} {
-      allow read: if true;
-      allow create, update: if isValidId(settingId);
-      allow delete: if true;
-    }
-    
-    match /system_status/{docId} {
-      allow read, write: if true;
-    }
-
-    match /settings/{settingId} {
-      allow read, write: if true;
     }
   }
 }

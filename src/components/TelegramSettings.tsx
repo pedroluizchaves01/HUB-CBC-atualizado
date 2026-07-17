@@ -30,7 +30,7 @@ export function TelegramSettings() {
   const fetchConfig = async () => {
     try {
       const data = await getTelegramConfig();
-      setBotToken(maskToken(data.botToken));
+      setBotToken(data.botTokenMasked || '');
       setChatId(data.chatId || '');
       setFileNamePattern(data.fileNamePattern || '{centro} - {data} - {fornecedor} - {descricao} - {valor}');
     } catch (error) {

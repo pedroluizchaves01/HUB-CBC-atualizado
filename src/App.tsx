@@ -29,11 +29,7 @@ export default function App() {
 
   // If no user is logged in, show the clean login page
   if (!currentUser) {
-    const handleLoginAttempt = (username: string, pb: string) => {
-      const result = login(username, pb);
-      return result;
-    };
-
+    const handleLoginAttempt = (username: string, pb: string) => login(username, pb);
     return <Login onLogin={handleLoginAttempt} />;
   }
 

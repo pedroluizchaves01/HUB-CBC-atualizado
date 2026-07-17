@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { User, Client, Project, Transaction, ProjectDocument } from './types';
 import { INITIAL_USERS, INITIAL_CLIENTS, INITIAL_PROJECTS, INITIAL_TRANSACTIONS, INITIAL_DOCUMENTS } from './initialData';
 import { subscribeCollection, saveDoc, removeDoc } from './lib/firebaseDb';
-import { ensureDefaultTelegramConfig } from './lib/telegramService';
+import { apiSend, setSessionToken, getSessionToken, ApiError } from './lib/apiClient';
 
 export function useStore() {
   const [users, setUsers] = useState<User[]>([]);
@@ -16,9 +16,8 @@ export function useStore() {
     return saved ? JSON.parse(saved) : null;
   });
 
-  // Real-time synchronization listeners with automatic seeding
+  // Real-time synchronization listeners (via backend guardião)
   useEffect(() => {
-    ensureDefaultTelegramConfig().catch(err => console.error('Erro ao garantir configuração padrão do Telegram:', err));
     const unsubUsers = subscribeCollection('users', setUsers, INITIAL_USERS, 'cbc_users');
     const unsubClients = subscribeCollection('clients', setClients, INITIAL_CLIENTS, 'cbc_clients');
     const unsubProjects = subscribeCollection('projects', setProjects, INITIAL_PROJECTS, 'cbc_projects');
@@ -34,70 +33,50 @@ export function useStore() {
     };
   }, []);
 
-  // Auto-heal/sync missing default users from INITIAL_USERS (e.g. newly added roles like Marketing)
+  // Sessão do app: só é considerada válida se houver token de sessão do backend.
+  // Isso impede forjar 'cbc_current_user' no storage sem um token assinado pelo servidor.
   useEffect(() => {
-    if (users.length > 0) {
-      INITIAL_USERS.forEach(async (defaultUser) => {
-        const exists = users.some(
-          u => u.username.trim().toLowerCase() === defaultUser.username.trim().toLowerCase()
-        );
-        if (!exists) {
-          console.log(`Auto-seeding missing default user: ${defaultUser.username}`);
-          try {
-            await saveDoc('users', defaultUser.id, defaultUser);
-          } catch (err) {
-            console.error(`Failed to auto-seed missing user ${defaultUser.username}:`, err);
-          }
-        }
-      });
-    }
-  }, [users]);
-
-  // Sync current user login session
-  useEffect(() => {
-    if (currentUser) {
+    if (currentUser && getSessionToken()) {
       sessionStorage.setItem('cbc_current_user', JSON.stringify(currentUser));
-    } else {
+    } else if (!currentUser) {
       sessionStorage.removeItem('cbc_current_user');
     }
   }, [currentUser]);
 
-  // Case-insensitive username comparison, case-sensitive password comparison
-  const login = (usernameInput: string, passwordInput: string): { success: boolean; error?: string; user?: User } => {
-    const cleanUsername = usernameInput.trim().toLowerCase();
-    
-    let matchedUser = users.find(
-      u => u.username.trim().toLowerCase() === cleanUsername
-    );
+  // Ao montar, se há usuário salvo mas nenhum token de sessão, descarta a sessão (não confiável).
+  useEffect(() => {
+    if (currentUser && !getSessionToken()) {
+      setCurrentUser(null);
+      sessionStorage.removeItem('cbc_current_user');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    // If not found in the sync'd state, fallback to hardcoded INITIAL_USERS for instant availability
-    if (!matchedUser) {
-      const fallbackUser = INITIAL_USERS.find(
-        u => u.username.trim().toLowerCase() === cleanUsername
-      );
-      if (fallbackUser && fallbackUser.passwordHash === passwordInput) {
-        // Trigger a save so it populates on Firestore
-        saveDoc('users', fallbackUser.id, fallbackUser).catch(err => {
-          console.error('Error seeding user on demand:', err);
-        });
-        matchedUser = fallbackUser;
+  // Login real: valida no backend (bcrypt + sessão assinada). Nenhuma senha é comparada no cliente.
+  const login = async (usernameInput: string, passwordInput: string): Promise<{ success: boolean; error?: string; user?: User }> => {
+    try {
+      const resp = await apiSend('/api/auth/login', 'POST', {
+        username: usernameInput.trim(),
+        password: passwordInput,
+      });
+      if (!resp?.user || !resp?.token) {
+        return { success: false, error: 'Resposta inválida do servidor.' };
       }
+      setSessionToken(resp.token);
+      const user = resp.user as User;
+      setCurrentUser(user);
+      return { success: true, user };
+    } catch (err: any) {
+      const msg = err instanceof ApiError
+        ? err.message
+        : 'Não foi possível conectar ao servidor. Tente novamente.';
+      return { success: false, error: msg };
     }
-
-    if (!matchedUser) {
-      return { success: false, error: 'Usuário ou senha incorretos ou cadastro não localizado.' };
-    }
-
-    if (matchedUser.passwordHash !== passwordInput) {
-      return { success: false, error: 'Usuário ou senha incorretos ou cadastro não localizado.' };
-    }
-
-    setCurrentUser(matchedUser);
-    ensureDefaultTelegramConfig().catch(err => console.error('Erro ao vincular Telegram automaticamente:', err));
-    return { success: true, user: matchedUser };
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try { await apiSend('/api/auth/logout', 'POST', {}); } catch { /* ignora */ }
+    setSessionToken(null);
     setCurrentUser(null);
   };
 
@@ -109,34 +88,35 @@ export function useStore() {
       throw new Error(`O usuário "${newClient.username}" já está cadastrado.`);
     }
 
-    // Save client to Firestore
+    // Salva o cliente (via backend)
     await saveDoc('clients', newClient.id, newClient);
 
-    // Create and save links user
-    const newUser: User = {
+    // Cria o usuário vinculado com senha HASHEADA no backend (nunca em texto puro).
+    await apiSend('/api/users/upsert', 'POST', {
       id: `user-${Date.now()}`,
       username: newClient.username,
-      passwordHash: passwordInput,
       role: 'client',
       name: newClient.name,
-      clientId: newClient.id
-    };
-    await saveDoc('users', newUser.id, newUser);
+      clientId: newClient.id,
+      password: passwordInput,
+    });
   };
 
   const editClient = async (updatedClient: Client, newPassword?: string) => {
     await saveDoc('clients', updatedClient.id, updatedClient);
-    
-    // Update linked user
+
+    // Atualiza o usuário vinculado. A senha (se informada) é hasheada no backend.
     const linkedUser = users.find(u => u.clientId === updatedClient.id);
     if (linkedUser) {
-      const updatedUser: User = {
-        ...linkedUser,
-        name: updatedClient.name,
+      await apiSend('/api/users/upsert', 'POST', {
+        id: linkedUser.id,
         username: updatedClient.username,
-        passwordHash: newPassword && newPassword.trim() !== '' ? newPassword : linkedUser.passwordHash
-      };
-      await saveDoc('users', updatedUser.id, updatedUser);
+        role: linkedUser.role,
+        name: updatedClient.name,
+        clientId: linkedUser.clientId,
+        // Só envia password quando o admin definiu uma nova; senão o backend mantém a atual.
+        password: newPassword && newPassword.trim() !== '' ? newPassword : undefined,
+      });
     }
   };
 

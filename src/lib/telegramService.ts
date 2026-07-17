@@ -1,13 +1,13 @@
-import { doc, getDoc } from 'firebase/firestore';
-import { db, saveDoc } from './firebaseDb';
+// src/lib/telegramService.ts
+// FRONTEND: apenas um cliente fino para os endpoints do backend guardião.
+// Nenhum token de bot, senha ou chamada direta à API do Telegram vive aqui — tudo isso
+// migrou para o servidor (src/lib/server/telegramServer.ts). O bundle não contém segredos.
 
-export const DEFAULT_BOT_TOKEN = '8301754881:AAGhunIBqoCrngjRfaC3N9fkCCxyWktblKk';
-export const DEFAULT_CHAT_ID = '-5480284811';
-export const DEFAULT_FILE_PATTERN = '{centro} - {data} - {fornecedor} - {descricao} - {valor}';
-const ADMIN_PASSWORD = 'Cbc*12345';
+import { apiGet, apiSend } from "./apiClient";
 
 export interface TelegramConfig {
-  botToken: string;
+  botTokenMasked: string;
+  botTokenSet: boolean;
   chatId: string;
   fileNamePattern: string;
 }
@@ -21,183 +21,68 @@ export interface DocumentNameFields {
   extension?: string;
 }
 
-export function maskToken(token: string): string {
-  if (!token) return '';
-  if (token.length <= 10) return token;
-  return token.substring(0, 6) + '...' + token.substring(token.length - 4);
-}
-
+/** Formata o nome do arquivo (lógica pura, pode rodar no cliente). */
 export function buildTelegramFileName(pattern: string, fields: DocumentNameFields): string {
-  const sanitize = (str: string) => str.replace(/[/\\?%*:|"<>\n\r]/g, '').trim();
+  const sanitize = (str: string) => str.replace(/[/\\?%*:|"<>\n\r]/g, "").trim();
+  const centro = fields.centro ? sanitize(fields.centro) : "Geral";
+  const data = fields.data ? sanitize(fields.data) : new Date().toISOString().split("T")[0];
+  const fornecedor = fields.fornecedor ? sanitize(fields.fornecedor) : "Fornecedor";
+  const descricao = fields.descricao ? sanitize(fields.descricao) : "Documento";
 
-  const centro = fields.centro !== undefined && fields.centro !== null && fields.centro !== ''
-    ? sanitize(fields.centro)
-    : 'Geral';
-
-  const data = fields.data !== undefined && fields.data !== null && fields.data !== ''
-    ? sanitize(fields.data)
-    : new Date().toISOString().split('T')[0];
-
-  const fornecedor = fields.fornecedor !== undefined && fields.fornecedor !== null && fields.fornecedor !== ''
-    ? sanitize(fields.fornecedor)
-    : 'Fornecedor';
-
-  const descricao = fields.descricao !== undefined && fields.descricao !== null && fields.descricao !== ''
-    ? sanitize(fields.descricao)
-    : 'Documento';
-
-  let valor = '';
-  if (fields.valor !== undefined && fields.valor !== null && fields.valor !== '') {
-    if (typeof fields.valor === 'number') {
-      valor = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(fields.valor);
-    } else {
-      valor = fields.valor.toString();
-    }
+  let valor = "";
+  if (fields.valor !== undefined && fields.valor !== null && fields.valor !== "") {
+    valor = typeof fields.valor === "number"
+      ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(fields.valor)
+      : String(fields.valor);
     valor = sanitize(valor);
   }
 
-  // Replace placeholders in pattern
-  let rawName = pattern
-    .replace(/{centro}/g, centro)
-    .replace(/{data}/g, data)
-    .replace(/{fornecedor}/g, fornecedor)
-    .replace(/{descricao}/g, descricao)
-    .replace(/{valor}/g, valor);
+  let rawName = (pattern || "{centro} - {data} - {fornecedor} - {descricao} - {valor}")
+    .replace(/{centro}/g, centro).replace(/{data}/g, data).replace(/{fornecedor}/g, fornecedor)
+    .replace(/{descricao}/g, descricao).replace(/{valor}/g, valor)
+    .replace(/\s*-\s*-\s*/g, " - ").replace(/-{2,}/g, "-").trim()
+    .replace(/^[- ]+/, "").replace(/[- ]+$/, "").replace(/\s+/g, " ");
 
-  // Normalize spaces and hyphens
-  rawName = rawName
-    .replace(/\s*-\s*-\s*/g, ' - ')
-    .replace(/\s*-\s*-\s*/g, ' - ')
-    .replace(/-{2,}/g, '-')
-    .trim();
-
-  // Trim leading/trailing spaces and hyphens
-  rawName = rawName.replace(/^[- ]+/, '').replace(/[- ]+$/, '');
-  rawName = rawName.replace(/\s+/g, ' ');
-
-  // Append file extension
-  let ext = fields.extension || 'pdf';
-  if (ext.includes('.')) {
-    ext = ext.split('.').pop() || 'pdf';
-  }
+  let ext = fields.extension || "pdf";
+  if (ext.includes(".")) ext = ext.split(".").pop() || "pdf";
   ext = sanitize(ext);
 
-  // Sanitize the full name and return with extension
-  const sanitizedNameOnly = sanitize(rawName);
-  return sanitizedNameOnly ? `${sanitizedNameOnly}.${ext}` : `Documento.${ext}`;
+  const nameOnly = sanitize(rawName);
+  return nameOnly ? `${nameOnly}.${ext}` : `Documento.${ext}`;
 }
 
+export function maskToken(token: string): string {
+  if (!token) return "";
+  if (token.length <= 10) return token;
+  return token.slice(0, 6) + "..." + token.slice(-4);
+}
+
+/** Lê a config (mascarada) do backend. */
 export async function getTelegramConfig(): Promise<TelegramConfig> {
-  try {
-    const ref = doc(db, 'settings', 'telegram');
-    const snap = await getDoc(ref);
-    if (snap.exists()) {
-      const data = snap.data() as Partial<TelegramConfig>;
-      return {
-        botToken: data.botToken || DEFAULT_BOT_TOKEN,
-        chatId: data.chatId || DEFAULT_CHAT_ID,
-        fileNamePattern: data.fileNamePattern || DEFAULT_FILE_PATTERN,
-      };
-    }
-  } catch (e) {
-    console.error('Erro ao ler configuração do Telegram no Firestore:', e);
-  }
-  return { botToken: DEFAULT_BOT_TOKEN, chatId: DEFAULT_CHAT_ID, fileNamePattern: DEFAULT_FILE_PATTERN };
+  return apiGet("/api/telegram/config");
 }
 
-// Garante que a config padrão exista no Firestore. Idempotente: roda a cada login
-// mas só grava se ainda não existir nenhum documento.
-export async function ensureDefaultTelegramConfig(): Promise<void> {
-  try {
-    const ref = doc(db, 'settings', 'telegram');
-    const snap = await getDoc(ref);
-    if (!snap.exists()) {
-      await saveDoc('settings', 'telegram', {
-        botToken: DEFAULT_BOT_TOKEN,
-        chatId: DEFAULT_CHAT_ID,
-        fileNamePattern: DEFAULT_FILE_PATTERN,
-      });
-      console.log('Configuração padrão do Telegram criada automaticamente no Firestore.');
-    }
-  } catch (e) {
-    console.error('Erro ao garantir configuração padrão do Telegram:', e);
-  }
-}
+// Compatibilidade: componentes chamavam ensureDefaultTelegramConfig no login.
+// A config padrão agora é responsabilidade do servidor (env). No-op no cliente.
+export async function ensureDefaultTelegramConfig(): Promise<void> { /* no-op */ }
 
+/** Salva config no backend (o backend exige sessão de admin). */
 export async function saveTelegramConfig(
-  input: { botToken: string; chatId: string; fileNamePattern: string; password: string }
+  input: { botToken: string; chatId: string; fileNamePattern: string; password?: string }
 ): Promise<{ success: boolean; message: string }> {
-  if (input.password !== ADMIN_PASSWORD) {
-    throw new Error('Senha de autorização incorreta. Você não tem permissão para alterar as configurações do banco de dados.');
-  }
-  const current = await getTelegramConfig();
-  const updated: TelegramConfig = {
-    botToken: input.botToken && !input.botToken.includes('...') ? input.botToken : current.botToken,
-    chatId: input.chatId || current.chatId,
-    fileNamePattern: input.fileNamePattern || current.fileNamePattern,
-  };
-  await saveDoc('settings', 'telegram', updated);
-  return { success: true, message: 'Configuração do Banco de Dados salva com sucesso!' };
-}
-
-async function parseTelegramResponse(res: Response, fallbackError: string) {
-  const raw = await res.text();
-  let data: any = {};
-  if (raw) {
-    try { data = JSON.parse(raw); } catch { throw new Error('Resposta inválida da API do Telegram.'); }
-  }
-  if (!data.ok) {
-    throw new Error(data.description || fallbackError);
-  }
-  return data;
+  return apiSend("/api/telegram/config", "POST", {
+    botToken: input.botToken, chatId: input.chatId, fileNamePattern: input.fileNamePattern,
+  });
 }
 
 export async function sendTelegramTestMessage(): Promise<{ success: boolean; message: string }> {
-  const config = await getTelegramConfig();
-  if (!config.botToken || !config.chatId) {
-    throw new Error('Telegram não configurado. Insira o Token do Bot e o Chat ID primeiro.');
-  }
-  const testMsg = `🔌 *Teste de Integração Chaves Brites Correa*\n\n✅ O sistema está conectado e integrado com sucesso ao seu canal/grupo do Telegram!\n\n📅 Data: ${new Date().toLocaleString('pt-BR')}\n👤 Usuário: Painel Administrativo`;
-  const res = await fetch(`https://api.telegram.org/bot${config.botToken}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: config.chatId, text: testMsg, parse_mode: 'Markdown' }),
-  });
-  await parseTelegramResponse(res, 'Erro retornado pela API do Telegram');
-  return { success: true, message: 'Mensagem de teste enviada com sucesso no Telegram!' };
+  return apiSend("/api/telegram/test", "POST", {});
 }
 
-function base64ToBlob(base64Str: string, mimeType: string): Blob {
-  const cleanBase64 = base64Str.includes('base64,') ? base64Str.split('base64,')[1] : base64Str;
-  const byteChars = atob(cleanBase64);
-  const bytes = new Uint8Array(byteChars.length);
-  for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
-  return new Blob([bytes], { type: mimeType || 'application/octet-stream' });
-}
-
+/** Envia um documento (base64) via backend e retorna a URL de proxy. */
 export async function sendTelegramDocument(
   base64Str: string, fileName: string, mimeType: string
 ): Promise<{ url: string; fileId: string }> {
-  const config = await getTelegramConfig();
-  if (!config.botToken || !config.chatId) {
-    throw new Error('Telegram não configurado. Acesse o Painel Admin e insira o Token do Bot e Chat ID.');
-  }
-  const fileBlob = base64ToBlob(base64Str, mimeType);
-  const formData = new FormData();
-  formData.append('chat_id', config.chatId);
-  formData.append('document', fileBlob, fileName || 'arquivo.dat');
-  formData.append('caption', `📁 *Novo Anexo Recebido*\n📄 Documento: \`${fileName || 'arquivo'}\`\n🔧 Processado pelo Sistema Chaves Brites Correa.`);
-
-  const res = await fetch(`https://api.telegram.org/bot${config.botToken}/sendDocument`, {
-    method: 'POST',
-    body: formData,
-  });
-  const data = await parseTelegramResponse(res, 'Erro ao enviar documento para o Telegram');
-  const fileId = data.result.document.file_id;
-
-  const fileInfoRes = await fetch(`https://api.telegram.org/bot${config.botToken}/getFile?file_id=${fileId}`);
-  const fileInfo = await parseTelegramResponse(fileInfoRes, 'Erro ao resolver arquivo no Telegram');
-  const url = `https://api.telegram.org/file/bot${config.botToken}/${fileInfo.result.file_path}`;
-
-  return { url, fileId };
+  const resp = await apiSend("/api/telegram/upload", "POST", { base64Str, fileName, mimeType });
+  return { url: resp.url, fileId: resp.fileId };
 }

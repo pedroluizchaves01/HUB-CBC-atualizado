@@ -1,201 +1,103 @@
-import { 
-  getFirestore, 
-  collection, 
-  doc, 
-  setDoc, 
-  deleteDoc, 
-  onSnapshot, 
-  writeBatch,
-  getDocs,
-  getDoc
-} from 'firebase/firestore';
-import { app, auth } from './firebaseAuth';
-import firebaseConfig from '../../firebase-applet-config.json';
+// src/lib/firebaseDb.ts
+// ATENÇÃO: este módulo NÃO acessa mais o Firestore diretamente.
+// Todo o acesso a dados passa pelo "backend guardião" (endpoints /api/data/*), que valida
+// a sessão e usa o Admin SDK no servidor. O navegador nunca fala com o Firestore.
+// As assinaturas (saveDoc / removeDoc / subscribeCollection) foram preservadas para não
+// exigir mudança nos componentes que já as consomem.
 
-// Initialize Firestore with the custom database ID provided in the configuration
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+import { apiGet, apiSend, ApiError } from "./apiClient";
 
+// Mantido por compatibilidade de tipos com código legado que importava OperationType.
 export enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
+  CREATE = "create", UPDATE = "update", DELETE = "delete",
+  LIST = "list", GET = "get", WRITE = "write",
 }
 
-export interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId?: string | null;
-    email?: string | null;
-    emailVerified?: boolean | null;
-    isAnonymous?: boolean | null;
-    tenantId?: string | null;
-    providerInfo?: {
-      providerId?: string | null;
-      email?: string | null;
-    }[];
-  }
-}
-
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData?.map(provider => ({
-        providerId: provider.providerId,
-        email: provider.email,
-      })) || []
-    },
-    operationType,
-    path
-  };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
-
-/**
- * Saves or updates a document in a specific collection in Firestore.
- */
+/** Salva/atualiza um documento via backend. */
 export const saveDoc = async (collectionName: string, id: string, data: any) => {
   try {
-    const docRef = doc(db, collectionName, id);
-    // Sanitize data: replace undefined fields with null or remove them to avoid Firestore errors
-    const sanitizedData = JSON.parse(JSON.stringify(data, (key, value) => {
-      return value === undefined ? null : value;
-    }));
-    await setDoc(docRef, sanitizedData, { merge: true });
+    await apiSend(`/api/data/${encodeURIComponent(collectionName)}/${encodeURIComponent(id)}`, "PUT", { data });
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, `${collectionName}/${id}`);
+    console.error(`Erro ao salvar ${collectionName}/${id}:`, error);
+    throw error instanceof Error ? error : new Error(String(error));
   }
 };
 
-/**
- * Deletes a document from a specific collection in Firestore.
- */
+/** Exclui um documento via backend. */
 export const removeDoc = async (collectionName: string, id: string) => {
   try {
-    const docRef = doc(db, collectionName, id);
-    await deleteDoc(docRef);
+    await apiSend(`/api/data/${encodeURIComponent(collectionName)}/${encodeURIComponent(id)}`, "DELETE");
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, `${collectionName}/${id}`);
+    console.error(`Erro ao excluir ${collectionName}/${id}:`, error);
+    throw error instanceof Error ? error : new Error(String(error));
   }
 };
 
+const POLL_INTERVAL_MS = 8000;
+
 /**
- * Subscribes to a collection in real-time. 
- * If the collection is empty in Firestore, it automatically seeds it using the local storage cached data 
- * (if available) or the provided initial default data.
+ * Assina uma coleção. Como o acesso agora é via backend (sem WebSocket), usamos polling leve:
+ * busca imediata + atualização periódica. Mantém o cache em localStorage para carregamento
+ * instantâneo e resiliência offline, exatamente como antes.
+ *
+ * Retorna uma função de unsubscribe.
  */
 export const subscribeCollection = (
-  collectionName: string, 
-  onUpdate: (data: any[]) => void, 
+  collectionName: string,
+  onUpdate: (data: any[]) => void,
   defaultData: any[],
   localStorageKey?: string
 ) => {
-  const colRef = collection(db, collectionName);
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let lastSerialized = "";
 
-  // Setup the real-time listener
-  const unsubscribe = onSnapshot(colRef, async (snapshot) => {
-    if (snapshot.empty) {
-      // 1. If snapshot is from cache and empty, wait for server to resolve actual database state
-      if (snapshot.metadata.fromCache) {
-        console.log(`Collection ${collectionName} is empty in cache, waiting for server...`);
-        return;
-      }
-
-      console.log(`Collection ${collectionName} is empty on server. Checking global initialization...`);
-      
-      try {
-        const initDocRef = doc(db, 'system_status', 'init');
-        const initDoc = await getDoc(initDocRef);
-
-        // 2. If system is already initialized globally, keep the collection empty (user deleted its contents)
-        if (initDoc.exists() && initDoc.data()?.seeded) {
-          console.log(`System already initialized. Keeping ${collectionName} empty.`);
-          onUpdate([]);
-          if (localStorageKey) {
-            localStorage.setItem(localStorageKey, JSON.stringify([]));
-          }
-          return;
-        }
-
-        // 3. First time app is run: seed the database collection
-        console.log(`System not initialized. Seeding collection ${collectionName}...`);
-        let seedData = defaultData;
-        if (localStorageKey) {
-          const saved = localStorage.getItem(localStorageKey);
-          if (saved) {
-            try {
-              const parsed = JSON.parse(saved);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                seedData = parsed;
-                console.log(`Found existing data in localStorage for ${localStorageKey}. Seeding to Firestore...`);
-              }
-            } catch (e) {
-              console.error(`Error parsing localStorage key ${localStorageKey}:`, e);
-            }
-          }
-        }
-
-        // Perform batch seeding to Firestore atomically, including marking the system as initialized
-        const batch = writeBatch(db);
-        seedData.forEach((item) => {
-          const itemId = item.id || `doc-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-          const docRef = doc(db, collectionName, itemId);
-          const sanitized = JSON.parse(JSON.stringify(item, (key, value) => {
-            return value === undefined ? null : value;
-          }));
-          batch.set(docRef, { ...sanitized, id: itemId });
-        });
-
-        // Atomically set initialization state
-        batch.set(initDocRef, { seeded: true });
-        await batch.commit();
-        
-        console.log(`Successfully seeded ${seedData.length} items to ${collectionName} and marked initialized.`);
-      } catch (err) {
-        console.error(`Failed to seed collection ${collectionName}:`, err);
-        // Fallback to local representation if database seeding fails
-        onUpdate(defaultData);
-      }
-    } else {
-      // Collect the documents from the snapshot
-      const items: any[] = [];
-      snapshot.forEach((doc) => {
-        items.push({ id: doc.id, ...doc.data() });
-      });
-      
-      // Pass the synchronized items to the React component state callback
-      onUpdate(items);
-      
-      // Keep local device cache perfectly synchronized with the latest Firestore server state
-      if (localStorageKey) {
-        localStorage.setItem(localStorageKey, JSON.stringify(items));
-      }
-    }
-  }, (error) => {
-    console.error(`Error in onSnapshot listener for ${collectionName}:`, error);
-    // If listener fails, fallback to freshest local device cache or defaultData
-    let fallback = defaultData;
-    if (localStorageKey) {
+  // 1. Entrega imediata do cache local (se houver) para não piscar a tela.
+  if (localStorageKey) {
+    try {
       const saved = localStorage.getItem(localStorageKey);
       if (saved) {
-        try {
-          fallback = JSON.parse(saved);
-        } catch (_) {}
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) { lastSerialized = saved; onUpdate(parsed); }
       }
-    }
-    onUpdate(fallback);
-  });
+    } catch { /* cache inválido, ignora */ }
+  }
 
-  return unsubscribe;
+  const poll = async () => {
+    if (stopped) return;
+    try {
+      const resp = await apiGet(`/api/data/${encodeURIComponent(collectionName)}`);
+      const items: any[] = Array.isArray(resp?.items) ? resp.items : [];
+      const serialized = JSON.stringify(items);
+      if (serialized !== lastSerialized) {
+        lastSerialized = serialized;
+        onUpdate(items);
+        if (localStorageKey) {
+          try { localStorage.setItem(localStorageKey, serialized); } catch { /* quota */ }
+        }
+      }
+    } catch (err) {
+      // 401 => sessão expirou: não insiste em loop; deixa o app redirecionar ao login.
+      if (err instanceof ApiError && err.status === 401) {
+        stopped = true;
+        return;
+      }
+      // Outros erros: mantém o último estado conhecido (cache/local) e tenta de novo depois.
+      if (!lastSerialized && localStorageKey) {
+        try {
+          const saved = localStorage.getItem(localStorageKey);
+          if (saved) { const p = JSON.parse(saved); if (Array.isArray(p)) onUpdate(p); }
+        } catch { /* ignore */ }
+      }
+    } finally {
+      if (!stopped) timer = setTimeout(poll, POLL_INTERVAL_MS);
+    }
+  };
+
+  poll();
+
+  return () => {
+    stopped = true;
+    if (timer) clearTimeout(timer);
+  };
 };

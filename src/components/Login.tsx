@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { Eye, EyeOff } from 'lucide-react';
 
 interface LoginProps {
-  onLogin: (username: string, pb: string) => { success: boolean; error?: string };
+  onLogin: (username: string, pb: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 export default function Login({ onLogin }: LoginProps) {
@@ -26,14 +26,12 @@ export default function Login({ onLogin }: LoginProps) {
     }
 
     setLoading(true);
-    // Smooth transition simulation for premium feel
-    setTimeout(() => {
-      const result = onLogin(username, password);
-      setLoading(false);
-      if (!result.success && result.error) {
-        setError(result.error);
-      }
-    }, 600);
+    onLogin(username, password)
+      .then((result) => {
+        if (!result.success && result.error) setError(result.error);
+      })
+      .catch(() => setError('Falha ao conectar ao servidor. Tente novamente.'))
+      .finally(() => setLoading(false));
   };
 
   return (

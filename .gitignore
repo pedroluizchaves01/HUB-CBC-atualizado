@@ -6,3 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+# Config legada do Telegram (podia conter o token) — nunca versionar
+telegram-config.json
+# Credencial da service account do Firebase — segredo de servidor
+service-account*.json
+firebase-service-account*.json

@@ -1,21 +1,144 @@
 import express from "express";
 import path from "path";
 import dotenv from "dotenv";
+import helmet from "helmet";
+import cookieParser from "cookie-parser";
+import rateLimit from "express-rate-limit";
 import { GoogleGenAI, Type } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 import * as XLSX from "xlsx";
 import { saveDocumentToDrive, DRIVE_FOLDERS } from "./src/lib/driveService";
 import { extractReceiptText } from "./src/lib/receiptOcr";
 import { parseReceiptText } from "./src/lib/receiptParser";
+import { authenticate, createSessionToken } from "./src/lib/server/authService";
+import { requireAuth, requireRole } from "./src/lib/server/authMiddleware";
+import * as dataService from "./src/lib/server/dataService";
+import * as telegram from "./src/lib/server/telegramServer";
+import { isAdminConfigured } from "./src/lib/server/firebaseAdmin";
 
 dotenv.config();
+
+// Defesa em profundidade: uma promise rejeitada não deve derrubar o servidor inteiro.
+// (Ex.: falha transitória de credencial/rede do Admin SDK vira erro tratado no request.)
+process.on("unhandledRejection", (reason) => {
+  console.error("unhandledRejection capturado (servidor segue de pé):", reason);
+});
 
 const app = express();
 const PORT = 3000;
 
+// Confia no proxy reverso (nginx) para IP correto no rate limit
+app.set("trust proxy", 1);
+
+// Cabeçalhos de segurança. CSP desabilitada aqui (o app tem estilos/inline próprios);
+// se quiser CSP estrita, configure diretiva a diretiva.
+app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+app.use(cookieParser());
+
 // Increase limit to handle PDF/Excel base64 uploads
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
+
+// Rate limits: um geral para toda a API e um mais rígido para login (anti brute-force).
+const apiLimiter = rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false,
+  message: { error: "Muitas requisições. Aguarde um instante e tente novamente." } });
+const loginLimiter = rateLimit({ windowMs: 15 * 60_000, max: 10, standardHeaders: true, legacyHeaders: false,
+  message: { error: "Muitas tentativas de login. Aguarde alguns minutos." } });
+const aiLimiter = rateLimit({ windowMs: 60_000, max: 20, standardHeaders: true, legacyHeaders: false,
+  message: { error: "Limite de análises por minuto atingido. Aguarde um instante." } });
+app.use("/api/", apiLimiter);
+
+// ==========================================
+// AUTENTICAÇÃO (sessão via token assinado)
+// ==========================================
+app.post("/api/auth/login", loginLimiter, async (req, res) => {
+  try {
+    const { username, password } = req.body || {};
+    const user = await authenticate(String(username || ""), String(password || ""));
+    if (!user) return res.status(401).json({ error: "Usuário ou senha incorretos." });
+    const token = createSessionToken(user);
+    res.cookie("cbc_session", token, {
+      httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production",
+      maxAge: 12 * 60 * 60 * 1000,
+    });
+    return res.json({ success: true, user, token });
+  } catch (e: any) {
+    console.error("Erro no login:", e);
+    return res.status(500).json({ error: "Falha ao autenticar. Verifique a configuração do servidor." });
+  }
+});
+
+app.post("/api/auth/logout", (req, res) => {
+  res.clearCookie("cbc_session");
+  return res.json({ success: true });
+});
+
+app.get("/api/auth/me", requireAuth, (req, res) => {
+  return res.json({ user: req.sessionUser });
+});
+
+// Provisiona ou atualiza um usuário com senha hasheada (bcrypt). Apenas admin.
+// A senha em texto puro NUNCA é gravada; só o hash. Nada disso passa pelo cliente.
+app.post("/api/users/upsert", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const { id, username, role, name, clientId, password } = req.body || {};
+    if (!id || !username || !role || !name) {
+      return res.status(400).json({ error: "Dados de usuário incompletos." });
+    }
+    if (!["admin", "client", "marketing"].includes(role)) {
+      return res.status(400).json({ error: "Papel inválido." });
+    }
+    const doc: any = { id, username: String(username).trim(), role, name };
+    if (clientId) doc.clientId = clientId;
+    if (password && String(password).trim() !== "") {
+      const { hashPassword } = await import("./src/lib/server/authService");
+      doc.passwordHash = await hashPassword(String(password));
+    }
+    await dataService.setDocById("users", id, doc);
+    return res.json({ success: true });
+  } catch (e: any) {
+    return res.status(500).json({ error: e.message || "Falha ao salvar usuário." });
+  }
+});
+
+// ==========================================
+// DADOS (backend guardião — Firestore via Admin SDK)
+// Toda leitura/escrita exige sessão. O navegador nunca acessa o Firestore direto.
+// ==========================================
+app.get("/api/data/:collection", requireAuth, async (req, res) => {
+  try {
+    const u = req.sessionUser!;
+    const items = await dataService.listCollectionForUser(req.params.collection, { role: u.role, clientId: u.clientId });
+    return res.json({ items });
+  } catch (e: any) {
+    const status = /Acesso negado/i.test(e.message || "") ? 403 : 400;
+    return res.status(status).json({ error: e.message || "Erro ao listar coleção." });
+  }
+});
+
+app.put("/api/data/:collection/:id", requireAuth, async (req, res) => {
+  try {
+    const u = req.sessionUser!;
+    dataService.assertCanWrite(req.params.collection, { role: u.role, clientId: u.clientId });
+    await dataService.setDocById(req.params.collection, req.params.id, req.body?.data ?? req.body);
+    return res.json({ success: true });
+  } catch (e: any) {
+    const status = /permissão/i.test(e.message || "") ? 403 : 400;
+    return res.status(status).json({ error: e.message || "Erro ao salvar documento." });
+  }
+});
+
+app.delete("/api/data/:collection/:id", requireAuth, async (req, res) => {
+  try {
+    const u = req.sessionUser!;
+    dataService.assertCanWrite(req.params.collection, { role: u.role, clientId: u.clientId });
+    await dataService.deleteDocById(req.params.collection, req.params.id);
+    return res.json({ success: true });
+  } catch (e: any) {
+    const status = /permissão/i.test(e.message || "") ? 403 : 400;
+    return res.status(status).json({ error: e.message || "Erro ao excluir documento." });
+  }
+});
 
 // Initialize Gemini client using server-side config
 const ai = new GoogleGenAI({
@@ -123,7 +246,7 @@ async function callGeminiForJson(params: {
 }
 
 // AI Document parsing endpoint for the physical-financial schedule
-app.post("/api/planning/parse-document", async (req, res) => {
+app.post("/api/planning/parse-document", requireAuth, aiLimiter, async (req, res) => {
   try {
     const { fileBase64, mimeType, fileName, accessToken } = req.body;
 
@@ -216,7 +339,7 @@ REGRAS DE DISTRIBUIÇÃO E AJUSTE:
 });
 
 // AI Document parsing endpoint for materials lists
-app.post("/api/planning/parse-materials", async (req, res) => {
+app.post("/api/planning/parse-materials", requireAuth, aiLimiter, async (req, res) => {
   try {
     const { fileBase64, mimeType, fileName, accessToken } = req.body;
 
@@ -327,7 +450,7 @@ Retorne obrigatoriamente no formato do esquema JSON definido.
 });
 
 // AI Refinement / Alteration Checkpoint endpoint for materials lists
-app.post("/api/planning/refine-materials", async (req, res) => {
+app.post("/api/planning/refine-materials", requireAuth, aiLimiter, async (req, res) => {
   try {
     const { currentMaterials, userMessage } = req.body;
 
@@ -400,7 +523,7 @@ Retorne estritamente o JSON com a estrutura atualizada.
 });
 
 // AI Invoice parsing endpoint for construction expenses
-app.post("/api/acompanhamento/parse-invoice", async (req, res) => {
+app.post("/api/acompanhamento/parse-invoice", requireAuth, aiLimiter, async (req, res) => {
   try {
     const { fileBase64, mimeType, fileName } = req.body;
 
@@ -504,7 +627,7 @@ Retorne obrigatoriamente um objeto JSON válido conforme o esquema definido. Nã
 });
 
 // AI Bulk Transactions parsing endpoint (e.g. Excel spreadsheet, PDF bank statement, multiple invoice table)
-app.post("/api/acompanhamento/parse-bulk-transactions", async (req, res) => {
+app.post("/api/acompanhamento/parse-bulk-transactions", requireAuth, aiLimiter, async (req, res) => {
   try {
     const { fileBase64, mimeType, fileName, accessToken } = req.body;
 
@@ -621,7 +744,7 @@ Não inclua nenhuma outra resposta ou marcação de markdown além do objeto JSO
 });
 
 // AI Material Request parsing endpoint (e.g. WhatsApp prints, contractor photos, list handwritten)
-app.post("/api/quotations/parse-material-request", async (req, res) => {
+app.post("/api/quotations/parse-material-request", requireAuth, aiLimiter, async (req, res) => {
   try {
     const { fileBase64, mimeType, fileName } = req.body;
 
@@ -714,7 +837,7 @@ Não inclua nenhuma outra resposta ou markdown fora do objeto JSON.
 });
 
 // AI receipt parsing and auto-uploading to Google Drive
-app.post("/api/office/analyze-receipt", async (req, res) => {
+app.post("/api/office/analyze-receipt", requireAuth, aiLimiter, async (req, res) => {
   try {
     const { fileBase64, mimeType, fileName, accessToken } = req.body;
 
@@ -851,229 +974,77 @@ Retorne estritamente um objeto JSON com as chaves indicadas. Não inclua markdow
 });
 
 // ==========================================
-// TELEGRAM STORAGE BACKEND ROUTING ENGINE
+// TELEGRAM (backend guardião — token só no servidor)
+// Config/token vivem em telegramServer.ts (env/Firestore); nada disso vai ao bundle.
 // ==========================================
-import fs from "fs";
 
-interface TelegramConfig {
-  botToken?: string;
-  chatId?: string;
-  fileNamePattern?: string;
-}
-
-const TELEGRAM_CONFIG_PATH = path.join(process.cwd(), "telegram-config.json");
-const DEFAULT_BOT_TOKEN = "8301754881:AAGhunIBqoCrngjRfaC3N9fkCCxyWktblKk";
-const DEFAULT_CHAT_ID = "-5480284811";
-
-function getTelegramConfig(): TelegramConfig {
-  let fileConfig: TelegramConfig = {};
+// Config mascarada (nunca revela o token). Exige sessão.
+app.get("/api/telegram/config", requireAuth, async (req, res) => {
   try {
-    if (fs.existsSync(TELEGRAM_CONFIG_PATH)) {
-      const data = fs.readFileSync(TELEGRAM_CONFIG_PATH, "utf-8").trim();
-      if (data) {
-        fileConfig = JSON.parse(data);
-      }
-    } else {
-      fileConfig = {
-        botToken: DEFAULT_BOT_TOKEN,
-        chatId: DEFAULT_CHAT_ID,
-        fileNamePattern: "{centro} - {data} - {fornecedor} - {descricao} - {valor}"
-      };
-      saveTelegramConfig(fileConfig);
-    }
-  } catch (e) {
-    console.error("Erro ao ler telegram-config.json:", e);
-  }
-  return {
-    botToken: fileConfig.botToken || process.env.TELEGRAM_BOT_TOKEN || DEFAULT_BOT_TOKEN,
-    chatId: fileConfig.chatId || process.env.TELEGRAM_CHAT_ID || DEFAULT_CHAT_ID,
-    fileNamePattern: fileConfig.fileNamePattern || "{centro} - {data} - {fornecedor} - {descricao} - {valor}"
-  };
-}
-
-function saveTelegramConfig(config: TelegramConfig) {
-  try {
-    fs.writeFileSync(TELEGRAM_CONFIG_PATH, JSON.stringify(config, null, 2), "utf-8");
-  } catch (e) {
-    console.error("Erro ao salvar telegram-config.json:", e);
-  }
-}
-
-// Get current Telegram config (masked for security)
-app.get("/api/telegram/config", (req, res) => {
-  const config = getTelegramConfig();
-  const maskedToken = config.botToken 
-    ? config.botToken.substring(0, 6) + "..." + config.botToken.substring(config.botToken.length - 4)
-    : "";
-  return res.json({
-    botToken: maskedToken,
-    hasToken: !!config.botToken,
-    chatId: config.chatId || "",
-    fileNamePattern: config.fileNamePattern || "{centro} - {data} - {fornecedor} - {descricao} - {valor}"
-  });
-});
-
-// Update Telegram config
-app.post("/api/telegram/config", (req, res) => {
-  try {
-    const { botToken, chatId, password, fileNamePattern } = req.body;
-    
-    // Validate authorization password
-    if (password !== "Cbc*12345") {
-      return res.status(401).json({ error: "Senha de autorização incorreta. Você não tem permissão para alterar as configurações do banco de dados." });
-    }
-
-    const currentConfig = getTelegramConfig();
-    
-    // If token has ellipsis, keep the original saved one
-    const updatedToken = (botToken && botToken.includes("...")) 
-      ? currentConfig.botToken 
-      : botToken;
-
-    saveTelegramConfig({
-      botToken: updatedToken || "",
-      chatId: chatId || "",
-      fileNamePattern: fileNamePattern || "{centro} - {data} - {fornecedor} - {descricao} - {valor}"
-    });
-    
-    return res.json({ success: true, message: "Configuração do Banco de Dados salva com sucesso!" });
-  } catch (error: any) {
-    return res.status(500).json({ error: error.message || "Falha ao salvar configuração." });
+    return res.json(await telegram.getMaskedTelegramConfig());
+  } catch (e: any) {
+    return res.status(500).json({ error: e.message || "Erro ao ler configuração." });
   }
 });
 
-// Upload document to Telegram chat/group and get a persistent fileId
-app.post("/api/telegram/upload", async (req, res) => {
+// Atualiza config do Telegram — apenas admin autenticado (sem senha hardcoded).
+app.post("/api/telegram/config", requireAuth, requireRole("admin"), async (req, res) => {
   try {
-    const { base64Str, fileName, mimeType } = req.body;
-    if (!base64Str) {
-      return res.status(400).json({ error: "Conteúdo do arquivo ausente." });
-    }
-
-    const config = getTelegramConfig();
-    if (!config.botToken || !config.chatId) {
-      return res.status(400).json({ 
-        error: "Telegram não configurado. Por favor, acesse o Painel Admin e insira o Token do Bot e Chat ID." 
-      });
-    }
-
-    const cleanBase64 = base64Str.includes("base64,") 
-      ? base64Str.split("base64,")[1] 
-      : base64Str;
-    const buffer = Buffer.from(cleanBase64, "base64");
-    
-    // We construct a Blob natively in Node.js
-    const fileBlob = new Blob([buffer], { type: mimeType || "application/octet-stream" });
-
-    const telegramFormData = new FormData();
-    telegramFormData.append("chat_id", config.chatId);
-    telegramFormData.append("document", fileBlob, fileName || "arquivo.dat");
-    telegramFormData.append("caption", `📁 *Novo Anexo Recebido*\n📄 Documento: \`${fileName || "arquivo"}\`\n🔧 Processado pelo Sistema Chaves Brites Correa.`);
-
-    const telegramRes = await fetch(`https://api.telegram.org/bot${config.botToken}/sendDocument`, {
-      method: "POST",
-      body: telegramFormData
-    });
-
-    const telegramData: any = await telegramRes.json();
-    if (!telegramData.ok) {
-      throw new Error(telegramData.description || "Erro retornado pela API do Telegram");
-    }
-
-    const fileId = telegramData.result.document.file_id;
-    return res.json({
-      success: true,
-      url: `/api/telegram/file/${fileId}`,
-      fileId,
-      error: null
-    });
-
-  } catch (error: any) {
-    console.error("Erro no upload do Telegram:", error);
-    return res.status(500).json({ error: error.message || "Erro interno no upload do Telegram." });
+    const { botToken, chatId, fileNamePattern } = req.body || {};
+    await telegram.saveTelegramConfig({ botToken, chatId, fileNamePattern });
+    return res.json({ success: true, message: "Configuração salva com sucesso!" });
+  } catch (e: any) {
+    return res.status(500).json({ error: e.message || "Falha ao salvar configuração." });
   }
 });
 
-// Download/Stream file from Telegram securely
-app.get("/api/telegram/file/:fileId", async (req, res) => {
+// Upload de documento ao Telegram. Exige sessão. Valida tamanho e tipo.
+app.post("/api/telegram/upload", requireAuth, async (req, res) => {
   try {
-    const { fileId } = req.params;
-    const config = getTelegramConfig();
-    if (!config.botToken) {
-      return res.status(400).send("Telegram Bot Token não configurado.");
-    }
+    const { base64Str, fileName, mimeType } = req.body || {};
+    if (!base64Str) return res.status(400).json({ error: "Conteúdo do arquivo ausente." });
 
-    // 1. Resolve path
-    const getFileRes = await fetch(`https://api.telegram.org/bot${config.botToken}/getFile?file_id=${fileId}`);
-    const getFileData: any = await getFileRes.json();
-    if (!getFileData.ok) {
-      throw new Error(getFileData.description || "Erro ao localizar arquivo no Telegram");
-    }
+    const clean = String(base64Str).includes("base64,") ? String(base64Str).split("base64,")[1] : String(base64Str);
+    // Limite de ~10MB por arquivo (base64 ≈ 4/3 do binário).
+    if (clean.length > 14_000_000) return res.status(413).json({ error: "Arquivo excede o limite de 10MB." });
 
-    const filePath = getFileData.result.file_path;
-    if (!filePath) {
-      throw new Error("Caminho do arquivo não fornecido pelo Telegram.");
-    }
+    const result = await telegram.sendDocument(clean, fileName || "arquivo.dat", mimeType || "application/octet-stream");
+    return res.json({ success: true, url: result.url, fileId: result.fileId, error: null });
+  } catch (e: any) {
+    console.error("Erro no upload do Telegram:", e);
+    return res.status(500).json({ error: e.message || "Erro interno no upload do Telegram." });
+  }
+});
 
-    // 2. Fetch binary stream
-    const downloadUrl = `https://api.telegram.org/file/bot${config.botToken}/${filePath}`;
-    const fileRes = await fetch(downloadUrl);
-    if (!fileRes.ok) {
-      throw new Error(`Erro ao baixar arquivo do Telegram: ${fileRes.statusText}`);
-    }
-
-    const contentType = fileRes.headers.get("content-type") || "application/octet-stream";
+// Proxy de download — exige sessão; valida o fileId (anti SSRF/path traversal).
+app.get("/api/telegram/file/:fileId", requireAuth, async (req, res) => {
+  try {
+    const { buffer, contentType, fileName } = await telegram.fetchFileBinary(req.params.fileId);
     res.setHeader("Content-Type", contentType);
-    
-    const fileName = path.basename(filePath);
     res.setHeader("Content-Disposition", `inline; filename="${fileName}"`);
-
-    const arrayBuffer = await fileRes.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
     return res.send(buffer);
-
-  } catch (error: any) {
-    console.error("Erro no download de arquivo do Telegram:", error);
-    return res.status(500).send(`Erro ao buscar arquivo: ${error.message || error}`);
+  } catch (e: any) {
+    console.error("Erro no download do Telegram:", e);
+    return res.status(400).send(`Erro ao buscar arquivo: ${e.message || e}`);
   }
 });
 
-// Send a test text message to verify Telegram Bot configuration
-app.post("/api/telegram/test", async (req, res) => {
+// Teste de integração — apenas admin.
+app.post("/api/telegram/test", requireAuth, requireRole("admin"), async (req, res) => {
   try {
-    const config = getTelegramConfig();
-    if (!config.botToken || !config.chatId) {
-      return res.status(400).json({ 
-        error: "Telegram não configurado. Forga favor, insira o Token do Bot e o Chat ID primeiro." 
-      });
-    }
-
-    const testMsg = `🔌 *Teste de Integração Chaves Brites Correa*\n\n✅ O sistema está conectado e integrado com sucesso ao seu canal/grupo do Telegram!\n\n📅 Data: ${new Date().toLocaleString("pt-BR")}\n👤 Usuário: Painel Administrativo`;
-    
-    const telegramRes = await fetch(`https://api.telegram.org/bot${config.botToken}/sendMessage`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        chat_id: config.chatId,
-        text: testMsg,
-        parse_mode: "Markdown"
-      })
-    });
-
-    const telegramData: any = await telegramRes.json();
-    if (!telegramData.ok) {
-      throw new Error(telegramData.description || "Erro retornado pela API do Telegram");
-    }
-
+    await telegram.sendTestMessage();
     return res.json({ success: true, message: "Mensagem de teste enviada com sucesso no Telegram!" });
-
-  } catch (error: any) {
-    console.error("Erro no teste do Telegram:", error);
-    return res.status(500).json({ error: error.message || "Erro interno ao testar integração." });
+  } catch (e: any) {
+    console.error("Erro no teste do Telegram:", e);
+    return res.status(500).json({ error: e.message || "Erro interno ao testar integração." });
   }
 });
+
+// Health-check simples (sem sessão) — reporta se o Admin SDK está configurado.
+app.get("/api/health", (req, res) => {
+  return res.json({ ok: true, adminConfigured: isAdminConfigured() });
+});
+
 
 // Vite middleware for development
 async function startServer() {
