@@ -1,15 +1,15 @@
 // scripts/seed-users.ts
-// Provisiona os usuários iniciais no Firestore com senha HASHEADA (bcrypt).
+// Provisiona os usuários iniciais no banco (Postgres/Supabase) com senha HASHEADA (bcrypt).
 // As senhas vêm de variáveis de ambiente — nunca do código versionado.
 //
 // Uso:
-//   FIREBASE_SERVICE_ACCOUNT='{...}' \
-//   ADMIN_PASSWORD='...' MARKETING_PASSWORD='...' CLIENT_DEFAULT_PASSWORD='...' \
+//   DATABASE_URL='postgresql://...' \
+//   ADMIN_PASSWORD='...' MARKETING_PASSWORD='...' CLIENT_ORALMED_PASSWORD='...' \
 //   npx tsx scripts/seed-users.ts
 //
 // Se uma senha não for informada, o usuário correspondente é PULADO (não recebe senha fraca).
 
-import { getAdminDb } from "../src/lib/server/firebaseAdmin";
+import { getAdminDb } from "../src/lib/server/db";
 import { hashPassword } from "../src/lib/server/authService";
 
 interface SeedUser {

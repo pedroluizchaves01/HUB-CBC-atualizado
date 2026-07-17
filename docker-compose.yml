@@ -15,7 +15,7 @@ services:
     environment:
       - NODE_ENV=production
       # Obrigatórias em produção (ver DEPLOY.md) — configure no painel do Coolify ou em um .env:
-      - FIREBASE_SERVICE_ACCOUNT=${FIREBASE_SERVICE_ACCOUNT} # JSON (em uma linha) da service account do Firebase
+      - DATABASE_URL=${DATABASE_URL} # connection string do Supabase/Postgres (pooler, porta 6543)
       - SESSION_SECRET=${SESSION_SECRET} # string aleatória longa (>= 32 chars) para assinar sessões
       # Opcionais:
       - GEMINI_API_KEY=${GEMINI_API_KEY:-} # só se quiser o motor Gemini; o OCR interno funciona sem

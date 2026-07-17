@@ -8,7 +8,7 @@
 
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import { getAdminDb } from "./firebaseAdmin";
+import { getAdminDb } from "./db";
 
 const BCRYPT_ROUNDS = 10;
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 horas
@@ -86,7 +86,7 @@ export async function authenticate(username: string, password: string): Promise<
   const clean = username.trim().toLowerCase();
 
   const snap = await db.collection("users").get();
-  let matchDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+  let matchDoc: (typeof snap.docs)[number] | null = null;
   for (const d of snap.docs) {
     const u = d.data();
     if ((u.username || "").trim().toLowerCase() === clean) { matchDoc = d; break; }
