@@ -33,25 +33,11 @@ export class ApiError extends Error {
   constructor(message: string, status: number) { super(message); this.status = status; }
 }
 
-// Callback registrado pela camada de estado (useStore) para reagir a uma sessão expirada/
-// inválida (401) vinda de QUALQUER chamada à API, não só do login. Sem isso, o usuário ficava
-// preso na tela atual vendo o erro "Sessão inválida ou expirada", sem ser levado de volta ao
-// login para de fato conseguir corrigir a situação.
-let onUnauthorized: (() => void) | null = null;
-
-export function setUnauthorizedHandler(handler: (() => void) | null) {
-  onUnauthorized = handler;
-}
-
 async function handle(res: Response): Promise<any> {
   const text = await res.text();
   let data: any = null;
   if (text) { try { data = JSON.parse(text); } catch { data = { error: text }; } }
   if (!res.ok) {
-    if (res.status === 401) {
-      setSessionToken(null);
-      if (onUnauthorized) onUnauthorized();
-    }
     throw new ApiError((data && data.error) || `Erro ${res.status}`, res.status);
   }
   return data;
