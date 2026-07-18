@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { User, Client, Project, Transaction, ProjectDocument } from './types';
 import { INITIAL_USERS, INITIAL_CLIENTS, INITIAL_PROJECTS, INITIAL_TRANSACTIONS, INITIAL_DOCUMENTS } from './initialData';
 import { subscribeCollection, saveDoc, removeDoc } from './lib/firebaseDb';
-import { apiSend, setSessionToken, getSessionToken, ApiError } from './lib/apiClient';
+import { apiSend, setSessionToken, getSessionToken, setUnauthorizedHandler, ApiError } from './lib/apiClient';
 
 export function useStore() {
   const [users, setUsers] = useState<User[]>([]);
@@ -15,6 +15,20 @@ export function useStore() {
     const saved = sessionStorage.getItem('cbc_current_user');
     return saved ? JSON.parse(saved) : null;
   });
+
+  const [sessionNotice, setSessionNotice] = useState<string | null>(null);
+
+  // Qualquer chamada à API (leitura ou escrita) que volte 401 dispara este handler: derruba a
+  // sessão local e devolve o usuário à tela de login com um aviso, em vez de deixá-lo preso numa
+  // tela travada vendo "Sessão inválida ou expirada" sem conseguir agir.
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      setCurrentUser(null);
+      sessionStorage.removeItem('cbc_current_user');
+      setSessionNotice('Sua sessão expirou. Faça login novamente.');
+    });
+    return () => setUnauthorizedHandler(null);
+  }, []);
 
   // Real-time synchronization listeners (via backend guardião)
   useEffect(() => {
@@ -65,6 +79,7 @@ export function useStore() {
       setSessionToken(resp.token);
       const user = resp.user as User;
       setCurrentUser(user);
+      setSessionNotice(null);
       return { success: true, user };
     } catch (err: any) {
       const msg = err instanceof ApiError
@@ -230,6 +245,7 @@ export function useStore() {
     transactions,
     documents,
     currentUser,
+    sessionNotice,
     login,
     logout,
     addClient,

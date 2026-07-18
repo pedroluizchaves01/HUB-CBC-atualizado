@@ -10,6 +10,7 @@ export default function App() {
     projects,
     transactions,
     currentUser,
+    sessionNotice,
     login,
     logout,
     addClient,
@@ -30,7 +31,7 @@ export default function App() {
   // If no user is logged in, show the clean login page
   if (!currentUser) {
     const handleLoginAttempt = (username: string, pb: string) => login(username, pb);
-    return <Login onLogin={handleLoginAttempt} />;
+    return <Login onLogin={handleLoginAttempt} notice={sessionNotice} />;
   }
 
   // Admin & Marketing View

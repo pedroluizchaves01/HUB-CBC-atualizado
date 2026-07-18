@@ -4,9 +4,10 @@ import { Eye, EyeOff } from 'lucide-react';
 
 interface LoginProps {
   onLogin: (username: string, pb: string) => Promise<{ success: boolean; error?: string }>;
+  notice?: string | null;
 }
 
-export default function Login({ onLogin }: LoginProps) {
+export default function Login({ onLogin, notice }: LoginProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -78,6 +79,11 @@ export default function Login({ onLogin }: LoginProps) {
           <span className="label font-mono text-[0.65rem] uppercase tracking-[0.15em] text-[#FF5A35] font-bold mb-8 block">Autenticação</span>
           
           <form onSubmit={handleSubmit} className="space-y-6">
+            {!error && notice && (
+              <div className="bg-amber-500/10 border border-amber-500/20 text-amber-400 p-3.5 rounded-xl text-xs font-mono">
+                {notice}
+              </div>
+            )}
             {error && (
               <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-3.5 rounded-xl text-xs font-mono">
                 {error}
