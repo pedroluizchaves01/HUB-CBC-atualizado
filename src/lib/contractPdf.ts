@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import { Contract, ContractFormData, ContractType, Project } from '../types';
 import { CBC_FIXED_DATA, buildContractDocument, buildSignatureBlocks, formatBRL } from './contractTemplates';
+import { uploadBase64ToFirebase } from './firebaseStorage';
 
 const MARGIN_X = 14;
 const PAGE_BOTTOM = 282; // limite útil antes do rodapé (A4 = 297mm)
@@ -208,11 +209,30 @@ function formatDatePt(iso: string | undefined): string {
   return `${parseInt(d, 10)} de ${meses[mi] ?? m} de ${y}`;
 }
 
-export function downloadContractPdf(contract: Contract, project: Project | undefined) {
-  const doc = generateContractPdf(contract, project);
+export function buildContractPdfFileName(contract: Contract): string {
   const typeLabelSlug = contract.type.replace(/_/g, '-');
-  const fileName = `${contract.data.contratante.name || 'contrato'} - ${typeLabelSlug} #${contract.number
+  return `${contract.data.contratante.name || 'contrato'} - ${typeLabelSlug} #${contract.number
     .toString()
     .padStart(2, '0')}.pdf`;
-  doc.save(fileName);
+}
+
+export function downloadContractPdf(contract: Contract, project: Project | undefined) {
+  const doc = generateContractPdf(contract, project);
+  doc.save(buildContractPdfFileName(contract));
+}
+
+/**
+ * Gera o PDF do contrato e o envia para o storage do sistema (mesmo mecanismo
+ * usado para outros anexos — Telegram, com fallback em base64), permitindo
+ * reabrir/consultar o mesmo arquivo depois sem precisar gerá-lo novamente.
+ */
+export async function saveContractPdfToSystem(
+  contract: Contract,
+  project: Project | undefined
+): Promise<{ url: string; fileName: string; error: string | null }> {
+  const doc = generateContractPdf(contract, project);
+  const fileName = buildContractPdfFileName(contract);
+  const dataUri = doc.output('datauristring');
+  const { url, error } = await uploadBase64ToFirebase(dataUri, `contracts/${fileName}`, 'application/pdf');
+  return { url, fileName, error };
 }

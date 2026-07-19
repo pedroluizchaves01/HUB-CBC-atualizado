@@ -266,6 +266,11 @@ export interface Contract {
   createdAt: string;
   updatedAt?: string;
   data: ContractFormData;
+
+  // PDF salvo no sistema para consulta/edição futura (independente do download local)
+  pdfUrl?: string;
+  pdfFileName?: string;
+  pdfSavedAt?: string; // ISO date do último salvamento
 }
 
 
