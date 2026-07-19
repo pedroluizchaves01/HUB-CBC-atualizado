@@ -1448,6 +1448,16 @@ export default function QuotationMaps({
     setNewItemQty(1);
   };
 
+  const handleEditFormItem = (itemId: string, field: 'name' | 'unit' | 'quantity', value: string) => {
+    setFormItems(prev => prev.map(item => {
+      if (item.id !== itemId) return item;
+      if (field === 'quantity') {
+        return { ...item, quantity: value === '' ? 0 : Number(value) };
+      }
+      return { ...item, [field]: value };
+    }));
+  };
+
   const handleDeleteFormItem = (itemId: string) => {
     setFormItems(prev => prev.filter(item => item.id !== itemId));
     setFormSuppliers(prev => prev.map(sup => {
@@ -2301,9 +2311,32 @@ export default function QuotationMaps({
                   ) : (
                     formItems.map((item, idx) => (
                       <tr key={item.id} className="hover:bg-stone-50/50">
-                        <td className="p-2 font-sans font-medium text-stone-800">{item.name}</td>
-                        <td className="p-2 text-center font-mono text-stone-600">{item.unit}</td>
-                        <td className="p-2 text-center font-mono text-stone-800 font-bold">{item.quantity}</td>
+                        <td className="p-1">
+                          <input
+                            type="text"
+                            value={item.name}
+                            onChange={(e) => handleEditFormItem(item.id, 'name', e.target.value)}
+                            className="w-full bg-transparent hover:bg-white focus:bg-white border border-transparent hover:border-stone-200 focus:border-stone-400 py-1 px-1.5 text-xs font-sans font-medium text-stone-800 focus:outline-none"
+                          />
+                        </td>
+                        <td className="p-1">
+                          <input
+                            type="text"
+                            value={item.unit}
+                            onChange={(e) => handleEditFormItem(item.id, 'unit', e.target.value)}
+                            className="w-full bg-transparent hover:bg-white focus:bg-white border border-transparent hover:border-stone-200 focus:border-stone-400 py-1 px-1.5 text-xs font-mono text-stone-600 text-center focus:outline-none"
+                          />
+                        </td>
+                        <td className="p-1">
+                          <input
+                            type="number"
+                            value={item.quantity === 0 ? '' : item.quantity}
+                            onChange={(e) => handleEditFormItem(item.id, 'quantity', e.target.value)}
+                            min="0"
+                            step="any"
+                            className="w-full bg-transparent hover:bg-white focus:bg-white border border-transparent hover:border-stone-200 focus:border-stone-400 py-1 px-1.5 text-xs font-mono text-stone-800 font-bold text-center focus:outline-none"
+                          />
+                        </td>
                         <td className="p-2 text-center">
                           <button
                             type="button"
