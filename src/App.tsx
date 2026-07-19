@@ -24,7 +24,11 @@ export default function App() {
     documents,
     addDocument,
     editDocument,
-    deleteDocument
+    deleteDocument,
+    contracts,
+    addContract,
+    editContract,
+    deleteContract
   } = useStore();
 
   // If no user is logged in, show the clean login page
@@ -42,6 +46,7 @@ export default function App() {
         projects={projects}
         transactions={transactions}
         documents={documents}
+        contracts={contracts}
         onLogout={logout}
         onAddClient={addClient}
         onEditClient={editClient}
@@ -55,6 +60,9 @@ export default function App() {
         onAddDocument={addDocument}
         onEditDocument={editDocument}
         onDeleteDocument={deleteDocument}
+        onAddContract={addContract}
+        onEditContract={editContract}
+        onDeleteContract={deleteContract}
       />
     );
   }

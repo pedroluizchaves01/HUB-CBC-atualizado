@@ -199,5 +199,74 @@ export interface MarketingSettings {
   pressUrl?: string;
 }
 
+// ============ CONTRATOS ============
+
+export type ContractType = 'gerenciamento_obra' | 'projeto_arquitetura' | 'empreitada_mao_de_obra';
+
+export type ContractStatus = 'rascunho' | 'gerado' | 'assinado' | 'cancelado';
+
+export interface ContractPersonData {
+  name: string;
+  cpfCnpj: string;
+  address: string;
+  qualification?: string; // ex: "brasileiro, casado" — texto livre extra de qualificação civil
+}
+
+// Campos de formulário preenchidos pelo usuário para gerar o contrato.
+// Nem todos são usados em todos os tipos — cada template usa o subconjunto pertinente.
+export interface ContractFormData {
+  // Contratante principal
+  contratanteId?: string; // se veio de um Client já cadastrado
+  contratante: ContractPersonData;
+
+  // Segundo contratante solidário (opcional — ex.: cônjuge), usado no modelo de empreitada
+  contratanteSolidario?: ContractPersonData;
+
+  // Objeto / imóvel
+  localObjeto: string; // endereço da obra
+  cepObjeto?: string;
+  areaM2: string;
+  descricaoImovel?: string; // especificações de pavimentos/ambientes (texto livre)
+
+  // Financeiro
+  valorTotal: string; // string formatada em reais, ex "76.000,00"
+  valorTotalExtenso?: string;
+  percentualHonorarios?: string; // usado no gerenciamento de obra
+  valorEntrada?: string;
+  numeroParcelas?: string;
+  valorParcela?: string;
+  formaPagamento?: string; // texto livre extra (ex: parcelas quinzenais)
+
+  // Prazo
+  prazoExecucao: string; // ex: "10 (dez) meses" ou "30 (trinta) dias corridos"
+
+  // Escopo (texto livre editável — pré-preenchido pelo template, ajustável por contrato)
+  escopoServicos: string;
+
+  // Específico — Empreitada de mão de obra
+  contratado?: ContractPersonData; // empreiteiro/executor
+  encarregadoExecucao?: string; // nome (se diferente do contratado)
+  responsavelTecnico?: ContractPersonData; // interveniente-fiscalizadora
+  responsavelTecnicoCargo?: string; // ex: "Eng. ..., CREA/MS nº ..."
+  itensExcluidos?: string; // texto livre, serviços excluídos do escopo
+
+  // Data e local de assinatura
+  localAssinatura: string;
+  dataAssinatura: string; // YYYY-MM-DD
+
+  observacoes?: string;
+}
+
+export interface Contract {
+  id: string;
+  projectId: string;
+  type: ContractType;
+  number: number;
+  status: ContractStatus;
+  createdAt: string;
+  updatedAt?: string;
+  data: ContractFormData;
+}
+
 
 

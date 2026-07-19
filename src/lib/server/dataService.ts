@@ -8,7 +8,7 @@ import { getAdminDb } from "./db";
 // para o endpoint genérico não virar um acesso arbitrário ao banco.
 export const ALLOWED_COLLECTIONS = new Set<string>([
   // Núcleo
-  "users", "clients", "projects", "transactions", "documents",
+  "users", "clients", "projects", "transactions", "documents", "contracts",
   // Sistema/config
   "system_status", "settings",
   // Físico / obra
@@ -29,6 +29,8 @@ export const ADMIN_ONLY_COLLECTIONS = new Set<string>([
   "office_transactions", "office_leads", "labor_contracts", "labor_payments",
   "marketing_outbound", "marketing_posts", "marketing_press", "marketing_settings",
   "unified_suppliers", "unified_materials", "settings",
+  // Contratos são gerados e geridos apenas pelo admin por enquanto (sem visão do cliente ainda).
+  "contracts",
 ]);
 
 export function assertAllowed(collection: string): void {
