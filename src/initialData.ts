@@ -1,4 +1,4 @@
-import { User, Client, Project, Transaction, ProjectDocument } from './types';
+import { User, Client, Project, Transaction, ProjectDocument, Contract } from './types';
 
 // IMPORTANTE: nenhum passwordHash/senha é versionado aqui. As senhas são definidas
 // no backend (scripts/seed-users.ts, a partir de variáveis de ambiente) e guardadas
@@ -305,6 +305,8 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
     receiptName: 'recibo_plotagem_cadernos.pdf'
   }
 ];
+
+export const INITIAL_CONTRACTS: Contract[] = [];
 
 export const INITIAL_DOCUMENTS: ProjectDocument[] = [
   // project-1: Reforma de Interiores Clínica OralMed

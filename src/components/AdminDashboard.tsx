@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Client, Project, Transaction, TransactionCategory, TransactionStatus, ProjectType, ProjectStatus, ProjectDocument, DocumentClass, DocumentStatus, MaterialItem } from '../types';
+import { Client, Project, Transaction, TransactionCategory, TransactionStatus, ProjectType, ProjectStatus, ProjectDocument, DocumentClass, DocumentStatus, MaterialItem, Contract } from '../types';
 import { 
   Users, 
   Layers, 
@@ -37,7 +37,8 @@ import {
   Megaphone,
   Send,
   Settings,
-  Database
+  Database,
+  FileSignature
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { PlanningMaterials } from './PlanningMaterials';
@@ -52,6 +53,7 @@ import { subscribeCollection, saveDoc, removeDoc } from '../lib/firebaseDb';
 import { uploadFileToFirebase } from '../lib/firebaseStorage';
 import { getTelegramConfig, buildTelegramFileName } from '../lib/telegramService';
 import { TelegramSettings } from './TelegramSettings';
+import ContractGeneration from './ContractGeneration';
 
 
 interface AdminDashboardProps {
@@ -60,6 +62,7 @@ interface AdminDashboardProps {
   projects: Project[];
   transactions: Transaction[];
   documents: ProjectDocument[];
+  contracts: Contract[];
   onLogout: () => void;
   onAddClient: (client: Client, pass: string) => Promise<void>;
   onEditClient: (client: Client, pass?: string) => Promise<void>;
@@ -73,9 +76,12 @@ interface AdminDashboardProps {
   onAddDocument: (doc: ProjectDocument) => Promise<void>;
   onEditDocument: (doc: ProjectDocument) => Promise<void>;
   onDeleteDocument: (id: string) => Promise<void>;
+  onAddContract: (contract: Contract) => Promise<void>;
+  onEditContract: (contract: Contract) => Promise<void>;
+  onDeleteContract: (id: string) => Promise<void>;
 }
 
-type TabType = 'resumo' | 'clientes' | 'projetos' | 'escritorio' | 'marketing' | 'classe_administrativo' | 'classe_planejamento' | 'classe_acompanhamento' | 'telegram';
+type TabType = 'resumo' | 'clientes' | 'projetos' | 'escritorio' | 'marketing' | 'classe_administrativo' | 'classe_planejamento' | 'classe_acompanhamento' | 'contratos' | 'telegram';
 
 export default function AdminDashboard({
   role,
@@ -83,6 +89,7 @@ export default function AdminDashboard({
   projects,
   transactions,
   documents,
+  contracts,
   onLogout,
   onAddClient,
   onEditClient,
@@ -95,7 +102,10 @@ export default function AdminDashboard({
   onDeleteTransaction,
   onAddDocument,
   onEditDocument,
-  onDeleteDocument
+  onDeleteDocument,
+  onAddContract,
+  onEditContract,
+  onDeleteContract
 }: AdminDashboardProps) {
   // Navigation State
   const [activeTab, setActiveTab] = useState<TabType>(role === 'marketing' ? 'marketing' : 'resumo');
@@ -1478,6 +1488,22 @@ export default function AdminDashboard({
                   <div className="flex items-center gap-2.5">
                     <TrendingUp size={14} className={activeTab === 'classe_acompanhamento' ? 'text-[#FF5A35]' : 'text-slate-400'} />
                     <span>3. Acompanhamento</span>
+                  </div>
+                  <ChevronRight size={12} className="opacity-40" />
+                </button>
+
+                <button
+                  id="nav_btn_contratos"
+                  onClick={() => setActiveTab('contratos')}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-mono uppercase tracking-wider transition-all rounded-xl text-left cursor-pointer ${
+                    activeTab === 'contratos' 
+                      ? 'bg-gradient-to-r from-[#FF5A35]/15 to-[#7C3AED]/5 text-white border-l-2 border-[#FF5A35] font-bold' 
+                      : 'text-slate-400 hover:text-white hover:bg-white/[0.02]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <FileSignature size={14} className={activeTab === 'contratos' ? 'text-[#FF5A35]' : 'text-slate-400'} />
+                    <span>4. Contratos</span>
                   </div>
                   <ChevronRight size={12} className="opacity-40" />
                 </button>
@@ -2983,6 +3009,20 @@ export default function AdminDashboard({
               )}
 
             </div>
+          )}
+
+          {/* ============================================================== */}
+          {/* TAB: CONTRATOS - GERAÇÃO DE MINUTAS */}
+          {/* ============================================================== */}
+          {activeTab === 'contratos' && (
+            <ContractGeneration
+              clients={clients}
+              projects={projects}
+              contracts={contracts}
+              onAddContract={onAddContract}
+              onEditContract={onEditContract}
+              onDeleteContract={onDeleteContract}
+            />
           )}
 
           {/* ============================================================== */}

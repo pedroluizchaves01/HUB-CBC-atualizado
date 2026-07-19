@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { User, Client, Project, Transaction, ProjectDocument } from './types';
-import { INITIAL_USERS, INITIAL_CLIENTS, INITIAL_PROJECTS, INITIAL_TRANSACTIONS, INITIAL_DOCUMENTS } from './initialData';
+import { User, Client, Project, Transaction, ProjectDocument, Contract } from './types';
+import { INITIAL_USERS, INITIAL_CLIENTS, INITIAL_PROJECTS, INITIAL_TRANSACTIONS, INITIAL_DOCUMENTS, INITIAL_CONTRACTS } from './initialData';
 import { subscribeCollection, saveDoc, removeDoc } from './lib/firebaseDb';
 import { apiSend, setSessionToken, getSessionToken, ApiError } from './lib/apiClient';
 
@@ -10,6 +10,7 @@ export function useStore() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [documents, setDocuments] = useState<ProjectDocument[]>([]);
+  const [contracts, setContracts] = useState<Contract[]>([]);
 
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = sessionStorage.getItem('cbc_current_user');
@@ -23,6 +24,7 @@ export function useStore() {
     const unsubProjects = subscribeCollection('projects', setProjects, INITIAL_PROJECTS, 'cbc_projects');
     const unsubTransactions = subscribeCollection('transactions', setTransactions, INITIAL_TRANSACTIONS, 'cbc_transactions');
     const unsubDocuments = subscribeCollection('documents', setDocuments, INITIAL_DOCUMENTS, 'cbc_documents');
+    const unsubContracts = subscribeCollection('contracts', setContracts, INITIAL_CONTRACTS, 'cbc_contracts');
 
     return () => {
       unsubUsers();
@@ -30,6 +32,7 @@ export function useStore() {
       unsubProjects();
       unsubTransactions();
       unsubDocuments();
+      unsubContracts();
     };
   }, []);
 
@@ -223,12 +226,25 @@ export function useStore() {
     await removeDoc('documents', docId);
   };
 
+  const addContract = async (newContract: Contract) => {
+    await saveDoc('contracts', newContract.id, newContract);
+  };
+
+  const editContract = async (updatedContract: Contract) => {
+    await saveDoc('contracts', updatedContract.id, updatedContract);
+  };
+
+  const deleteContract = async (contractId: string) => {
+    await removeDoc('contracts', contractId);
+  };
+
   return {
     users,
     clients,
     projects,
     transactions,
     documents,
+    contracts,
     currentUser,
     login,
     logout,
@@ -243,6 +259,9 @@ export function useStore() {
     deleteTransaction,
     addDocument,
     editDocument,
-    deleteDocument
+    deleteDocument,
+    addContract,
+    editContract,
+    deleteContract
   };
 }
