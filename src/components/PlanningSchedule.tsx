@@ -17,10 +17,14 @@ import {
   Download,
   Upload,
   Camera,
-  Paperclip
+  Paperclip,
+  MessageSquare,
+  History
 } from 'lucide-react';
+import Markdown from 'react-markdown';
 import { Project, Transaction } from '../types';
 import { getAccessToken } from '../lib/firebaseAuth';
+import { generateScheduleFromAnswers } from '../lib/scheduleGenerator';
 
 interface PlanningScheduleProps {
   timelinePhases: any[];
@@ -63,6 +67,26 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
   const [isAiConfirmOpen, setIsAiConfirmOpen] = useState<boolean>(false);
   const [planningDriveFile, setPlanningDriveFile] = useState<{ id: string; webViewLink: string } | null>(null);
   const [planningDriveError, setPlanningDriveError] = useState<string | null>(null);
+  const [phaseSource, setPhaseSource] = useState<'ia_arquivo' | 'gerador'>('ia_arquivo');
+
+  // Generator (questionnaire) states — geração nativa sem IA
+  const [isGeneratorFormOpen, setIsGeneratorFormOpen] = useState<boolean>(false);
+  const [generatorAnswers, setGeneratorAnswers] = useState({
+    projectKind: 'nova_construcao' as 'nova_construcao' | 'reforma' | 'comercial',
+    standard: 'medio' as 'popular' | 'medio' | 'alto',
+    areaM2: '',
+    totalBudget: '',
+    startDate: new Date().toISOString().split('T')[0],
+    durationMonths: '6',
+  });
+  const [generatorError, setGeneratorError] = useState<string | null>(null);
+
+  // Schedule refinement (checkpoint / ajuste via IA) states
+  const [scheduleComment, setScheduleComment] = useState<string | null>(null);
+  const [scheduleCheckpointPrompt, setScheduleCheckpointPrompt] = useState<string>('');
+  const [isRefiningSchedule, setIsRefiningSchedule] = useState<boolean>(false);
+  const [scheduleRefiningError, setScheduleRefiningError] = useState<string | null>(null);
+  const [scheduleCheckpointHistory, setScheduleCheckpointHistory] = useState<string[]>([]);
 
   // Phase editing states
   const [editingPhase, setEditingPhase] = useState<any | null>(null);
@@ -452,6 +476,89 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
     setExtractedPhases(null);
     setAiPlanningFile(null);
     setIsAiConfirmOpen(false);
+    setScheduleComment(null);
+    setScheduleCheckpointHistory([]);
+  };
+
+  // Geração NATIVA (sem IA) do cronograma a partir das respostas do questionário.
+  const handleGenerateSchedule = () => {
+    setGeneratorError(null);
+
+    const areaNum = parseFloat(generatorAnswers.areaM2.replace(',', '.'));
+    const budgetNum = parseFloat(generatorAnswers.totalBudget.replace(/\./g, '').replace(',', '.'));
+    const durationNum = parseFloat(generatorAnswers.durationMonths.replace(',', '.'));
+
+    if (!budgetNum || budgetNum <= 0) {
+      setGeneratorError('Informe um orçamento total válido.');
+      return;
+    }
+    if (!durationNum || durationNum <= 0) {
+      setGeneratorError('Informe um prazo total (em meses) válido.');
+      return;
+    }
+    if (!generatorAnswers.startDate) {
+      setGeneratorError('Informe a data de início da obra.');
+      return;
+    }
+
+    const generated = generateScheduleFromAnswers({
+      projectKind: generatorAnswers.projectKind,
+      standard: generatorAnswers.standard,
+      areaM2: areaNum || 0,
+      totalBudget: budgetNum,
+      startDate: generatorAnswers.startDate,
+      durationMonths: durationNum,
+    });
+
+    setExtractedPhases(generated);
+    setPhaseSource('gerador');
+    setIsAiConfirmOpen(true);
+    setIsGeneratorFormOpen(false);
+    setScheduleComment(null);
+    setScheduleCheckpointHistory(['Cronograma gerado a partir do questionário (tabela de referência da construção civil).']);
+  };
+
+  // Ajuste via IA (checkpoint) do cronograma — passo opcional da abordagem híbrida.
+  const handleRefineSchedule = async () => {
+    if (!scheduleCheckpointPrompt.trim() || !extractedPhases) return;
+
+    setIsRefiningSchedule(true);
+    setScheduleRefiningError(null);
+
+    try {
+      const response = await fetch('/api/planning/refine-schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPhases: extractedPhases,
+          userMessage: scheduleCheckpointPrompt.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        let serverMessage = 'Falha no servidor ao ajustar o cronograma.';
+        try {
+          const errJson = await response.json();
+          if (errJson?.error) serverMessage = errJson.error;
+        } catch {}
+        throw new Error(serverMessage);
+      }
+
+      const data = await response.json();
+      if (data.success && data.phases) {
+        setExtractedPhases(data.phases);
+        setScheduleComment(data.comment || null);
+        setScheduleCheckpointHistory(prev => [...prev, scheduleCheckpointPrompt.trim()]);
+        setScheduleCheckpointPrompt('');
+      } else {
+        throw new Error('Não foi possível aplicar as alterações solicitadas.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setScheduleRefiningError(err.message || 'Erro ao ajustar o cronograma com a IA.');
+    } finally {
+      setIsRefiningSchedule(false);
+    }
   };
 
   // Phase Save & Delete Handlers
@@ -798,7 +905,105 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
                     <Camera size={16} className="text-stone-500 group-hover:text-stone-800" />
                     <span>Tirar Foto</span>
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsGeneratorFormOpen(prev => !prev)}
+                    className="flex items-center justify-center gap-2 border-2 border-dashed border-sky-300 hover:border-sky-500 bg-sky-50 hover:bg-sky-100 py-4 px-3 text-xs font-mono uppercase font-bold tracking-wider text-sky-800 transition-all cursor-pointer group"
+                  >
+                    <Sliders size={16} className="text-sky-600" />
+                    <span>Gerar por Perguntas (sem arquivo)</span>
+                  </button>
                 </div>
+
+                {isGeneratorFormOpen && (
+                  <div className="bg-sky-50 border border-sky-200 p-4 mt-3 space-y-3">
+                    <p className="text-[10.5px] text-sky-900 leading-relaxed">
+                      Responda o questionário abaixo e o sistema monta um cronograma físico-financeiro completo automaticamente,
+                      usando tabelas de referência da construção civil (sem IA). Depois, se quiser, dá pra ajustar por comando de texto.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[8px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Tipo de Obra</label>
+                        <select
+                          value={generatorAnswers.projectKind}
+                          onChange={(e) => setGeneratorAnswers({ ...generatorAnswers, projectKind: e.target.value as any })}
+                          className="w-full bg-white border border-stone-300 py-1.5 px-2 text-xs focus:outline-none focus:border-sky-500"
+                        >
+                          <option value="nova_construcao">Nova Construção Residencial</option>
+                          <option value="reforma">Reforma</option>
+                          <option value="comercial">Construção Comercial</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[8px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Padrão de Acabamento</label>
+                        <select
+                          value={generatorAnswers.standard}
+                          onChange={(e) => setGeneratorAnswers({ ...generatorAnswers, standard: e.target.value as any })}
+                          className="w-full bg-white border border-stone-300 py-1.5 px-2 text-xs focus:outline-none focus:border-sky-500"
+                        >
+                          <option value="popular">Popular / Econômico</option>
+                          <option value="medio">Médio</option>
+                          <option value="alto">Alto Padrão</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[8px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Área Construída (m²)</label>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="Ex: 150"
+                          value={generatorAnswers.areaM2}
+                          onChange={(e) => setGeneratorAnswers({ ...generatorAnswers, areaM2: e.target.value })}
+                          className="w-full bg-white border border-stone-300 py-1.5 px-2 text-xs focus:outline-none focus:border-sky-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[8px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Orçamento Total (R$)</label>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="Ex: 400000"
+                          value={generatorAnswers.totalBudget}
+                          onChange={(e) => setGeneratorAnswers({ ...generatorAnswers, totalBudget: e.target.value })}
+                          className="w-full bg-white border border-stone-300 py-1.5 px-2 text-xs focus:outline-none focus:border-sky-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[8px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Data de Início</label>
+                        <input
+                          type="date"
+                          value={generatorAnswers.startDate}
+                          onChange={(e) => setGeneratorAnswers({ ...generatorAnswers, startDate: e.target.value })}
+                          className="w-full bg-white border border-stone-300 py-1.5 px-2 text-xs focus:outline-none focus:border-sky-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[8px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Prazo Total (meses)</label>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="Ex: 8"
+                          value={generatorAnswers.durationMonths}
+                          onChange={(e) => setGeneratorAnswers({ ...generatorAnswers, durationMonths: e.target.value })}
+                          className="w-full bg-white border border-stone-300 py-1.5 px-2 text-xs focus:outline-none focus:border-sky-500"
+                        />
+                      </div>
+                    </div>
+
+                    {generatorError && (
+                      <p className="text-[10px] text-red-600 font-mono">{generatorError}</p>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={handleGenerateSchedule}
+                      className="w-full sm:w-auto bg-sky-800 hover:bg-sky-700 text-white py-2.5 px-5 text-[10px] font-mono uppercase tracking-widest font-bold transition-all cursor-pointer"
+                    >
+                      📐 Gerar Cronograma Automaticamente
+                    </button>
+                  </div>
+                )}
 
                 <input
                   id="ai-planning-picker"
@@ -867,8 +1072,14 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
               <div className="bg-stone-900 text-white p-5 space-y-4 border border-stone-850 shadow-lg">
                 <div className="flex justify-between items-start border-b border-stone-800 pb-2.5">
                   <div>
-                    <h5 className="font-serif text-xs font-bold uppercase tracking-wider text-stone-100">Etapas extraídas com sucesso! ✨</h5>
-                    <p className="text-[10px] text-stone-400 mt-0.5">A Inteligência Artificial Gemini identificou {extractedPhases.length} etapas de planejamento.</p>
+                    <h5 className="font-serif text-xs font-bold uppercase tracking-wider text-stone-100">
+                      {phaseSource === 'gerador' ? 'Cronograma gerado com sucesso! 📐' : 'Etapas extraídas com sucesso! ✨'}
+                    </h5>
+                    <p className="text-[10px] text-stone-400 mt-0.5">
+                      {phaseSource === 'gerador'
+                        ? `Cronograma nativo gerado a partir do questionário (${extractedPhases.length} etapas, tabela de referência da construção civil).`
+                        : `A Inteligência Artificial Gemini identificou ${extractedPhases.length} etapas de planejamento.`}
+                    </p>
                   </div>
                   <button 
                     onClick={() => setIsAiConfirmOpen(false)}
@@ -878,7 +1089,72 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
                   </button>
                 </div>
 
+                {/* Ajuste via IA (checkpoint) — opcional, funciona tanto pro gerador quanto pra extração por arquivo */}
+                <div className="bg-stone-950 border border-stone-800 p-3.5 space-y-2.5">
+                  <span className="block text-[9px] font-mono uppercase tracking-wider text-stone-400 font-bold flex items-center gap-1.5">
+                    <MessageSquare size={11} className="text-stone-400" />
+                    Ajustar com IA (opcional)
+                  </span>
+                  <p className="text-[9.5px] text-stone-500 leading-normal">
+                    Ex: "aumente a fundação em 2 semanas", "adicione uma fase de paisagismo no final", "meu terreno é em aclive, inclua terraplanagem no início".
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={scheduleCheckpointPrompt}
+                      onChange={(e) => setScheduleCheckpointPrompt(e.target.value)}
+                      placeholder="Instruções para ajustar o cronograma..."
+                      className="flex-1 bg-stone-900 border border-stone-800 text-stone-100 py-2 px-3 text-xs focus:outline-none focus:border-stone-600 font-sans"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleRefineSchedule();
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      disabled={isRefiningSchedule || !scheduleCheckpointPrompt.trim()}
+                      onClick={handleRefineSchedule}
+                      className="bg-stone-800 hover:bg-stone-700 disabled:opacity-50 text-white font-mono uppercase tracking-wider text-[10px] py-2 px-4 font-bold transition-all flex items-center gap-1.5 justify-center"
+                    >
+                      {isRefiningSchedule ? (
+                        <>
+                          <div className="animate-spin rounded-full h-3 w-3 border border-white border-t-transparent"></div>
+                          <span>Processando...</span>
+                        </>
+                      ) : (
+                        <span>Ajustar com IA</span>
+                      )}
+                    </button>
+                  </div>
+                  {scheduleRefiningError && (
+                    <p className="text-[10px] text-red-400 font-mono">{scheduleRefiningError}</p>
+                  )}
+                  {scheduleCheckpointHistory.length > 0 && (
+                    <div className="pt-2 border-t border-stone-900 flex items-center gap-2 flex-wrap">
+                      <span className="text-[9px] font-mono text-stone-500 font-bold flex items-center gap-1">
+                        <History size={10} /> Histórico:
+                      </span>
+                      {scheduleCheckpointHistory.map((hist, hIdx) => (
+                        <span key={hIdx} className="bg-stone-900 border border-stone-800 text-stone-400 text-[8px] font-mono py-0.5 px-2">
+                          {hIdx === 0 ? '✓ Origem' : `Checkpoint ${hIdx}: "${hist}"`}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
+                {scheduleComment && (
+                  <div className="bg-[#FAF9F6] text-stone-900 border-l-4 border-amber-500 p-4 font-sans text-xs">
+                    <span className="block text-[9px] font-mono uppercase tracking-widest text-amber-800 font-bold mb-2">
+                      📋 O que foi alterado
+                    </span>
+                    <div className="markdown-body prose prose-stone prose-xs leading-relaxed max-w-none text-stone-800">
+                      <Markdown>{scheduleComment}</Markdown>
+                    </div>
+                  </div>
+                )}
 
                 <div className="max-h-40 overflow-y-auto space-y-2 border border-stone-800 p-3 bg-stone-950 font-mono text-[9px] text-stone-300 divide-y divide-stone-800">
                   {extractedPhases.map((p, idx) => (

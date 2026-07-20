@@ -70,6 +70,10 @@ export const PlanningMaterials: React.FC<PlanningMaterialsProps> = ({
   const [materialsDriveFile, setMaterialsDriveFile] = useState<{ id: string; webViewLink: string } | null>(null);
   const [materialsDriveError, setMaterialsDriveError] = useState<string | null>(null);
   const [isPrintPreviewOpen, setIsPrintPreviewOpen] = useState<boolean>(false);
+  const [materialsWarnings, setMaterialsWarnings] = useState<string[]>([]);
+  const [materialsEngine, setMaterialsEngine] = useState<string | null>(null);
+  const [groupingSuggestions, setGroupingSuggestions] = useState<{ itemIndices: number[]; itemNames: string[]; reason: string }[]>([]);
+  const [dismissedGroupKeys, setDismissedGroupKeys] = useState<Set<string>>(new Set());
 
   // Refinement / Checkpoint prompt states
   const [checkpointPrompt, setCheckpointPrompt] = useState<string>('');
@@ -301,13 +305,21 @@ export const PlanningMaterials: React.FC<PlanningMaterialsProps> = ({
     setAiMaterialsError(null);
     setAiMaterialsStep('Lendo arquivo de materiais...');
 
-    const steps = [
-      'Lendo arquivo e decodificando estrutura...',
-      'Analisando linhas do orçamento / cotação com a IA Gemini...',
-      'Mapeando descrições, quantidades e unidades de medida...',
-      'Analisando fornecedores, valores unitários e prazos...',
-      'Estruturando dados e elaborando parecer de suprimentos...'
-    ];
+    const isPdfFile = aiMaterialsFile.type === 'application/pdf' || aiMaterialsFile.name.toLowerCase().endsWith('.pdf');
+    const steps = isPdfFile
+      ? [
+          'Lendo camada de texto do PDF...',
+          'Reconhecendo colunas da tabela (material, quantidade, valores, datas)...',
+          'Reconstruindo linhas e extraindo cada item...',
+          'Verificando itens com nomes parecidos para sugestão de agrupamento...',
+        ]
+      : [
+          'Lendo arquivo e decodificando estrutura...',
+          'Analisando linhas do orçamento / cotação com a IA Gemini...',
+          'Mapeando descrições, quantidades e unidades de medida...',
+          'Analisando fornecedores, valores unitários e prazos...',
+          'Estruturando dados e elaborando parecer de suprimentos...',
+        ];
 
     let stepIndex = 0;
     const interval = setInterval(() => {
@@ -373,9 +385,13 @@ export const PlanningMaterials: React.FC<PlanningMaterialsProps> = ({
       const data = await response.json();
       if (data.success && data.materials) {
         setTempMaterials(data.materials);
-        setTempComment(data.comment);
+        setTempComment(data.comment || null);
         setMaterialsDriveFile(data.driveFile || null);
         setMaterialsDriveError(data.driveError || null);
+        setMaterialsWarnings(Array.isArray(data.warnings) ? data.warnings : []);
+        setGroupingSuggestions(Array.isArray(data.groupingSuggestions) ? data.groupingSuggestions : []);
+        setDismissedGroupKeys(new Set());
+        setMaterialsEngine(data.engine || null);
         setIsPreviewOpen(true);
         setCheckpointHistory(['Extração inicial do arquivo concluída.']);
       } else {
@@ -388,6 +404,75 @@ export const PlanningMaterials: React.FC<PlanningMaterialsProps> = ({
     } finally {
       setAiMaterialsLoading(false);
     }
+  };
+
+  // Chave estável para identificar uma sugestão de agrupamento (baseada nos nomes envolvidos)
+  const groupKey = (g: { itemNames: string[] }) => g.itemNames.slice().sort().join('|');
+
+  const handleDismissGroupSuggestion = (g: { itemNames: string[] }) => {
+    setDismissedGroupKeys(prev => new Set(prev).add(groupKey(g)));
+  };
+
+  const handleMergeGroup = (g: { itemIndices: number[]; itemNames: string[] }) => {
+    if (!tempMaterials) return;
+    const rows = g.itemIndices.map(idx => tempMaterials[idx]).filter(Boolean);
+    if (rows.length < 2) return;
+
+    // Nome: mantém o mais longo/descritivo do grupo
+    const mergedName = rows.reduce((longest, r) => (r.name || '').length > longest.length ? (r.name || '') : longest, '');
+
+    // Quantidade: soma; se as unidades divergirem, mantém a mais frequente e avisa nas notas
+    const totalQty = rows.reduce((sum, r) => sum + (parseFloat(r.quantityVal) || 0), 0);
+    const unitCounts: Record<string, number> = {};
+    rows.forEach(r => {
+      const u = (r.quantityUnit || r.unit || '').trim();
+      if (u) unitCounts[u] = (unitCounts[u] || 0) + 1;
+    });
+    const units = Object.keys(unitCounts);
+    const mergedUnit = units.sort((a, b) => unitCounts[b] - unitCounts[a])[0] || '';
+    const unitsDiffer = units.length > 1;
+
+    // Valor unitário: média ponderada pelo valor total combinado
+    const totalValue = rows.reduce((sum, r) => sum + ((parseFloat(r.quantityVal) || 0) * (parseFloat(r.unitValue) || 0)), 0);
+    const mergedUnitValue = totalQty > 0 ? Math.round((totalValue / totalQty) * 100) / 100 : 0;
+
+    // Fornecedores: se todos iguais, mantém; senão lista os distintos
+    const suppliers = Array.from(new Set(rows.map(r => (r.supplier || '').trim()).filter(Boolean)));
+    const mergedSupplier = suppliers.length <= 1 ? (suppliers[0] || 'Cotação') : suppliers.join(' + ');
+
+    // Datas: pedido mais antigo, entrega mais recente
+    const orderDates = rows.map(r => r.orderDate).filter(Boolean).sort();
+    const deliveryDates = rows.map(r => r.deliveryDate).filter(Boolean).sort();
+    const mergedOrderDate = orderDates[0] || new Date().toISOString().split('T')[0];
+    const mergedDeliveryDate = deliveryDates[deliveryDates.length - 1] || mergedOrderDate;
+
+    const notesParts = [`Item agrupado a partir de: ${rows.map(r => r.name).join(', ')}.`];
+    if (unitsDiffer) notesParts.push(`Atenção: as unidades originais divergiam (${units.join(', ')}) — confira a quantidade total.`);
+
+    const mergedItem = {
+      name: mergedName,
+      quantityVal: Math.round(totalQty * 100) / 100,
+      quantityUnit: mergedUnit,
+      unit: mergedUnit,
+      supplier: mergedSupplier,
+      unitValue: mergedUnitValue,
+      orderDate: mergedOrderDate,
+      deliveryDate: mergedDeliveryDate,
+      notes: notesParts.join(' '),
+    };
+
+    const indicesSet = new Set(g.itemIndices);
+    const firstIndex = Math.min(...g.itemIndices);
+    const newMaterials = tempMaterials
+      .filter((_, idx) => !indicesSet.has(idx))
+      .concat([]); // cópia
+    // Insere o item mesclado na posição relativa do primeiro item do grupo
+    const insertAt = tempMaterials.slice(0, firstIndex).filter((_, idx) => !indicesSet.has(idx)).length;
+    newMaterials.splice(insertAt, 0, mergedItem);
+
+    setTempMaterials(newMaterials);
+    handleDismissGroupSuggestion(g);
+    setCheckpointHistory(prev => [...prev, `Agrupamento manual: ${rows.length} itens unidos em "${mergedName}".`]);
   };
 
   const handleRefineMaterials = async () => {
@@ -471,6 +556,9 @@ export const PlanningMaterials: React.FC<PlanningMaterialsProps> = ({
     setIsPreviewOpen(false);
     setAiMaterialsFile(null);
     setCheckpointHistory([]);
+    setGroupingSuggestions([]);
+    setMaterialsWarnings([]);
+    setDismissedGroupKeys(new Set());
   };
 
   const [formInput, setFormInput] = useState({
@@ -673,7 +761,7 @@ export const PlanningMaterials: React.FC<PlanningMaterialsProps> = ({
                 <span className="text-sm">🪄</span> Preenchimento Automático de Materiais com Inteligência Artificial
               </h4>
               <p className="text-[11px] text-stone-500 mt-0.5">
-                Anexe uma lista de materiais, planilha de insumos ou cotação em PDF ou Excel (.pdf, .xlsx, .xls). A IA do Gemini mapeará todos os itens, quantidades, fornecedores, valores e datas automaticamente.
+                Anexe uma lista de materiais, planilha de insumos ou cotação em PDF (lido por um leitor nativo, sem uso de IA) ou Excel (.xlsx, .xls, via IA). Todos os itens, quantidades, fornecedores, valores e datas são mapeados automaticamente — inclusive sugestões de agrupamento para itens com nomes parecidos.
               </p>
             </div>
 
@@ -762,7 +850,11 @@ export const PlanningMaterials: React.FC<PlanningMaterialsProps> = ({
               <div className="bg-stone-100 border border-stone-200 p-4 space-y-3">
                 <div className="flex items-center gap-3">
                   <div className="animate-spin rounded-full h-4 w-4 border-2 border-stone-850 border-t-transparent"></div>
-                  <span className="text-xs font-bold text-stone-800 font-serif">Módulo de IA Chaves Brites Correa está analisando os materiais...</span>
+                  <span className="text-xs font-bold text-stone-800 font-serif">
+                    {aiMaterialsFile && (aiMaterialsFile.type === 'application/pdf' || aiMaterialsFile.name.toLowerCase().endsWith('.pdf'))
+                      ? 'Leitor Nativo de PDF está processando os materiais...'
+                      : 'Módulo de IA Chaves Brites Correa está analisando os materiais...'}
+                  </span>
                 </div>
                 <p className="text-xs font-mono text-stone-600 animate-pulse">{aiMaterialsStep}</p>
               </div>
@@ -789,6 +881,8 @@ export const PlanningMaterials: React.FC<PlanningMaterialsProps> = ({
                       setTempMaterials(null);
                       setTempComment(null);
                       setAiMaterialsFile(null);
+                      setGroupingSuggestions([]);
+                      setMaterialsWarnings([]);
                     }
                   }}
                   className="text-stone-400 hover:text-white font-bold text-sm"
@@ -796,6 +890,52 @@ export const PlanningMaterials: React.FC<PlanningMaterialsProps> = ({
                   ✕
                 </button>
               </div>
+
+              <span className="inline-block text-[8px] font-mono uppercase bg-stone-800 text-stone-300 px-1.5 py-0.5 font-bold">
+                {materialsEngine === 'leitor-nativo-pdf' ? 'Leitor Nativo de PDF (sem IA)' : 'Extração por IA (Gemini)'}
+              </span>
+
+              {materialsWarnings.length > 0 && (
+                <div className="bg-amber-950/40 border border-amber-800 p-2.5 text-[11px] text-amber-200 leading-relaxed">
+                  {materialsWarnings.map((w, i) => (
+                    <p key={i}>⚠ {w}</p>
+                  ))}
+                </div>
+              )}
+
+              {groupingSuggestions.filter(g => !dismissedGroupKeys.has(groupKey(g))).length > 0 && (
+                <div className="bg-sky-950/40 border border-sky-800 p-3.5 space-y-2.5">
+                  <span className="block text-[9px] font-mono uppercase tracking-wider text-sky-300 font-bold flex items-center gap-1.5">
+                    <Layers size={12} /> Sugestões de Agrupamento — Itens com Nomes Parecidos
+                  </span>
+                  {groupingSuggestions.filter(g => !dismissedGroupKeys.has(groupKey(g))).map((g, gi) => (
+                    <div key={gi} className="bg-stone-950/60 border border-sky-900 p-2.5 flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
+                      <div className="text-[10.5px] text-stone-300 font-sans">
+                        <span className="block text-sky-400 text-[9px] font-mono uppercase mb-1">{g.reason}</span>
+                        {g.itemNames.map((n, i) => (
+                          <span key={i} className="block">• {n}</span>
+                        ))}
+                      </div>
+                      <div className="flex gap-1.5 flex-shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleMergeGroup(g)}
+                          className="bg-sky-800 hover:bg-sky-700 text-white text-[9px] font-mono uppercase tracking-wider py-1.5 px-2.5 font-bold transition-all whitespace-nowrap"
+                        >
+                          Agrupar Itens
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDismissGroupSuggestion(g)}
+                          className="bg-stone-800 hover:bg-stone-700 text-stone-400 text-[9px] font-mono uppercase tracking-wider py-1.5 px-2.5 transition-all whitespace-nowrap"
+                        >
+                          Ignorar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
 
 
@@ -929,6 +1069,8 @@ export const PlanningMaterials: React.FC<PlanningMaterialsProps> = ({
                       setTempMaterials(null);
                       setTempComment(null);
                       setAiMaterialsFile(null);
+                      setGroupingSuggestions([]);
+                      setMaterialsWarnings([]);
                     }
                   }}
                   className="bg-stone-800 hover:bg-stone-700 text-stone-300 py-2 px-4 text-[10px] font-mono uppercase tracking-wider transition-all cursor-pointer"
