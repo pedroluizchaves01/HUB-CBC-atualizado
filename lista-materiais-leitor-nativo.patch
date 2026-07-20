@@ -1,0 +1,726 @@
+diff --git a/server.ts b/server.ts
+index e891d33..0e0d9d1 100644
+--- a/server.ts
++++ b/server.ts
+@@ -10,6 +10,7 @@ import * as XLSX from "xlsx";
+ import { saveDocumentToDrive, DRIVE_FOLDERS } from "./src/lib/driveService";
+ import { extractReceiptText } from "./src/lib/receiptOcr";
+ import { parseBulkTransactionsFromPdf } from "./src/lib/bulkTransactionParser";
++import { parseMaterialListFromPdf } from "./src/lib/materialListParser";
+ import { validateBase64File, RECEIPT_MIMES } from "./src/lib/server/fileValidation";
+ import { parseReceiptText } from "./src/lib/receiptParser";
+ import { authenticate, createSessionToken } from "./src/lib/server/authService";
+@@ -367,6 +368,27 @@ app.post("/api/planning/parse-materials", requireAuth, aiLimiter, async (req, re
+       fileBase64
+     );
+ 
++    // --- PDF: extrator nativo, sem chamada a nenhuma IA ---
++    const isPdfNative = mimeType === "application/pdf" || (fileName && fileName.toLowerCase().endsWith(".pdf"));
++    if (isPdfNative) {
++      try {
++        const { materials, warnings, groupingSuggestions } = await parseMaterialListFromPdf(fileBase64);
++        return res.json({
++          success: true,
++          materials,
++          comment: null,
++          warnings,
++          groupingSuggestions,
++          engine: "leitor-nativo-pdf",
++          driveFile,
++          driveError,
++        });
++      } catch (nativeError: any) {
++        console.error("Erro ao ler PDF de materiais com o leitor nativo:", nativeError);
++        return res.status(422).json({ error: nativeError.message || "Não foi possível ler este PDF automaticamente." });
++      }
++    }
++
+     const currentDate = new Date().toISOString().split('T')[0];
+ 
+     const prompt = `
+@@ -444,7 +466,7 @@ Retorne obrigatoriamente no formato do esquema JSON definido.
+       context: "lista de materiais",
+     });
+ 
+-    return res.json({ success: true, materials: data.materials, comment: data.comment, driveFile, driveError });
++    return res.json({ success: true, materials: data.materials, comment: data.comment, warnings: [], groupingSuggestions: [], engine: "ia-gemini", driveFile, driveError });
+   } catch (error: any) {
+     console.error("Erro no processamento da IA para materiais:", error);
+     return res.status(500).json({ error: error.message || "Erro desconhecido ao processar a lista de materiais com a IA." });
+diff --git a/src/components/PlanningMaterials.tsx b/src/components/PlanningMaterials.tsx
+index dd8969c..b32ee6b 100644
+--- a/src/components/PlanningMaterials.tsx
++++ b/src/components/PlanningMaterials.tsx
+@@ -70,6 +70,10 @@ export const PlanningMaterials: React.FC<PlanningMaterialsProps> = ({
+   const [materialsDriveFile, setMaterialsDriveFile] = useState<{ id: string; webViewLink: string } | null>(null);
+   const [materialsDriveError, setMaterialsDriveError] = useState<string | null>(null);
+   const [isPrintPreviewOpen, setIsPrintPreviewOpen] = useState<boolean>(false);
++  const [materialsWarnings, setMaterialsWarnings] = useState<string[]>([]);
++  const [materialsEngine, setMaterialsEngine] = useState<string | null>(null);
++  const [groupingSuggestions, setGroupingSuggestions] = useState<{ itemIndices: number[]; itemNames: string[]; reason: string }[]>([]);
++  const [dismissedGroupKeys, setDismissedGroupKeys] = useState<Set<string>>(new Set());
+ 
+   // Refinement / Checkpoint prompt states
+   const [checkpointPrompt, setCheckpointPrompt] = useState<string>('');
+@@ -301,13 +305,21 @@ export const PlanningMaterials: React.FC<PlanningMaterialsProps> = ({
+     setAiMaterialsError(null);
+     setAiMaterialsStep('Lendo arquivo de materiais...');
+ 
+-    const steps = [
+-      'Lendo arquivo e decodificando estrutura...',
+-      'Analisando linhas do orçamento / cotação com a IA Gemini...',
+-      'Mapeando descrições, quantidades e unidades de medida...',
+-      'Analisando fornecedores, valores unitários e prazos...',
+-      'Estruturando dados e elaborando parecer de suprimentos...'
+-    ];
++    const isPdfFile = aiMaterialsFile.type === 'application/pdf' || aiMaterialsFile.name.toLowerCase().endsWith('.pdf');
++    const steps = isPdfFile
++      ? [
++          'Lendo camada de texto do PDF...',
++          'Reconhecendo colunas da tabela (material, quantidade, valores, datas)...',
++          'Reconstruindo linhas e extraindo cada item...',
++          'Verificando itens com nomes parecidos para sugestão de agrupamento...',
++        ]
++      : [
++          'Lendo arquivo e decodificando estrutura...',
++          'Analisando linhas do orçamento / cotação com a IA Gemini...',
++          'Mapeando descrições, quantidades e unidades de medida...',
++          'Analisando fornecedores, valores unitários e prazos...',
++          'Estruturando dados e elaborando parecer de suprimentos...',
++        ];
+ 
+     let stepIndex = 0;
+     const interval = setInterval(() => {
+@@ -373,9 +385,13 @@ export const PlanningMaterials: React.FC<PlanningMaterialsProps> = ({
+       const data = await response.json();
+       if (data.success && data.materials) {
+         setTempMaterials(data.materials);
+-        setTempComment(data.comment);
++        setTempComment(data.comment || null);
+         setMaterialsDriveFile(data.driveFile || null);
+         setMaterialsDriveError(data.driveError || null);
++        setMaterialsWarnings(Array.isArray(data.warnings) ? data.warnings : []);
++        setGroupingSuggestions(Array.isArray(data.groupingSuggestions) ? data.groupingSuggestions : []);
++        setDismissedGroupKeys(new Set());
++        setMaterialsEngine(data.engine || null);
+         setIsPreviewOpen(true);
+         setCheckpointHistory(['Extração inicial do arquivo concluída.']);
+       } else {
+@@ -390,6 +406,75 @@ export const PlanningMaterials: React.FC<PlanningMaterialsProps> = ({
+     }
+   };
+ 
++  // Chave estável para identificar uma sugestão de agrupamento (baseada nos nomes envolvidos)
++  const groupKey = (g: { itemNames: string[] }) => g.itemNames.slice().sort().join('|');
++
++  const handleDismissGroupSuggestion = (g: { itemNames: string[] }) => {
++    setDismissedGroupKeys(prev => new Set(prev).add(groupKey(g)));
++  };
++
++  const handleMergeGroup = (g: { itemIndices: number[]; itemNames: string[] }) => {
++    if (!tempMaterials) return;
++    const rows = g.itemIndices.map(idx => tempMaterials[idx]).filter(Boolean);
++    if (rows.length < 2) return;
++
++    // Nome: mantém o mais longo/descritivo do grupo
++    const mergedName = rows.reduce((longest, r) => (r.name || '').length > longest.length ? (r.name || '') : longest, '');
++
++    // Quantidade: soma; se as unidades divergirem, mantém a mais frequente e avisa nas notas
++    const totalQty = rows.reduce((sum, r) => sum + (parseFloat(r.quantityVal) || 0), 0);
++    const unitCounts: Record<string, number> = {};
++    rows.forEach(r => {
++      const u = (r.quantityUnit || r.unit || '').trim();
++      if (u) unitCounts[u] = (unitCounts[u] || 0) + 1;
++    });
++    const units = Object.keys(unitCounts);
++    const mergedUnit = units.sort((a, b) => unitCounts[b] - unitCounts[a])[0] || '';
++    const unitsDiffer = units.length > 1;
++
++    // Valor unitário: média ponderada pelo valor total combinado
++    const totalValue = rows.reduce((sum, r) => sum + ((parseFloat(r.quantityVal) || 0) * (parseFloat(r.unitValue) || 0)), 0);
++    const mergedUnitValue = totalQty > 0 ? Math.round((totalValue / totalQty) * 100) / 100 : 0;
++
++    // Fornecedores: se todos iguais, mantém; senão lista os distintos
++    const suppliers = Array.from(new Set(rows.map(r => (r.supplier || '').trim()).filter(Boolean)));
++    const mergedSupplier = suppliers.length <= 1 ? (suppliers[0] || 'Cotação') : suppliers.join(' + ');
++
++    // Datas: pedido mais antigo, entrega mais recente
++    const orderDates = rows.map(r => r.orderDate).filter(Boolean).sort();
++    const deliveryDates = rows.map(r => r.deliveryDate).filter(Boolean).sort();
++    const mergedOrderDate = orderDates[0] || new Date().toISOString().split('T')[0];
++    const mergedDeliveryDate = deliveryDates[deliveryDates.length - 1] || mergedOrderDate;
++
++    const notesParts = [`Item agrupado a partir de: ${rows.map(r => r.name).join(', ')}.`];
++    if (unitsDiffer) notesParts.push(`Atenção: as unidades originais divergiam (${units.join(', ')}) — confira a quantidade total.`);
++
++    const mergedItem = {
++      name: mergedName,
++      quantityVal: Math.round(totalQty * 100) / 100,
++      quantityUnit: mergedUnit,
++      unit: mergedUnit,
++      supplier: mergedSupplier,
++      unitValue: mergedUnitValue,
++      orderDate: mergedOrderDate,
++      deliveryDate: mergedDeliveryDate,
++      notes: notesParts.join(' '),
++    };
++
++    const indicesSet = new Set(g.itemIndices);
++    const firstIndex = Math.min(...g.itemIndices);
++    const newMaterials = tempMaterials
++      .filter((_, idx) => !indicesSet.has(idx))
++      .concat([]); // cópia
++    // Insere o item mesclado na posição relativa do primeiro item do grupo
++    const insertAt = tempMaterials.slice(0, firstIndex).filter((_, idx) => !indicesSet.has(idx)).length;
++    newMaterials.splice(insertAt, 0, mergedItem);
++
++    setTempMaterials(newMaterials);
++    handleDismissGroupSuggestion(g);
++    setCheckpointHistory(prev => [...prev, `Agrupamento manual: ${rows.length} itens unidos em "${mergedName}".`]);
++  };
++
+   const handleRefineMaterials = async () => {
+     if (!checkpointPrompt.trim() || !tempMaterials) return;
+ 
+@@ -471,6 +556,9 @@ export const PlanningMaterials: React.FC<PlanningMaterialsProps> = ({
+     setIsPreviewOpen(false);
+     setAiMaterialsFile(null);
+     setCheckpointHistory([]);
++    setGroupingSuggestions([]);
++    setMaterialsWarnings([]);
++    setDismissedGroupKeys(new Set());
+   };
+ 
+   const [formInput, setFormInput] = useState({
+@@ -673,7 +761,7 @@ export const PlanningMaterials: React.FC<PlanningMaterialsProps> = ({
+                 <span className="text-sm">🪄</span> Preenchimento Automático de Materiais com Inteligência Artificial
+               </h4>
+               <p className="text-[11px] text-stone-500 mt-0.5">
+-                Anexe uma lista de materiais, planilha de insumos ou cotação em PDF ou Excel (.pdf, .xlsx, .xls). A IA do Gemini mapeará todos os itens, quantidades, fornecedores, valores e datas automaticamente.
++                Anexe uma lista de materiais, planilha de insumos ou cotação em PDF (lido por um leitor nativo, sem uso de IA) ou Excel (.xlsx, .xls, via IA). Todos os itens, quantidades, fornecedores, valores e datas são mapeados automaticamente — inclusive sugestões de agrupamento para itens com nomes parecidos.
+               </p>
+             </div>
+ 
+@@ -762,7 +850,11 @@ export const PlanningMaterials: React.FC<PlanningMaterialsProps> = ({
+               <div className="bg-stone-100 border border-stone-200 p-4 space-y-3">
+                 <div className="flex items-center gap-3">
+                   <div className="animate-spin rounded-full h-4 w-4 border-2 border-stone-850 border-t-transparent"></div>
+-                  <span className="text-xs font-bold text-stone-800 font-serif">Módulo de IA Chaves Brites Correa está analisando os materiais...</span>
++                  <span className="text-xs font-bold text-stone-800 font-serif">
++                    {aiMaterialsFile && (aiMaterialsFile.type === 'application/pdf' || aiMaterialsFile.name.toLowerCase().endsWith('.pdf'))
++                      ? 'Leitor Nativo de PDF está processando os materiais...'
++                      : 'Módulo de IA Chaves Brites Correa está analisando os materiais...'}
++                  </span>
+                 </div>
+                 <p className="text-xs font-mono text-stone-600 animate-pulse">{aiMaterialsStep}</p>
+               </div>
+@@ -789,6 +881,8 @@ export const PlanningMaterials: React.FC<PlanningMaterialsProps> = ({
+                       setTempMaterials(null);
+                       setTempComment(null);
+                       setAiMaterialsFile(null);
++                      setGroupingSuggestions([]);
++                      setMaterialsWarnings([]);
+                     }
+                   }}
+                   className="text-stone-400 hover:text-white font-bold text-sm"
+@@ -797,6 +891,52 @@ export const PlanningMaterials: React.FC<PlanningMaterialsProps> = ({
+                 </button>
+               </div>
+ 
++              <span className="inline-block text-[8px] font-mono uppercase bg-stone-800 text-stone-300 px-1.5 py-0.5 font-bold">
++                {materialsEngine === 'leitor-nativo-pdf' ? 'Leitor Nativo de PDF (sem IA)' : 'Extração por IA (Gemini)'}
++              </span>
++
++              {materialsWarnings.length > 0 && (
++                <div className="bg-amber-950/40 border border-amber-800 p-2.5 text-[11px] text-amber-200 leading-relaxed">
++                  {materialsWarnings.map((w, i) => (
++                    <p key={i}>⚠ {w}</p>
++                  ))}
++                </div>
++              )}
++
++              {groupingSuggestions.filter(g => !dismissedGroupKeys.has(groupKey(g))).length > 0 && (
++                <div className="bg-sky-950/40 border border-sky-800 p-3.5 space-y-2.5">
++                  <span className="block text-[9px] font-mono uppercase tracking-wider text-sky-300 font-bold flex items-center gap-1.5">
++                    <Layers size={12} /> Sugestões de Agrupamento — Itens com Nomes Parecidos
++                  </span>
++                  {groupingSuggestions.filter(g => !dismissedGroupKeys.has(groupKey(g))).map((g, gi) => (
++                    <div key={gi} className="bg-stone-950/60 border border-sky-900 p-2.5 flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
++                      <div className="text-[10.5px] text-stone-300 font-sans">
++                        <span className="block text-sky-400 text-[9px] font-mono uppercase mb-1">{g.reason}</span>
++                        {g.itemNames.map((n, i) => (
++                          <span key={i} className="block">• {n}</span>
++                        ))}
++                      </div>
++                      <div className="flex gap-1.5 flex-shrink-0">
++                        <button
++                          type="button"
++                          onClick={() => handleMergeGroup(g)}
++                          className="bg-sky-800 hover:bg-sky-700 text-white text-[9px] font-mono uppercase tracking-wider py-1.5 px-2.5 font-bold transition-all whitespace-nowrap"
++                        >
++                          Agrupar Itens
++                        </button>
++                        <button
++                          type="button"
++                          onClick={() => handleDismissGroupSuggestion(g)}
++                          className="bg-stone-800 hover:bg-stone-700 text-stone-400 text-[9px] font-mono uppercase tracking-wider py-1.5 px-2.5 transition-all whitespace-nowrap"
++                        >
++                          Ignorar
++                        </button>
++                      </div>
++                    </div>
++                  ))}
++                </div>
++              )}
++
+ 
+ 
+               {/* Chat checkpoint input / controller */}
+@@ -929,6 +1069,8 @@ export const PlanningMaterials: React.FC<PlanningMaterialsProps> = ({
+                       setTempMaterials(null);
+                       setTempComment(null);
+                       setAiMaterialsFile(null);
++                      setGroupingSuggestions([]);
++                      setMaterialsWarnings([]);
+                     }
+                   }}
+                   className="bg-stone-800 hover:bg-stone-700 text-stone-300 py-2 px-4 text-[10px] font-mono uppercase tracking-wider transition-all cursor-pointer"
+diff --git a/src/lib/materialListParser.ts b/src/lib/materialListParser.ts
+new file mode 100644
+index 0000000..e68213b
+--- /dev/null
++++ b/src/lib/materialListParser.ts
+@@ -0,0 +1,433 @@
++// src/lib/materialListParser.ts
++// Extrator NATIVO (sem IA) de lista de materiais a partir de PDFs de tabela/planilha
++// (ex.: "Material | Quantidade | Unidade | Fornecedor | Valor Unitário | Valor Total |
++// Data do Pedido | Data de Entrega").
++//
++// Mesma estratégia usada em bulkTransactionParser.ts: lê a camada de texto do PDF
++// preservando a posição (x, y) de cada célula (unpdf) e reconstrói a tabela por
++// coluna, usando o cabeçalho para localizar os limites de cada coluna.
++//
++// Também inclui um motor de SUGESTÃO DE AGRUPAMENTO: compara os nomes dos materiais
++// extraídos e aponta itens com nomes muito parecidos (possíveis duplicatas/variações
++// de digitação do mesmo insumo), para o usuário decidir se quer uni-los.
++//
++// NÃO importar este arquivo em componentes React (uso apenas no backend).
++
++import { extractTextItems } from "unpdf";
++
++export interface ParsedMaterialItem {
++  name: string;
++  quantityVal: number;
++  quantityUnit: string;
++  supplier: string;
++  unitValue: number;
++  orderDate: string; // YYYY-MM-DD
++  deliveryDate: string; // YYYY-MM-DD
++  notes: string;
++}
++
++export interface GroupingSuggestion {
++  /** Índices (no array de materials retornado) dos itens sugeridos para agrupar. */
++  itemIndices: number[];
++  itemNames: string[];
++  reason: string;
++}
++
++export interface MaterialListParseResult {
++  materials: ParsedMaterialItem[];
++  warnings: string[];
++  groupingSuggestions: GroupingSuggestion[];
++}
++
++// ---------------------------------------------------------------------------
++// Utilitários de normalização de texto
++// ---------------------------------------------------------------------------
++
++const stripAccents = (s: string): string => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
++const norm = (s: string): string => stripAccents(s).toLowerCase().trim();
++
++// ---------------------------------------------------------------------------
++// Reconstrução de linhas a partir dos itens de texto (x, y) do PDF
++// ---------------------------------------------------------------------------
++
++interface TextItem { str: string; x: number; y: number; fontSize?: number }
++interface Cell { text: string; x: number }
++interface Row { y: number; cells: Cell[] }
++
++function groupItemsIntoRows(items: TextItem[]): Row[] {
++  const visible = items.filter((it) => it.str && it.str.trim().length > 0);
++  visible.sort((a, b) => (Math.abs(b.y - a.y) > 3 ? b.y - a.y : a.x - b.x));
++
++  const rows: Row[] = [];
++  let currentY: number | null = null;
++  let current: Cell[] = [];
++
++  for (const it of visible) {
++    const tolerance = Math.max(2, (it.fontSize || 10) * 0.5);
++    if (currentY === null || Math.abs(it.y - currentY) <= tolerance) {
++      current.push({ text: it.str.trim(), x: it.x });
++      currentY = currentY === null ? it.y : currentY;
++    } else {
++      rows.push({ y: currentY, cells: current.sort((a, b) => a.x - b.x) });
++      current = [{ text: it.str.trim(), x: it.x }];
++      currentY = it.y;
++    }
++  }
++  if (current.length > 0) rows.push({ y: currentY as number, cells: current.sort((a, b) => a.x - b.x) });
++  return rows;
++}
++
++// ---------------------------------------------------------------------------
++// Detecção de cabeçalho e mapeamento de colunas
++// ---------------------------------------------------------------------------
++
++type ColumnKey = "name" | "quantity" | "unit" | "supplier" | "unitPrice" | "totalPrice" | "dateOrder" | "dateDelivery";
++
++const HEADER_DEFS: { key: ColumnKey; patterns: RegExp[] }[] = [
++  { key: "name", patterns: [/material/, /insumo/, /descri/, /^item/, /produto/, /servico/] },
++  { key: "quantity", patterns: [/quantidade/, /^qtd/, /^qtde/] },
++  { key: "unit", patterns: [/^unidade/, /^un\.?$/, /unid\./] },
++  { key: "supplier", patterns: [/fornecedor/, /^local/, /credor/, /^cliente/] },
++  { key: "unitPrice", patterns: [/valor unit/, /preco unit/, /vl\.?\s*unit/, /^unitario$/] },
++  { key: "totalPrice", patterns: [/valor total/, /preco total/, /vl\.?\s*total/, /^total$/, /^valor$/] },
++  { key: "dateOrder", patterns: [/data do pedido/, /data da compra/, /data emissao/, /data lancamento/, /data pedido/] },
++  { key: "dateDelivery", patterns: [/data de entrega/, /data de pagamento/, /data entrega/, /previsao/] },
++];
++
++interface ColumnBounds { key: ColumnKey; start: number; end: number }
++
++function matchHeaderKeys(cellText: string): ColumnKey[] {
++  const n = norm(cellText);
++  const matched: ColumnKey[] = [];
++  for (const def of HEADER_DEFS) {
++    if (def.patterns.some((p) => p.test(n))) matched.push(def.key);
++  }
++  return matched;
++}
++
++function findHeaderRow(rows: Row[]): Row | null {
++  for (const row of rows) {
++    const found = new Set<ColumnKey>();
++    for (const cell of row.cells) {
++      for (const key of matchHeaderKeys(cell.text)) found.add(key);
++    }
++    // Exige ao menos 3 colunas reconhecidas (evita falso positivo em título solto)
++    if (found.size >= 3) return row;
++  }
++  return null;
++}
++
++function buildColumnBounds(headerRow: Row): ColumnBounds[] {
++  const anchors: { key: ColumnKey; x: number }[] = [];
++  for (const cell of headerRow.cells) {
++    for (const key of matchHeaderKeys(cell.text)) {
++      anchors.push({ key, x: cell.x });
++    }
++  }
++  anchors.sort((a, b) => a.x - b.x);
++  return anchors.map((a, i) => ({
++    key: a.key,
++    start: i === 0 ? -Infinity : (anchors[i - 1].x + a.x) / 2,
++    end: i === anchors.length - 1 ? Infinity : (a.x + anchors[i + 1].x) / 2,
++  }));
++}
++
++function assignRowToColumns(row: Row, bounds: ColumnBounds[]): Partial<Record<ColumnKey, string>> {
++  const result: Partial<Record<ColumnKey, string>> = {};
++  for (const cell of row.cells) {
++    const col = bounds.find((c) => cell.x >= c.start && cell.x < c.end);
++    if (!col) continue;
++    result[col.key] = result[col.key] ? `${result[col.key]} ${cell.text}` : cell.text;
++  }
++  return result;
++}
++
++// ---------------------------------------------------------------------------
++// Parsers de número (R$ / quantidade) e data (DD/MM/AAAA)
++// ---------------------------------------------------------------------------
++
++function parseBrazilianNumber(raw: string | undefined): number | null {
++  if (!raw) return null;
++  let s = raw.replace(/[^\d.,]/g, "");
++  if (!s) return null;
++  const hasComma = s.includes(",");
++  const hasDot = s.includes(".");
++  if (hasComma && hasDot) {
++    s = s.lastIndexOf(",") > s.lastIndexOf(".") ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, "");
++  } else if (hasComma) {
++    s = s.replace(",", ".");
++  }
++  const n = parseFloat(s);
++  if (!isFinite(n) || n < 0 || n > 100_000_000) return null;
++  return Math.round(n * 100) / 100;
++}
++
++/** Extrai a quantidade numérica de uma célula que pode ter a unidade junto (ex.: "50 sacos"). */
++function parseQuantityCell(raw: string | undefined): { value: number | null; unit: string } {
++  if (!raw) return { value: null, unit: "" };
++  const m = raw.match(/([\d.,]+)\s*(.*)/);
++  if (!m) return { value: null, unit: "" };
++  const value = parseBrazilianNumber(m[1]);
++  const unit = (m[2] || "").trim();
++  return { value, unit };
++}
++
++function parseBrazilianDate(raw: string | undefined): string | null {
++  if (!raw) return null;
++  const m = raw.match(/(\d{1,2})\s*\/{1,2}\s*(\d{1,2})\s*\/\s*(\d{2,4})/);
++  if (!m) return null;
++  const day = parseInt(m[1], 10);
++  const month = parseInt(m[2], 10);
++  let year = parseInt(m[3], 10);
++  if (year < 100) year += 2000;
++  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
++  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
++}
++
++function addDays(dateStr: string, days: number): string {
++  const d = new Date(dateStr + "T00:00:00");
++  d.setDate(d.getDate() + days);
++  return d.toISOString().split("T")[0];
++}
++
++// ---------------------------------------------------------------------------
++// Motor de sugestão de agrupamento (nomes de materiais parecidos)
++// ---------------------------------------------------------------------------
++
++const STOPWORDS = new Set(["de", "da", "do", "das", "dos", "e", "para", "com", "sem", "em", "no", "na", "a", "o"]);
++
++function tokenize(name: string): Set<string> {
++  const n = norm(name).replace(/[^\w\s]/g, " ");
++  return new Set(n.split(/\s+/).filter((t) => t.length > 0 && !STOPWORDS.has(t)));
++}
++
++function jaccard(a: Set<string>, b: Set<string>): number {
++  if (a.size === 0 || b.size === 0) return 0;
++  let intersection = 0;
++  for (const t of a) if (b.has(t)) intersection++;
++  const union = a.size + b.size - intersection;
++  return union === 0 ? 0 : intersection / union;
++}
++
++function levenshtein(a: string, b: string): number {
++  const m = a.length, n = b.length;
++  if (m === 0) return n;
++  if (n === 0) return m;
++  const dp: number[] = new Array(n + 1);
++  for (let j = 0; j <= n; j++) dp[j] = j;
++  for (let i = 1; i <= m; i++) {
++    let prev = dp[0];
++    dp[0] = i;
++    for (let j = 1; j <= n; j++) {
++      const tmp = dp[j];
++      dp[j] = a[i - 1] === b[j - 1] ? prev : 1 + Math.min(prev, dp[j], dp[j - 1]);
++      prev = tmp;
++    }
++  }
++  return dp[n];
++}
++
++function levenshteinRatio(a: string, b: string): number {
++  const maxLen = Math.max(a.length, b.length);
++  if (maxLen === 0) return 1;
++  return 1 - levenshtein(a, b) / maxLen;
++}
++
++/** Compara dois nomes de material e retorna um score de 0 a 1 de quão parecidos são. */
++function nameSimilarity(nameA: string, nameB: string): number {
++  const normA = norm(nameA);
++  const normB = norm(nameB);
++  if (normA === normB) return 1;
++  const tokensA = tokenize(nameA);
++  const tokensB = tokenize(nameB);
++  const jac = jaccard(tokensA, tokensB);
++  const lev = levenshteinRatio(normA, normB);
++  return Math.max(jac, lev);
++}
++
++class UnionFind {
++  private parent: number[];
++  constructor(size: number) {
++    this.parent = Array.from({ length: size }, (_, i) => i);
++  }
++  find(x: number): number {
++    if (this.parent[x] !== x) this.parent[x] = this.find(this.parent[x]);
++    return this.parent[x];
++  }
++  union(a: number, b: number) {
++    const ra = this.find(a), rb = this.find(b);
++    if (ra !== rb) this.parent[ra] = rb;
++  }
++}
++
++const SIMILARITY_THRESHOLD = 0.62;
++const MIN_NAME_LENGTH_FOR_MATCH = 4;
++
++/** Detecta grupos de materiais com nomes muito parecidos (possíveis duplicatas/variações). */
++export function suggestGroups(materials: { name: string }[]): GroupingSuggestion[] {
++  const n = materials.length;
++  if (n < 2) return [];
++
++  const uf = new UnionFind(n);
++  for (let i = 0; i < n; i++) {
++    const nameI = materials[i].name;
++    if (norm(nameI).length < MIN_NAME_LENGTH_FOR_MATCH) continue;
++    for (let j = i + 1; j < n; j++) {
++      const nameJ = materials[j].name;
++      if (norm(nameJ).length < MIN_NAME_LENGTH_FOR_MATCH) continue;
++      const score = nameSimilarity(nameI, nameJ);
++      if (score >= SIMILARITY_THRESHOLD) uf.union(i, j);
++    }
++  }
++
++  const groupsMap = new Map<number, number[]>();
++  for (let i = 0; i < n; i++) {
++    const root = uf.find(i);
++    if (!groupsMap.has(root)) groupsMap.set(root, []);
++    groupsMap.get(root)!.push(i);
++  }
++
++  const suggestions: GroupingSuggestion[] = [];
++  for (const indices of groupsMap.values()) {
++    if (indices.length < 2) continue;
++    const names = indices.map((idx) => materials[idx].name);
++    const allIdentical = names.every((nm) => norm(nm) === norm(names[0]));
++    suggestions.push({
++      itemIndices: indices,
++      itemNames: names,
++      reason: allIdentical
++        ? "Itens com o nome idêntico — provavelmente o mesmo material lançado em linhas separadas."
++        : "Nomes muito parecidos — podem ser o mesmo material com pequenas variações de descrição/digitação.",
++    });
++  }
++
++  suggestions.sort((a, b) => a.itemIndices[0] - b.itemIndices[0]);
++  return suggestions;
++}
++
++// ---------------------------------------------------------------------------
++// Função principal
++// ---------------------------------------------------------------------------
++
++/**
++ * Extrai uma lista de materiais de um PDF de tabela/planilha (BOQ, cotação, orçamento),
++ * usando apenas a camada de texto do PDF (sem chamadas a nenhuma IA).
++ *
++ * Lança um erro amigável em pt-BR quando o PDF não tem camada de texto (escaneado)
++ * ou quando não é possível reconhecer uma tabela com cabeçalho reconhecível.
++ */
++export async function parseMaterialListFromPdf(fileBase64: string): Promise<MaterialListParseResult> {
++  const buffer = Buffer.from(fileBase64, "base64");
++  const { items } = await extractTextItems(new Uint8Array(buffer));
++
++  const totalChars = items.reduce((sum, page) => sum + page.reduce((s, it) => s + (it.str?.trim().length || 0), 0), 0);
++  if (totalChars < 20) {
++    throw new Error(
++      "Este PDF parece ser digitalizado (imagem escaneada, sem camada de texto). " +
++      "O leitor nativo só consegue ler PDFs gerados a partir de planilha/tabela (ex.: exportado do Excel/Google Sheets)."
++    );
++  }
++
++  const today = new Date().toISOString().split("T")[0];
++  const warnings: string[] = [];
++  const materials: ParsedMaterialItem[] = [];
++  let headerFound = false;
++  let lastSupplier = "";
++
++  for (const pageItems of items) {
++    const rows = groupItemsIntoRows(pageItems);
++    const headerRow = findHeaderRow(rows);
++    if (!headerRow) continue; // página sem tabela (ex.: capa) — ignora
++    headerFound = true;
++
++    const bounds = buildColumnBounds(headerRow);
++    const headerIndex = rows.indexOf(headerRow);
++
++    for (const row of rows.slice(headerIndex + 1)) {
++      // Se a mesma página repetir o cabeçalho (comum em relatórios longos), pula.
++      const isRepeatedHeader = row.cells.some((c) => /material|insumo/.test(norm(c.text)) && row.cells.some((c2) => /valor|quantidade/.test(norm(c2.text))));
++      if (isRepeatedHeader) continue;
++
++      const cells = assignRowToColumns(row, bounds);
++      const name = cells.name?.trim();
++      // Linhas sem nome de material não são lançamentos válidos (títulos, rodapés, totalizadores etc.)
++      if (!name) continue;
++
++      const notesParts: string[] = [];
++
++      // Quantidade e unidade
++      const qtyFromQuantityCol = parseQuantityCell(cells.quantity);
++      let quantityVal = qtyFromQuantityCol.value;
++      let quantityUnit = cells.unit?.trim() || qtyFromQuantityCol.unit || "";
++      if (quantityVal === null) {
++        quantityVal = 1;
++        notesParts.push("Quantidade não encontrada no PDF — preenchida com 1, confira.");
++      }
++
++      // Fornecedor (com herança de célula mesclada, comum em planilhas exportadas)
++      const supplierRaw = cells.supplier?.trim() || "";
++      const supplier = supplierRaw || lastSupplier || "Cotação";
++      if (supplierRaw) lastSupplier = supplierRaw;
++      else if (lastSupplier) notesParts.push("Fornecedor herdado da linha anterior (célula mesclada na planilha original).");
++
++      // Valores unitário e total — reconcilia quando só um dos dois está presente
++      let unitValue = parseBrazilianNumber(cells.unitPrice);
++      let totalValue = parseBrazilianNumber(cells.totalPrice);
++      if (unitValue === null && totalValue !== null) {
++        unitValue = quantityVal > 0 ? Math.round((totalValue / quantityVal) * 100) / 100 : totalValue;
++      } else if (unitValue === null && totalValue === null) {
++        unitValue = 0;
++        notesParts.push("Valor não encontrado no PDF — preenchido com 0, confira antes de salvar.");
++      } else if (unitValue !== null && totalValue !== null) {
++        const expectedTotal = Math.round(unitValue * quantityVal * 100) / 100;
++        if (Math.abs(expectedTotal - totalValue) > Math.max(0.5, totalValue * 0.02)) {
++          notesParts.push(`Valor total do PDF (${totalValue.toFixed(2)}) não bate com qtd × valor unitário — confira.`);
++        }
++      }
++
++      // Datas
++      const orderDate = parseBrazilianDate(cells.dateOrder) || today;
++      if (!parseBrazilianDate(cells.dateOrder)) {
++        notesParts.push("Data do pedido não encontrada — preenchida com a data de hoje, confira.");
++      }
++      const deliveryDate = parseBrazilianDate(cells.dateDelivery) || addDays(orderDate, 7);
++      if (!parseBrazilianDate(cells.dateDelivery)) {
++        notesParts.push("Data de entrega não encontrada — estimada em 7 dias após o pedido, confira.");
++      }
++
++      materials.push({
++        name,
++        quantityVal,
++        quantityUnit,
++        supplier,
++        unitValue: unitValue as number,
++        orderDate,
++        deliveryDate,
++        notes: notesParts.join(" "),
++      });
++    }
++  }
++
++  if (!headerFound) {
++    throw new Error(
++      "Não foi possível reconhecer a estrutura de tabela deste PDF (não encontrei um cabeçalho com colunas como " +
++      "Material/Insumo, Quantidade e Valor). Confira se o PDF foi exportado de uma planilha em formato de tabela."
++    );
++  }
++  if (materials.length === 0) {
++    throw new Error("O cabeçalho da tabela foi encontrado, mas nenhuma linha com material válido foi identificada no PDF.");
++  }
++
++  const flaggedCount = materials.filter((m) => m.notes.length > 0).length;
++  if (flaggedCount > 0) {
++    warnings.push(`${flaggedCount} de ${materials.length} item(ns) foram marcados para revisão — confira as observações de cada linha.`);
++  }
++
++  const groupingSuggestions = suggestGroups(materials);
++  if (groupingSuggestions.length > 0) {
++    const totalGroupedItems = groupingSuggestions.reduce((sum, g) => sum + g.itemIndices.length, 0);
++    warnings.push(`${groupingSuggestions.length} sugestão(ões) de agrupamento encontrada(s), envolvendo ${totalGroupedItems} itens com nomes parecidos.`);
++  }
++
++  return { materials, warnings, groupingSuggestions };
++}
