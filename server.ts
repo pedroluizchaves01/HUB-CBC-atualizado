@@ -10,6 +10,7 @@ import * as XLSX from "xlsx";
 import { saveDocumentToDrive, DRIVE_FOLDERS } from "./src/lib/driveService";
 import { extractReceiptText } from "./src/lib/receiptOcr";
 import { parseBulkTransactionsFromPdf } from "./src/lib/bulkTransactionParser";
+import { parseMaterialListFromPdf } from "./src/lib/materialListParser";
 import { validateBase64File, RECEIPT_MIMES } from "./src/lib/server/fileValidation";
 import { parseReceiptText } from "./src/lib/receiptParser";
 import { authenticate, createSessionToken } from "./src/lib/server/authService";
@@ -367,6 +368,27 @@ app.post("/api/planning/parse-materials", requireAuth, aiLimiter, async (req, re
       fileBase64
     );
 
+    // --- PDF: extrator nativo, sem chamada a nenhuma IA ---
+    const isPdfNative = mimeType === "application/pdf" || (fileName && fileName.toLowerCase().endsWith(".pdf"));
+    if (isPdfNative) {
+      try {
+        const { materials, warnings, groupingSuggestions } = await parseMaterialListFromPdf(fileBase64);
+        return res.json({
+          success: true,
+          materials,
+          comment: null,
+          warnings,
+          groupingSuggestions,
+          engine: "leitor-nativo-pdf",
+          driveFile,
+          driveError,
+        });
+      } catch (nativeError: any) {
+        console.error("Erro ao ler PDF de materiais com o leitor nativo:", nativeError);
+        return res.status(422).json({ error: nativeError.message || "Não foi possível ler este PDF automaticamente." });
+      }
+    }
+
     const currentDate = new Date().toISOString().split('T')[0];
 
     const prompt = `
@@ -444,7 +466,7 @@ Retorne obrigatoriamente no formato do esquema JSON definido.
       context: "lista de materiais",
     });
 
-    return res.json({ success: true, materials: data.materials, comment: data.comment, driveFile, driveError });
+    return res.json({ success: true, materials: data.materials, comment: data.comment, warnings: [], groupingSuggestions: [], engine: "ia-gemini", driveFile, driveError });
   } catch (error: any) {
     console.error("Erro no processamento da IA para materiais:", error);
     return res.status(500).json({ error: error.message || "Erro desconhecido ao processar a lista de materiais com a IA." });
