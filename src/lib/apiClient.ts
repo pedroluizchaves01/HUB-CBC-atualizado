@@ -1,24 +1,48 @@
 // src/lib/apiClient.ts
 // Cliente HTTP do frontend para o "backend guardião". Guarda o token de sessão e o envia
 // em toda requisição. O token também vai como cookie httpOnly (definido pelo backend),
-// mas mantemos uma cópia em memória + sessionStorage para reidratar a sessão do app.
+// mas mantemos uma cópia em memória + storage do navegador para reidratar a sessão do app.
+//
+// Por padrão o token vive em sessionStorage (some ao fechar a aba/navegador). Quando o
+// usuário marca "manter conectado" no login, guardamos em localStorage também, para que a
+// sessão sobreviva a fechar e reabrir o navegador (até a expiração do token no servidor).
 
 const SESSION_KEY = "cbc_session_token";
+const REMEMBER_FLAG_KEY = "cbc_session_remember";
 
 let sessionToken: string | null = null;
 
-export function setSessionToken(token: string | null) {
+export function setSessionToken(token: string | null, remember: boolean = false) {
   sessionToken = token;
   try {
-    if (token) sessionStorage.setItem(SESSION_KEY, token);
-    else sessionStorage.removeItem(SESSION_KEY);
-  } catch { /* sessionStorage indisponível */ }
+    if (token) {
+      if (remember) {
+        localStorage.setItem(SESSION_KEY, token);
+        localStorage.setItem(REMEMBER_FLAG_KEY, "1");
+        sessionStorage.removeItem(SESSION_KEY);
+      } else {
+        sessionStorage.setItem(SESSION_KEY, token);
+        localStorage.removeItem(SESSION_KEY);
+        localStorage.removeItem(REMEMBER_FLAG_KEY);
+      }
+    } else {
+      sessionStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(REMEMBER_FLAG_KEY);
+    }
+  } catch { /* storage indisponível */ }
 }
 
 export function getSessionToken(): string | null {
   if (sessionToken) return sessionToken;
-  try { sessionToken = sessionStorage.getItem(SESSION_KEY); } catch { /* ignore */ }
+  try {
+    sessionToken = sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(SESSION_KEY);
+  } catch { /* ignore */ }
   return sessionToken;
+}
+
+export function wasRememberedSession(): boolean {
+  try { return localStorage.getItem(REMEMBER_FLAG_KEY) === "1"; } catch { return false; }
 }
 
 function authHeaders(extra?: Record<string, string>): Record<string, string> {

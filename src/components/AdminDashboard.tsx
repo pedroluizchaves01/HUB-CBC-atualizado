@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Client, Project, Transaction, TransactionCategory, TransactionStatus, ProjectType, ProjectStatus, ProjectDocument, DocumentClass, DocumentStatus, MaterialItem, Contract } from '../types';
+import { Client, Project, Transaction, TransactionCategory, TransactionStatus, ProjectType, ProjectStatus, ProjectDocument, DocumentClass, DocumentStatus, MaterialItem, Contract, User } from '../types';
 import { 
   Users, 
   Layers, 
@@ -38,7 +38,8 @@ import {
   Send,
   Settings,
   Database,
-  FileSignature
+  FileSignature,
+  Kanban
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { PlanningMaterials } from './PlanningMaterials';
@@ -54,6 +55,8 @@ import { uploadFileToFirebase } from '../lib/firebaseStorage';
 import { getTelegramConfig, buildTelegramFileName } from '../lib/telegramService';
 import { TelegramSettings } from './TelegramSettings';
 import ContractGeneration from './ContractGeneration';
+import Demandas from './Demandas';
+import NotificationBell from './NotificationBell';
 
 
 interface AdminDashboardProps {
@@ -63,6 +66,7 @@ interface AdminDashboardProps {
   transactions: Transaction[];
   documents: ProjectDocument[];
   contracts: Contract[];
+  users: User[];
   onLogout: () => void;
   onAddClient: (client: Client, pass: string) => Promise<void>;
   onEditClient: (client: Client, pass?: string) => Promise<void>;
@@ -81,7 +85,7 @@ interface AdminDashboardProps {
   onDeleteContract: (id: string) => Promise<void>;
 }
 
-type TabType = 'resumo' | 'clientes' | 'projetos' | 'escritorio' | 'marketing' | 'classe_administrativo' | 'classe_planejamento' | 'classe_acompanhamento' | 'contratos' | 'telegram';
+type TabType = 'resumo' | 'clientes' | 'projetos' | 'escritorio' | 'marketing' | 'classe_administrativo' | 'classe_planejamento' | 'classe_acompanhamento' | 'contratos' | 'demandas' | 'telegram';
 
 export default function AdminDashboard({
   role,
@@ -90,6 +94,7 @@ export default function AdminDashboard({
   transactions,
   documents,
   contracts,
+  users,
   onLogout,
   onAddClient,
   onEditClient,
@@ -1307,6 +1312,8 @@ export default function AdminDashboard({
 
   return (
     <div className="min-h-screen bg-[#F4F6FA] text-[#0F172A] flex flex-col md:flex-row font-sans selection:bg-[#FF5A35]/15 relative overflow-hidden theme-light">
+      {/* Motor de automação de Demandas: roda no servidor (src/lib/server/demandAutomation.ts),
+          independente de qualquer admin estar logado. Nada a montar aqui no cliente. */}
       <div className="grid-bg"></div>
       
       {/* Decorative ambient background glows */}
@@ -1507,6 +1514,22 @@ export default function AdminDashboard({
                   </div>
                   <ChevronRight size={12} className="opacity-40" />
                 </button>
+
+                <button
+                  id="nav_btn_demandas"
+                  onClick={() => setActiveTab('demandas')}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-mono uppercase tracking-wider transition-all rounded-xl text-left cursor-pointer ${
+                    activeTab === 'demandas' 
+                      ? 'bg-gradient-to-r from-[#FF5A35]/15 to-[#7C3AED]/5 text-white border-l-2 border-[#FF5A35] font-bold' 
+                      : 'text-slate-400 hover:text-white hover:bg-white/[0.02]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Kanban size={14} className={activeTab === 'demandas' ? 'text-[#FF5A35]' : 'text-slate-400'} />
+                    <span>5. Demandas</span>
+                  </div>
+                  <ChevronRight size={12} className="opacity-40" />
+                </button>
               </>
             )}
           </nav>
@@ -1558,6 +1581,7 @@ export default function AdminDashboard({
             <h2 className="text-xs font-bold text-white uppercase tracking-wider">Centro de Custo &amp; Gestão de Obras</h2>
           </div>
           <div className="flex items-center gap-4 text-xs">
+            {role !== 'marketing' && <NotificationBell />}
             <span className="font-mono text-slate-400 uppercase text-[9px] px-2.5 py-1 bg-white/5 border border-white/10 rounded-full">TIME CORPORATIVO</span>
           </div>
         </header>
@@ -3022,6 +3046,17 @@ export default function AdminDashboard({
               onAddContract={onAddContract}
               onEditContract={onEditContract}
               onDeleteContract={onDeleteContract}
+            />
+          )}
+
+          {/* ============================================================== */}
+          {/* TAB: DEMANDAS - CRM INTERNO EM QUADRO KANBAN */}
+          {/* ============================================================== */}
+          {activeTab === 'demandas' && (
+            <Demandas
+              clients={clients}
+              projects={projects}
+              users={users}
             />
           )}
 

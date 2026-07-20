@@ -3,13 +3,18 @@ import { motion } from 'motion/react';
 import { Eye, EyeOff } from 'lucide-react';
 
 interface LoginProps {
-  onLogin: (username: string, pb: string) => Promise<{ success: boolean; error?: string }>;
+  onLogin: (username: string, pb: string, rememberMe: boolean) => Promise<{ success: boolean; error?: string }>;
 }
 
+const LAST_USERNAME_KEY = 'cbc_last_username';
+
 export default function Login({ onLogin }: LoginProps) {
-  const [username, setUsername] = useState('');
+  const [username, setUsername] = useState(() => {
+    try { return localStorage.getItem(LAST_USERNAME_KEY) || ''; } catch { return ''; }
+  });
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -26,9 +31,13 @@ export default function Login({ onLogin }: LoginProps) {
     }
 
     setLoading(true);
-    onLogin(username, password)
+    onLogin(username, password, rememberMe)
       .then((result) => {
-        if (!result.success && result.error) setError(result.error);
+        if (!result.success && result.error) {
+          setError(result.error);
+        } else {
+          try { localStorage.setItem(LAST_USERNAME_KEY, username.trim()); } catch { /* ignore */ }
+        }
       })
       .catch(() => setError('Falha ao conectar ao servidor. Tente novamente.'))
       .finally(() => setLoading(false));
@@ -94,6 +103,7 @@ export default function Login({ onLogin }: LoginProps) {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 disabled={loading}
+                autoComplete="username"
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 font-sans text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#FF5A35] focus:bg-white/[0.08] transition-all"
               />
             </div>
@@ -109,6 +119,7 @@ export default function Login({ onLogin }: LoginProps) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={loading}
+                  autoComplete="current-password"
                   className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 font-sans text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#FF5A35] focus:bg-white/[0.08] transition-all pr-10"
                 />
                 <button
@@ -120,6 +131,19 @@ export default function Login({ onLogin }: LoginProps) {
                 </button>
               </div>
             </div>
+
+            <label className="flex items-center gap-2.5 cursor-pointer select-none group">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                disabled={loading}
+                className="w-4 h-4 rounded border-white/20 bg-white/5 accent-[#FF5A35] cursor-pointer"
+              />
+              <span className="text-xs text-slate-400 group-hover:text-slate-300 transition-colors">
+                Manter conectado neste dispositivo por 7 dias
+              </span>
+            </label>
 
             <button 
               type="submit"

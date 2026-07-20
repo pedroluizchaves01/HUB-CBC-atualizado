@@ -5,7 +5,9 @@ import { User, Client, Project, Transaction, ProjectDocument, Contract } from '.
 // com hash bcrypt no Firestore. Este arquivo vai para o bundle público, então não
 // pode conter credencial alguma. O campo passwordHash fica vazio (nunca é usado no cliente).
 export const INITIAL_USERS: User[] = [
-  { id: 'admin-1', username: 'CHAVES BRITES CORREA', passwordHash: '', role: 'admin', name: 'Chaves Brites Correa' },
+  { id: 'admin-1', username: 'Pedro Chaves', passwordHash: '', role: 'admin', name: 'Pedro Chaves' },
+  { id: 'admin-2', username: 'Vinicius Brites', passwordHash: '', role: 'admin', name: 'Vinicius Brites' },
+  { id: 'admin-3', username: 'Leonardo Correa', passwordHash: '', role: 'admin', name: 'Leonardo Correa' },
   { id: 'user-marketing-1', username: 'MKTCBC', passwordHash: '', role: 'marketing', name: 'Equipe de Marketing' },
   { id: 'user-client-1', username: 'oralmed', passwordHash: '', role: 'client', name: 'Clínica OralMed', clientId: 'client-1' },
   { id: 'user-client-2', username: 'roberto', passwordHash: '', role: 'client', name: 'Cliente Exemplo 2', clientId: 'client-2' },

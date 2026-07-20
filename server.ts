@@ -13,11 +13,13 @@ import { parseBulkTransactionsFromPdf } from "./src/lib/bulkTransactionParser";
 import { parseMaterialListFromPdf } from "./src/lib/materialListParser";
 import { validateBase64File, RECEIPT_MIMES } from "./src/lib/server/fileValidation";
 import { parseReceiptText } from "./src/lib/receiptParser";
-import { authenticate, createSessionToken } from "./src/lib/server/authService";
+import { authenticate, createSessionToken, EXTENDED_SESSION_TTL_MS } from "./src/lib/server/authService";
 import { requireAuth, requireRole } from "./src/lib/server/authMiddleware";
 import * as dataService from "./src/lib/server/dataService";
 import * as telegram from "./src/lib/server/telegramServer";
 import { isDbConfigured, ensureSchema } from "./src/lib/server/db";
+import { startDemandAutomationScheduler } from "./src/lib/server/demandAutomation";
+import { notifyChange } from "./src/lib/server/notificationService";
 
 dotenv.config();
 
@@ -56,13 +58,14 @@ app.use("/api/", apiLimiter);
 // ==========================================
 app.post("/api/auth/login", loginLimiter, async (req, res) => {
   try {
-    const { username, password } = req.body || {};
+    const { username, password, rememberMe } = req.body || {};
     const user = await authenticate(String(username || ""), String(password || ""));
     if (!user) return res.status(401).json({ error: "Usuário ou senha incorretos." });
-    const token = createSessionToken(user);
+    const ttlMs = rememberMe ? EXTENDED_SESSION_TTL_MS : undefined;
+    const token = ttlMs ? createSessionToken(user, ttlMs) : createSessionToken(user);
     res.cookie("cbc_session", token, {
       httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production",
-      maxAge: 12 * 60 * 60 * 1000,
+      maxAge: ttlMs || 12 * 60 * 60 * 1000,
     });
     return res.json({ success: true, user, token });
   } catch (e: any) {
@@ -111,7 +114,7 @@ app.post("/api/users/upsert", requireAuth, requireRole("admin"), async (req, res
 app.get("/api/data/:collection", requireAuth, async (req, res) => {
   try {
     const u = req.sessionUser!;
-    const items = await dataService.listCollectionForUser(req.params.collection, { role: u.role, clientId: u.clientId });
+    const items = await dataService.listCollectionForUser(req.params.collection, { role: u.role, clientId: u.clientId, userId: u.id });
     return res.json({ items });
   } catch (e: any) {
     const status = /Acesso negado/i.test(e.message || "") ? 403 : 400;
@@ -123,7 +126,16 @@ app.put("/api/data/:collection/:id", requireAuth, async (req, res) => {
   try {
     const u = req.sessionUser!;
     dataService.assertCanWrite(req.params.collection, { role: u.role, clientId: u.clientId });
-    await dataService.setDocById(req.params.collection, req.params.id, req.body?.data ?? req.body);
+    const existing = await dataService.getDocById(req.params.collection, req.params.id).catch(() => null);
+    const payload = req.body?.data ?? req.body;
+    await dataService.setDocById(req.params.collection, req.params.id, payload);
+    void notifyChange(
+      { id: u.id, name: u.name, role: u.role },
+      req.params.collection,
+      req.params.id,
+      existing ? "update" : "create",
+      payload
+    );
     return res.json({ success: true });
   } catch (e: any) {
     const status = /permissão/i.test(e.message || "") ? 403 : 400;
@@ -135,11 +147,37 @@ app.delete("/api/data/:collection/:id", requireAuth, async (req, res) => {
   try {
     const u = req.sessionUser!;
     dataService.assertCanWrite(req.params.collection, { role: u.role, clientId: u.clientId });
+    const existing = await dataService.getDocById(req.params.collection, req.params.id).catch(() => null);
     await dataService.deleteDocById(req.params.collection, req.params.id);
+    void notifyChange(
+      { id: u.id, name: u.name, role: u.role },
+      req.params.collection,
+      req.params.id,
+      "delete",
+      existing
+    );
     return res.json({ success: true });
   } catch (e: any) {
     const status = /permissão/i.test(e.message || "") ? 403 : 400;
     return res.status(status).json({ error: e.message || "Erro ao excluir documento." });
+  }
+});
+
+// Marca notificações do usuário logado como lidas (todas, ou uma lista específica de ids).
+app.post("/api/notifications/mark-read", requireAuth, async (req, res) => {
+  try {
+    const u = req.sessionUser!;
+    const { ids } = req.body || {};
+    const mine = await dataService.listCollectionForUser("notifications", { role: u.role, clientId: u.clientId, userId: u.id });
+    const targets = Array.isArray(ids) && ids.length > 0
+      ? mine.filter((n: any) => ids.includes(n.id))
+      : mine.filter((n: any) => !n.read);
+    for (const n of targets) {
+      await dataService.setDocById("notifications", n.id, { ...n, read: true });
+    }
+    return res.json({ success: true, updated: targets.length });
+  } catch (e: any) {
+    return res.status(400).json({ error: e.message || "Erro ao marcar notificações como lidas." });
   }
 });
 
@@ -1193,6 +1231,18 @@ async function startServer() {
     console.log("Esquema do banco verificado/criado com sucesso.");
   } catch (e: any) {
     console.error("Aviso: não foi possível preparar o banco no boot:", e?.message || e);
+  }
+
+  // Motor de automação de Demandas: roda no servidor, independente de qualquer
+  // admin estar logado. Só inicia se o banco estiver configurado/acessível.
+  try {
+    if (await isDbConfigured()) {
+      startDemandAutomationScheduler(10);
+    } else {
+      console.warn("[demandAutomation] Banco não configurado — automação de Demandas desativada.");
+    }
+  } catch (e: any) {
+    console.error("[demandAutomation] Falha ao iniciar o agendador:", e?.message || e);
   }
 
   app.listen(PORT, "0.0.0.0", () => {

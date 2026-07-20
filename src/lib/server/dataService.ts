@@ -21,6 +21,10 @@ export const ALLOWED_COLLECTIONS = new Set<string>([
   "marketing_outbound", "marketing_posts", "marketing_press", "marketing_settings",
   // Cotações
   "unified_suppliers", "unified_materials", "quotation_maps",
+  // Demandas (CRM interno / kanban)
+  "demands", "demand_templates", "demand_settings",
+  // Notificações internas
+  "notifications",
 ]);
 
 // Coleções que só o admin/marketing podem ler/escrever (não são de cliente).
@@ -31,6 +35,10 @@ export const ADMIN_ONLY_COLLECTIONS = new Set<string>([
   "unified_suppliers", "unified_materials", "settings",
   // Contratos são gerados e geridos apenas pelo admin por enquanto (sem visão do cliente ainda).
   "contracts",
+  // Demandas: uso interno da equipe, sem visão do cliente.
+  "demands", "demand_templates", "demand_settings",
+  // Notificações: cada admin só acessa as suas (filtragem extra em listCollectionForUser).
+  "notifications",
 ]);
 
 export function assertAllowed(collection: string): void {
@@ -68,6 +76,7 @@ export async function listCollection(collection: string): Promise<any[]> {
 export interface Requester {
   role: "admin" | "client" | "marketing";
   clientId?: string;
+  userId?: string;
 }
 
 // Coleções ligadas a um projeto (têm campo projectId) — usadas para filtrar por cliente.
@@ -95,6 +104,14 @@ export async function listCollectionForUser(collection: string, req: Requester):
   }
 
   const all = await listCollection(collection);
+
+  // 'notifications' é sempre filtrada pelo destinatário, mesmo para admin — cada um só
+  // enxerga as próprias notificações, nunca as dos outros dois sócios.
+  if (collection === "notifications") {
+    if (!req.userId) return [];
+    return all.filter((n: any) => n.recipientUserId === req.userId);
+  }
+
   if (req.role !== "client") return all;
 
   const clientId = req.clientId;

@@ -6,6 +6,7 @@ import ClientDashboard from './components/ClientDashboard';
 
 export default function App() {
   const {
+    users,
     clients,
     projects,
     transactions,
@@ -33,7 +34,7 @@ export default function App() {
 
   // If no user is logged in, show the clean login page
   if (!currentUser) {
-    const handleLoginAttempt = (username: string, pb: string) => login(username, pb);
+    const handleLoginAttempt = (username: string, pb: string, rememberMe: boolean) => login(username, pb, rememberMe);
     return <Login onLogin={handleLoginAttempt} />;
   }
 
@@ -45,6 +46,7 @@ export default function App() {
         clients={clients}
         projects={projects}
         transactions={transactions}
+        users={users}
         documents={documents}
         contracts={contracts}
         onLogout={logout}
