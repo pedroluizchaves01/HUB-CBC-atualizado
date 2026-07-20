@@ -1,11 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import {
   FileSignature, Plus, Download, Trash2, X, User, Building, Search,
-  ClipboardList, Calendar, DollarSign, CheckCircle2, Edit3
+  ClipboardList, Calendar, DollarSign, CheckCircle2, Edit3, Save, ExternalLink, Loader2
 } from 'lucide-react';
 import { Client, Contract, ContractFormData, ContractPersonData, ContractStatus, ContractType, Project } from '../types';
 import { CONTRACT_TYPE_LABELS, emptyContractFormData } from '../lib/contractTemplates';
-import { downloadContractPdf } from '../lib/contractPdf';
+import { downloadContractPdf, saveContractPdfToSystem } from '../lib/contractPdf';
 
 interface ContractGenerationProps {
   clients: Client[];
@@ -48,6 +48,8 @@ export default function ContractGeneration({
   const [selectedClientId, setSelectedClientId] = useState('');
   const [form, setForm] = useState<ContractFormData>(emptyContractFormData('gerenciamento_obra'));
   const [filterProject, setFilterProject] = useState('');
+  const [savingToSystem, setSavingToSystem] = useState(false);
+  const [savingId, setSavingId] = useState<string | null>(null);
 
   const projectById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
   const clientById = useMemo(() => new Map(clients.map((c) => [c.id, c])), [clients]);
@@ -139,18 +141,26 @@ export default function ContractGeneration({
 
   const canSubmit = projectId && form.contratante.name.trim().length > 0;
 
-  const handleSubmit = async () => {
-    if (!canSubmit) return;
-    const contract: Contract = {
+  const buildContractFromForm = (): Contract => {
+    const existing = editingId ? contracts.find((c) => c.id === editingId) : undefined;
+    return {
       id: editingId || `contract-${Date.now()}`,
       projectId,
       type,
-      number: editingId ? (contracts.find((c) => c.id === editingId)?.number ?? nextNumber) : nextNumber,
+      number: editingId ? (existing?.number ?? nextNumber) : nextNumber,
       status: 'gerado',
-      createdAt: editingId ? (contracts.find((c) => c.id === editingId)?.createdAt ?? new Date().toISOString()) : new Date().toISOString(),
+      createdAt: editingId ? (existing?.createdAt ?? new Date().toISOString()) : new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       data: form,
+      pdfUrl: existing?.pdfUrl,
+      pdfFileName: existing?.pdfFileName,
+      pdfSavedAt: existing?.pdfSavedAt,
     };
+  };
+
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
+    const contract = buildContractFromForm();
     if (editingId) {
       await onEditContract(contract);
     } else {
@@ -161,8 +171,47 @@ export default function ContractGeneration({
     resetForm();
   };
 
+  const handleSaveToSystem = async () => {
+    if (!canSubmit) return;
+    setSavingToSystem(true);
+    try {
+      const contract = buildContractFromForm();
+      const { url, fileName, error } = await saveContractPdfToSystem(contract, projectById.get(projectId));
+      if (!url) {
+        alert(`Não foi possível salvar o PDF no sistema: ${error}`);
+        return;
+      }
+      const savedContract: Contract = { ...contract, pdfUrl: url, pdfFileName: fileName, pdfSavedAt: new Date().toISOString() };
+      if (editingId) {
+        await onEditContract(savedContract);
+      } else {
+        await onAddContract(savedContract);
+      }
+      if (error) alert(error);
+      setFormOpen(false);
+      resetForm();
+    } finally {
+      setSavingToSystem(false);
+    }
+  };
+
   const handleDownloadExisting = (contract: Contract) => {
     downloadContractPdf(contract, projectById.get(contract.projectId));
+  };
+
+  const handleSaveExistingToSystem = async (contract: Contract) => {
+    setSavingId(contract.id);
+    try {
+      const { url, fileName, error } = await saveContractPdfToSystem(contract, projectById.get(contract.projectId));
+      if (!url) {
+        alert(`Não foi possível salvar o PDF no sistema: ${error}`);
+        return;
+      }
+      await onEditContract({ ...contract, pdfUrl: url, pdfFileName: fileName, pdfSavedAt: new Date().toISOString() });
+      if (error) alert(error);
+    } finally {
+      setSavingId(null);
+    }
   };
 
   return (
@@ -215,6 +264,11 @@ export default function ContractGeneration({
                 <div className="text-[11px] text-stone-500 mt-0.5 truncate">
                   {c.data.contratante.name} • {proj?.name || 'Projeto removido'}
                 </div>
+                {c.pdfUrl && (
+                  <div className="text-[10px] text-emerald-600 font-bold mt-0.5 flex items-center gap-1">
+                    <CheckCircle2 size={11} /> PDF salvo no sistema
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <button
@@ -231,6 +285,25 @@ export default function ContractGeneration({
                 >
                   <Download size={14} />
                 </button>
+                <button
+                  onClick={() => handleSaveExistingToSystem(c)}
+                  disabled={savingId === c.id}
+                  className="p-2 text-stone-400 hover:text-[#FF5A35] hover:bg-stone-100 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={c.pdfUrl ? 'Atualizar PDF salvo no sistema' : 'Salvar PDF no sistema'}
+                >
+                  {savingId === c.id ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                </button>
+                {c.pdfUrl && (
+                  <a
+                    href={c.pdfUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2 text-stone-400 hover:text-[#FF5A35] hover:bg-stone-100 transition-colors cursor-pointer"
+                    title="Abrir PDF salvo"
+                  >
+                    <ExternalLink size={14} />
+                  </a>
+                )}
                 <button
                   onClick={() => onDeleteContract(c.id)}
                   className="p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
@@ -487,6 +560,14 @@ export default function ContractGeneration({
             <div className="p-4 border-t border-stone-200 bg-stone-50 flex items-center justify-end gap-2.5">
               <button onClick={() => setFormOpen(false)} className="px-4 py-2.5 text-xs font-bold uppercase text-stone-500 hover:text-stone-800 cursor-pointer">
                 Cancelar
+              </button>
+              <button
+                disabled={!canSubmit || savingToSystem}
+                onClick={handleSaveToSystem}
+                className="flex items-center gap-2 bg-white border border-[#FF5A35] text-[#FF5A35] disabled:border-stone-300 disabled:text-stone-400 disabled:cursor-not-allowed px-5 py-2.5 text-xs font-bold uppercase tracking-wider hover:bg-[#FF5A35]/5 transition-colors cursor-pointer"
+                title="Salva o PDF no sistema para consulta/edição futura, sem baixar"
+              >
+                {savingToSystem ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Salvar no Sistema
               </button>
               <button
                 disabled={!canSubmit}

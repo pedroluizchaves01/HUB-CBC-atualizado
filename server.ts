@@ -9,6 +9,7 @@ import { createServer as createViteServer } from "vite";
 import * as XLSX from "xlsx";
 import { saveDocumentToDrive, DRIVE_FOLDERS } from "./src/lib/driveService";
 import { extractReceiptText } from "./src/lib/receiptOcr";
+import { parseBulkTransactionsFromPdf } from "./src/lib/bulkTransactionParser";
 import { validateBase64File, RECEIPT_MIMES } from "./src/lib/server/fileValidation";
 import { parseReceiptText } from "./src/lib/receiptParser";
 import { authenticate, createSessionToken } from "./src/lib/server/authService";
@@ -627,7 +628,9 @@ Retorne obrigatoriamente um objeto JSON válido conforme o esquema definido. Nã
   }
 });
 
-// AI Bulk Transactions parsing endpoint (e.g. Excel spreadsheet, PDF bank statement, multiple invoice table)
+// Bulk Transactions parsing endpoint (Excel spreadsheet, PDF bank statement/table, multiple invoice table).
+// PDFs de tabela agora são lidos por um extrator NATIVO (sem IA) — ver src/lib/bulkTransactionParser.ts.
+// Excel/CSV e imagens continuam usando o Gemini, que já lida bem com esses formatos.
 app.post("/api/acompanhamento/parse-bulk-transactions", requireAuth, aiLimiter, async (req, res) => {
   try {
     const { fileBase64, mimeType, fileName, accessToken } = req.body;
@@ -639,13 +642,14 @@ app.post("/api/acompanhamento/parse-bulk-transactions", requireAuth, aiLimiter, 
     // Validation of supported formats (including Excel/spreadsheets)
     const isExcel = mimeType.includes("sheet") || mimeType.includes("excel") || mimeType.includes("csv") || 
                     (fileName && (fileName.toLowerCase().endsWith(".xlsx") || fileName.toLowerCase().endsWith(".xls") || fileName.toLowerCase().endsWith(".csv")));
+    const isPdf = mimeType === "application/pdf";
     const isAllowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(mimeType) || isExcel;
 
     if (!isAllowed) {
       return res.status(400).json({ error: "Formato de arquivo não suportado para leitura automática. Envie uma foto (JPG/PNG) ou um PDF." });
     }
 
-    // Salva o documento original no Drive (não bloqueia a extração por IA se falhar)
+    // Salva o documento original no Drive (não bloqueia a extração se falhar)
     const { driveFile, driveError } = await saveDocumentToDrive(
       accessToken,
       DRIVE_FOLDERS.extratos,
@@ -653,6 +657,17 @@ app.post("/api/acompanhamento/parse-bulk-transactions", requireAuth, aiLimiter, 
       mimeType,
       fileBase64
     );
+
+    // --- PDF: extrator nativo, sem chamada a nenhuma IA ---
+    if (isPdf) {
+      try {
+        const { transactions, warnings } = await parseBulkTransactionsFromPdf(fileBase64);
+        return res.json({ success: true, transactions, warnings, engine: "leitor-nativo-pdf", driveFile, driveError });
+      } catch (nativeError: any) {
+        console.error("Erro ao ler PDF de gastos com o leitor nativo:", nativeError);
+        return res.status(422).json({ error: nativeError.message || "Não foi possível ler este PDF automaticamente." });
+      }
+    }
 
     const currentDate = new Date().toISOString().split('T')[0];
 
