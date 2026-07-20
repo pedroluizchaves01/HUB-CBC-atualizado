@@ -4,10 +4,16 @@
 //
 // Uso:
 //   DATABASE_URL='postgresql://...' \
-//   ADMIN_PASSWORD='...' MARKETING_PASSWORD='...' CLIENT_ORALMED_PASSWORD='...' \
+//   ADMIN_PEDRO_PASSWORD='...' ADMIN_VINICIUS_PASSWORD='...' ADMIN_LEONARDO_PASSWORD='...' \
+//   MARKETING_PASSWORD='...' CLIENT_ORALMED_PASSWORD='...' \
 //   npx tsx scripts/seed-users.ts
 //
 // Se uma senha não for informada, o usuário correspondente é PULADO (não recebe senha fraca).
+//
+// NOTA — reconfiguração de acessos admin (3 sócios, logins distintos):
+// O antigo login único "CHAVES BRITES CORREA" (id admin-1) foi reaproveitado para o sócio
+// Pedro Chaves (mesmo id, novo username/nome). Os outros dois sócios ganham contas novas.
+// Rodar este script novamente é seguro (idempotente, faz merge por id).
 
 import { getAdminDb } from "../src/lib/server/db";
 import { hashPassword } from "../src/lib/server/authService";
@@ -18,7 +24,11 @@ interface SeedUser {
 }
 
 const SEED_USERS: SeedUser[] = [
-  { id: "admin-1", username: "CHAVES BRITES CORREA", role: "admin", name: "Chaves Brites Correa", passwordEnv: "ADMIN_PASSWORD" },
+  // Sócios — admin, logins distintos a partir de agora.
+  { id: "admin-1", username: "Pedro Chaves", role: "admin", name: "Pedro Chaves", passwordEnv: "ADMIN_PEDRO_PASSWORD" },
+  { id: "admin-2", username: "Vinicius Brites", role: "admin", name: "Vinicius Brites", passwordEnv: "ADMIN_VINICIUS_PASSWORD" },
+  { id: "admin-3", username: "Leonardo Correa", role: "admin", name: "Leonardo Correa", passwordEnv: "ADMIN_LEONARDO_PASSWORD" },
+
   { id: "user-marketing-1", username: "MKTCBC", role: "marketing", name: "Equipe de Marketing", passwordEnv: "MARKETING_PASSWORD" },
   { id: "user-client-1", username: "oralmed", role: "client", name: "Clínica OralMed", clientId: "client-1", passwordEnv: "CLIENT_ORALMED_PASSWORD" },
   { id: "user-client-2", username: "roberto", role: "client", name: "Cliente Exemplo 2", clientId: "client-2", passwordEnv: "CLIENT_ROBERTO_PASSWORD" },

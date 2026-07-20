@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { User, Client, Project, Transaction, ProjectDocument, Contract } from './types';
 import { INITIAL_USERS, INITIAL_CLIENTS, INITIAL_PROJECTS, INITIAL_TRANSACTIONS, INITIAL_DOCUMENTS, INITIAL_CONTRACTS } from './initialData';
 import { subscribeCollection, saveDoc, removeDoc } from './lib/firebaseDb';
-import { apiSend, setSessionToken, getSessionToken, ApiError } from './lib/apiClient';
+import { apiSend, setSessionToken, getSessionToken, wasRememberedSession, ApiError } from './lib/apiClient';
 
 export function useStore() {
   const [users, setUsers] = useState<User[]>([]);
@@ -13,9 +13,10 @@ export function useStore() {
   const [contracts, setContracts] = useState<Contract[]>([]);
 
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const saved = sessionStorage.getItem('cbc_current_user');
+    const saved = sessionStorage.getItem('cbc_current_user') || localStorage.getItem('cbc_current_user');
     return saved ? JSON.parse(saved) : null;
   });
+  const [rememberSession, setRememberSession] = useState<boolean>(() => wasRememberedSession());
 
   // Real-time synchronization listeners (via backend guardião)
   useEffect(() => {
@@ -38,34 +39,49 @@ export function useStore() {
 
   // Sessão do app: só é considerada válida se houver token de sessão do backend.
   // Isso impede forjar 'cbc_current_user' no storage sem um token assinado pelo servidor.
+  // Guardamos em localStorage (sobrevive fechar o navegador) quando "manter conectado"
+  // foi marcado no login; caso contrário, em sessionStorage (some ao fechar a aba).
   useEffect(() => {
     if (currentUser && getSessionToken()) {
-      sessionStorage.setItem('cbc_current_user', JSON.stringify(currentUser));
+      const payload = JSON.stringify(currentUser);
+      if (rememberSession) {
+        localStorage.setItem('cbc_current_user', payload);
+        sessionStorage.removeItem('cbc_current_user');
+      } else {
+        sessionStorage.setItem('cbc_current_user', payload);
+        localStorage.removeItem('cbc_current_user');
+      }
     } else if (!currentUser) {
       sessionStorage.removeItem('cbc_current_user');
+      localStorage.removeItem('cbc_current_user');
     }
-  }, [currentUser]);
+  }, [currentUser, rememberSession]);
 
   // Ao montar, se há usuário salvo mas nenhum token de sessão, descarta a sessão (não confiável).
   useEffect(() => {
     if (currentUser && !getSessionToken()) {
       setCurrentUser(null);
       sessionStorage.removeItem('cbc_current_user');
+      localStorage.removeItem('cbc_current_user');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Login real: valida no backend (bcrypt + sessão assinada). Nenhuma senha é comparada no cliente.
-  const login = async (usernameInput: string, passwordInput: string): Promise<{ success: boolean; error?: string; user?: User }> => {
+  // rememberMe estende a sessão para 7 dias e guarda o token em localStorage (sobrevive a
+  // fechar o navegador); sem isso, a sessão dura 12h e some ao fechar a aba, como antes.
+  const login = async (usernameInput: string, passwordInput: string, rememberMe: boolean = false): Promise<{ success: boolean; error?: string; user?: User }> => {
     try {
       const resp = await apiSend('/api/auth/login', 'POST', {
         username: usernameInput.trim(),
         password: passwordInput,
+        rememberMe,
       });
       if (!resp?.user || !resp?.token) {
         return { success: false, error: 'Resposta inválida do servidor.' };
       }
-      setSessionToken(resp.token);
+      setSessionToken(resp.token, rememberMe);
+      setRememberSession(rememberMe);
       const user = resp.user as User;
       setCurrentUser(user);
       return { success: true, user };
@@ -80,6 +96,7 @@ export function useStore() {
   const logout = async () => {
     try { await apiSend('/api/auth/logout', 'POST', {}); } catch { /* ignora */ }
     setSessionToken(null);
+    setRememberSession(false);
     setCurrentUser(null);
   };
 

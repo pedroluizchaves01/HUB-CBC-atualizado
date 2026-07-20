@@ -11,7 +11,8 @@ import crypto from "crypto";
 import { getAdminDb } from "./db";
 
 const BCRYPT_ROUNDS = 10;
-const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 horas
+const DEFAULT_SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 horas
+export const EXTENDED_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 dias ("manter conectado")
 
 // Segredo de assinatura da sessão. DEVE vir de env em produção.
 function getSessionSecret(): string {
@@ -40,8 +41,8 @@ function b64urlDecode(input: string): Buffer {
 }
 
 /** Cria um token de sessão assinado contendo o usuário e a expiração. */
-export function createSessionToken(user: SessionUser): string {
-  const payload = { u: user, exp: Date.now() + SESSION_TTL_MS };
+export function createSessionToken(user: SessionUser, ttlMs: number = DEFAULT_SESSION_TTL_MS): string {
+  const payload = { u: user, exp: Date.now() + ttlMs };
   const body = b64url(JSON.stringify(payload));
   const sig = b64url(crypto.createHmac("sha256", getSessionSecret()).update(body).digest());
   return `${body}.${sig}`;
