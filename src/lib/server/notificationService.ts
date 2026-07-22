@@ -73,7 +73,6 @@ export async function notifyChange(
 
     const users = (await dataService.listCollection("users")) as any[];
     const recipients = users.filter((u) => u.role === "admin" && u.id !== actor.id);
-    if (recipients.length === 0) return;
 
     const label = COLLECTION_LABELS[collection] || collection;
     const entityName = getEntityLabel(collection, data);
@@ -81,7 +80,24 @@ export async function notifyChange(
     const summary = `${actor.name} ${actionText} ${label}: ${entityName}`;
     const now = new Date().toISOString();
 
+    // Demandas com responsável: o responsável entra na lista de destinatários mesmo
+    // que não seja admin (ex.: papel marketing) e recebe mensagem personalizada
+    // ("atribuiu a você"), desde que não seja o próprio autor.
+    const assigneeId: string | null =
+      collection === "demands" && data && typeof data === "object" && data.assigneeUserId
+        ? String(data.assigneeUserId)
+        : null;
+    if (assigneeId && assigneeId !== actor.id && !recipients.some((r) => r.id === assigneeId)) {
+      const assigneeUser = users.find((u) => u.id === assigneeId);
+      if (assigneeUser) recipients.push(assigneeUser);
+    }
+    if (recipients.length === 0) return;
+
     for (const recipient of recipients) {
+      const isAssignee = assigneeId !== null && recipient.id === assigneeId && action !== "delete";
+      const personalSummary = isAssignee
+        ? `${actor.name} atribuiu a você a demanda: ${entityName}`
+        : summary;
       const id = `notif-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       await dataService.setDocById("notifications", id, {
         id,
@@ -92,7 +108,9 @@ export async function notifyChange(
         action,
         collection,
         entityId,
-        summary,
+        // projectId permite que o frontend navegue direto ao item ao clicar na notificação.
+        projectId: (data && typeof data === "object" && data.projectId) ? String(data.projectId) : null,
+        summary: personalSummary,
         read: false,
         createdAt: now,
       });

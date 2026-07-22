@@ -300,6 +300,46 @@ export default function AdminDashboard({
     };
   }, []);
 
+  // Navegação via clique em notificação: abre a aba correspondente à coleção alterada
+  // e, quando aplicável, seleciona o projeto do item. Componentes específicos (ex.:
+  // QuotationMaps) também escutam 'cbc:navigate' para focar o item exato.
+  React.useEffect(() => {
+    const COLLECTION_TO_TAB: Record<string, TabType> = {
+      clients: 'clientes',
+      projects: 'projetos',
+      documents: 'classe_administrativo',
+      contracts: 'contratos',
+      demands: 'demandas',
+      office_transactions: 'escritorio',
+      office_leads: 'escritorio',
+      marketing_outbound: 'marketing',
+      marketing_posts: 'marketing',
+      marketing_press: 'marketing',
+      materials: 'classe_planejamento',
+      labor_contracts: 'classe_planejamento',
+      labor_payments: 'classe_planejamento',
+      transactions: 'classe_acompanhamento',
+      daily_logs: 'classe_acompanhamento',
+      timeline_phases: 'classe_acompanhamento',
+      punch_lists: 'classe_acompanhamento',
+      weekly_logs: 'classe_acompanhamento',
+      regulatory_steps: 'classe_acompanhamento',
+      quotation_maps: 'classe_acompanhamento',
+      unified_suppliers: 'classe_acompanhamento',
+      unified_materials: 'classe_acompanhamento',
+    };
+    const onNavigate = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { collection?: string; entityId?: string; projectId?: string | null };
+      if (!detail?.collection) return;
+      const tab = COLLECTION_TO_TAB[detail.collection];
+      if (!tab) return;
+      if (detail.projectId) setSelectedClassProjectId(detail.projectId);
+      setActiveTab(tab);
+    };
+    window.addEventListener('cbc:navigate', onNavigate);
+    return () => window.removeEventListener('cbc:navigate', onNavigate);
+  }, []);
+
   // Generic updater to Firestore helper
   const syncToFirestore = async (collectionName: string, prevList: any[], nextList: any[]) => {
     try {

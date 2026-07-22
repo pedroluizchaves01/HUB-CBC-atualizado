@@ -350,6 +350,18 @@ export default function QuotationMaps({
 }: QuotationMapsProps) {
   const [maps, setMapsState] = useState<QuotationMap[]>([]);
   const [selectedMapId, setSelectedMapId] = useState<string | null>(null);
+
+  // Ao clicar numa notificação de cotação, seleciona o mapa exato mencionado nela.
+  React.useEffect(() => {
+    const onNavigate = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { collection?: string; entityId?: string };
+      if (detail?.collection === 'quotation_maps' && detail.entityId) {
+        setSelectedMapId(detail.entityId);
+      }
+    };
+    window.addEventListener('cbc:navigate', onNavigate);
+    return () => window.removeEventListener('cbc:navigate', onNavigate);
+  }, []);
   const [isCreating, setIsCreating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [exporting, setExporting] = useState(false);

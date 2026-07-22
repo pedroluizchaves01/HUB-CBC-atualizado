@@ -12,9 +12,21 @@ export interface AppNotification {
   action: 'create' | 'update' | 'delete';
   collection: string;
   entityId: string;
+  projectId?: string | null;
   summary: string;
   read: boolean;
   createdAt: string; // ISO
+}
+
+/**
+ * Evento global de navegação disparado ao clicar numa notificação.
+ * O AdminDashboard escuta 'cbc:navigate' e abre a aba/projeto correspondente;
+ * componentes específicos (ex.: QuotationMaps) escutam para selecionar o item exato.
+ */
+export interface CbcNavigateDetail {
+  collection: string;
+  entityId: string;
+  projectId?: string | null;
 }
 
 const ACTION_DOT: Record<AppNotification['action'], string> = {
@@ -66,6 +78,22 @@ export default function NotificationBell() {
     try {
       await saveDoc('notifications', n.id, { ...n, read: true });
     } catch { /* a próxima sincronização corrige se falhar */ }
+  };
+
+  // Clique na notificação: marca como lida, fecha o painel e navega até o item alterado.
+  const handleOpenNotification = (n: AppNotification) => {
+    handleMarkOneRead(n);
+    setIsOpen(false);
+    // Itens excluídos não têm mais destino para navegar.
+    if (n.action === 'delete') return;
+    try {
+      const detail: CbcNavigateDetail = {
+        collection: n.collection,
+        entityId: n.entityId,
+        projectId: n.projectId ?? null,
+      };
+      window.dispatchEvent(new CustomEvent('cbc:navigate', { detail }));
+    } catch { /* ambiente sem CustomEvent */ }
   };
 
   const handleMarkAllRead = async () => {
@@ -122,7 +150,8 @@ export default function NotificationBell() {
               sorted.slice(0, 50).map(n => (
                 <button
                   key={n.id}
-                  onClick={() => handleMarkOneRead(n)}
+                  onClick={() => handleOpenNotification(n)}
+                  title={n.action === 'delete' ? 'Item excluído (sem destino)' : 'Clique para ir até o item'}
                   className={`w-full text-left px-4 py-3 border-b border-white/5 hover:bg-white/[0.03] transition-colors cursor-pointer flex items-start gap-2.5 ${
                     n.read ? 'opacity-60' : ''
                   }`}
