@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { User, Client, Project, Transaction, ProjectDocument, Contract } from './types';
 import { INITIAL_USERS, INITIAL_CLIENTS, INITIAL_PROJECTS, INITIAL_TRANSACTIONS, INITIAL_DOCUMENTS, INITIAL_CONTRACTS } from './initialData';
-import { subscribeCollection, saveDoc, removeDoc } from './lib/firebaseDb';
+import { subscribeCollection, saveDoc, removeDoc, restartDataSync } from './lib/firebaseDb';
 import { apiSend, setSessionToken, getSessionToken, wasRememberedSession, ApiError } from './lib/apiClient';
 
 export function useStore() {
@@ -80,10 +80,20 @@ export function useStore() {
       if (!resp?.user || !resp?.token) {
         return { success: false, error: 'Resposta inválida do servidor.' };
       }
+      const user = resp.user as User;
+      // Se o usuário que está logando é DIFERENTE do último que usou este navegador,
+      // limpamos os caches de dados (cbc_*) para não exibir informações do login
+      // anterior enquanto a primeira sincronização não chega.
+      try {
+        const lastUserId = localStorage.getItem('cbc_last_user_id');
+        if (lastUserId && lastUserId !== user.id) clearDataCaches();
+        localStorage.setItem('cbc_last_user_id', user.id);
+      } catch { /* storage indisponível */ }
       setSessionToken(resp.token, rememberMe);
       setRememberSession(rememberMe);
-      const user = resp.user as User;
       setCurrentUser(user);
+      // O polling agrupado para quando recebe 401; após novo login, reativa.
+      restartDataSync();
       return { success: true, user };
     } catch (err: any) {
       const msg = err instanceof ApiError
@@ -93,11 +103,29 @@ export function useStore() {
     }
   };
 
+  // Remove todos os caches de DADOS (cbc_*) do navegador, preservando apenas
+  // preferências inofensivas (último username digitado no login).
+  const clearDataCaches = () => {
+    try {
+      const keep = new Set(['cbc_last_username', 'cbc_last_user_id']);
+      const toRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('cbc_') && !keep.has(k)) toRemove.push(k);
+      }
+      toRemove.forEach(k => localStorage.removeItem(k));
+    } catch { /* storage indisponível */ }
+  };
+
   const logout = async () => {
     try { await apiSend('/api/auth/logout', 'POST', {}); } catch { /* ignora */ }
     setSessionToken(null);
     setRememberSession(false);
     setCurrentUser(null);
+    // Caches de dados não podem sobreviver ao logout: era isso que fazia um login
+    // ver, por instantes (ou permanentemente, quando a rede falhava), os dados do
+    // login anterior no mesmo navegador.
+    clearDataCaches();
   };
 
   // Admin capabilities

@@ -40,8 +40,7 @@ import autoTable from 'jspdf-autotable';
 import { subscribeCollection, saveDoc, removeDoc } from '../lib/firebaseDb';
 import { uploadBase64ToFirebase } from '../lib/firebaseStorage';
 import { getTelegramConfig, buildTelegramFileName } from '../lib/telegramService';
-import { initAuth, googleSignIn, getAccessToken } from '../lib/firebaseAuth';
-import { User as FirebaseUser } from 'firebase/auth';
+import { initAuth, googleSignIn, getAccessToken, GoogleUser as FirebaseUser } from '../lib/firebaseAuth';
 
 // ----------------------------------------------------
 // OKLCH TO RGB CONVERTER & CSS SANITIZER FOR HTML2CANVAS
