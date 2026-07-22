@@ -13,7 +13,7 @@ import { parseBulkTransactionsFromPdf } from "./src/lib/bulkTransactionParser";
 import { parseMaterialListFromPdf } from "./src/lib/materialListParser";
 import { validateBase64File, RECEIPT_MIMES } from "./src/lib/server/fileValidation";
 import { parseReceiptText } from "./src/lib/receiptParser";
-import { authenticate, createSessionToken, EXTENDED_SESSION_TTL_MS } from "./src/lib/server/authService";
+import { authenticate, createSessionToken, EXTENDED_SESSION_TTL_MS, verifySessionToken as verifySessionTokenForRateLimit } from "./src/lib/server/authService";
 import { requireAuth, requireRole } from "./src/lib/server/authMiddleware";
 import * as dataService from "./src/lib/server/dataService";
 import * as telegram from "./src/lib/server/telegramServer";
@@ -45,7 +45,22 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Rate limits: um geral para toda a API e um mais rígido para login (anti brute-force).
-const apiLimiter = rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false,
+// IMPORTANTE: a chave do limite é o USUÁRIO da sessão (quando autenticado), não o IP.
+// Antes era por IP — e como toda a equipe no escritório sai pelo mesmo IP público,
+// os acessos somados estouravam o limite e derrubavam leituras E GRAVAÇÕES de todos
+// (falha silenciosa que fazia cotações "sumirem"). Com a chave por usuário, cada
+// sessão tem sua própria cota; o IP só é usado para requisições sem sessão (login).
+const rateLimitKey = (req: any): string => {
+  try {
+    const auth = req.headers?.authorization;
+    const token = auth && auth.startsWith("Bearer ") ? auth.slice(7) : req.cookies?.cbc_session;
+    const u = token ? verifySessionTokenForRateLimit(token) : null;
+    if (u?.id) return `user:${u.id}`;
+  } catch { /* cai para IP */ }
+  return `ip:${req.ip}`;
+};
+const apiLimiter = rateLimit({ windowMs: 60_000, max: 600, standardHeaders: true, legacyHeaders: false,
+  keyGenerator: rateLimitKey,
   message: { error: "Muitas requisições. Aguarde um instante e tente novamente." } });
 const loginLimiter = rateLimit({ windowMs: 15 * 60_000, max: 10, standardHeaders: true, legacyHeaders: false,
   message: { error: "Muitas tentativas de login. Aguarde alguns minutos." } });
@@ -111,6 +126,35 @@ app.post("/api/users/upsert", requireAuth, requireRole("admin"), async (req, res
 // DADOS (backend guardião — Firestore via Admin SDK)
 // Toda leitura/escrita exige sessão. O navegador nunca acessa o Firestore direto.
 // ==========================================
+// Busca AGRUPADA: devolve várias coleções em UMA requisição (?names=a,b,c).
+// Reduz o polling do frontend de ~15 requisições/8s para 1 requisição/8s.
+// Coleções às quais o usuário não tem acesso são simplesmente omitidas da resposta
+// (o frontend mantém o estado atual delas) — sem derrubar o lote inteiro.
+app.get("/api/data-bundle", requireAuth, async (req, res) => {
+  try {
+    const u = req.sessionUser!;
+    const names = String(req.query.names || "")
+      .split(",").map((s) => s.trim()).filter(Boolean);
+    if (names.length === 0) return res.json({ collections: {} });
+    if (names.length > 40) return res.status(400).json({ error: "Muitas coleções no lote." });
+
+    const collections: Record<string, any[]> = {};
+    const errors: Record<string, string> = {};
+    await Promise.all(names.map(async (name) => {
+      try {
+        collections[name] = await dataService.listCollectionForUser(name, {
+          role: u.role, clientId: u.clientId, userId: u.id,
+        });
+      } catch (e: any) {
+        errors[name] = e?.message || "erro";
+      }
+    }));
+    return res.json({ collections, errors });
+  } catch (e: any) {
+    return res.status(500).json({ error: e?.message || "Erro ao listar coleções." });
+  }
+});
+
 app.get("/api/data/:collection", requireAuth, async (req, res) => {
   try {
     const u = req.sessionUser!;
