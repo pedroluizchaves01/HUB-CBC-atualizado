@@ -20,6 +20,9 @@ import * as telegram from "./src/lib/server/telegramServer";
 import { isDbConfigured, ensureSchema } from "./src/lib/server/db";
 import { startDemandAutomationScheduler } from "./src/lib/server/demandAutomation";
 import { notifyChange } from "./src/lib/server/notificationService";
+import * as whatsapp from "./src/lib/server/whatsappServer";
+import { startAgendaReminderScheduler, runAgendaReminderCycle } from "./src/lib/server/agendaReminders";
+import { normalizePhoneBR } from "./src/lib/agenda";
 
 dotenv.config();
 
@@ -1245,6 +1248,63 @@ app.post("/api/telegram/test", requireAuth, requireRole("admin"), async (req, re
   }
 });
 
+// ---------------------------------------------------------------------------
+// WhatsApp / Agenda
+// ---------------------------------------------------------------------------
+
+// Config mascarada — qualquer usuário autenticado pode ver o estado (sem segredos).
+app.get("/api/whatsapp/config", requireAuth, async (req, res) => {
+  try {
+    return res.json(await whatsapp.getMaskedWhatsAppConfig());
+  } catch (e: any) {
+    return res.status(500).json({ error: e.message || "Erro ao ler configuração do WhatsApp." });
+  }
+});
+
+app.post("/api/whatsapp/config", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    await whatsapp.saveWhatsAppConfig(req.body || {});
+    return res.json({ success: true, config: await whatsapp.getMaskedWhatsAppConfig() });
+  } catch (e: any) {
+    return res.status(500).json({ error: e.message || "Erro ao salvar configuração do WhatsApp." });
+  }
+});
+
+// Diagnóstico: para o Evolution, consulta se a instância ainda está pareada.
+app.get("/api/whatsapp/status", requireAuth, async (req, res) => {
+  try {
+    return res.json(await whatsapp.getWhatsAppStatus());
+  } catch (e: any) {
+    return res.status(500).json({ error: e.message || "Erro ao consultar status do WhatsApp." });
+  }
+});
+
+app.post("/api/whatsapp/test", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const phone = normalizePhoneBR(String(req.body?.phone || ""));
+    if (!phone) return res.status(400).json({ error: "Informe um telefone válido com DDD." });
+    const result = await whatsapp.sendWhatsAppMessage(
+      phone,
+      "🔌 *Teste de integração — HUB CBC*\n\n✅ O WhatsApp está conectado à agenda.\n" +
+        `📅 ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`
+    );
+    return res.json({ success: true, ...result });
+  } catch (e: any) {
+    console.error("Erro no teste do WhatsApp:", e);
+    return res.status(500).json({ error: e.message || "Erro ao enviar mensagem de teste." });
+  }
+});
+
+// Força um ciclo de lembretes agora — útil para depurar sem esperar o intervalo.
+app.post("/api/agenda/run-reminders", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    await runAgendaReminderCycle();
+    return res.json({ success: true, message: "Ciclo de lembretes executado." });
+  } catch (e: any) {
+    return res.status(500).json({ error: e.message || "Erro ao executar o ciclo." });
+  }
+});
+
 // Health-check simples (sem sessão) — reporta se o banco está configurado e alcançável.
 app.get("/api/health", async (req, res) => {
   return res.json({ ok: true, dbConfigured: await isDbConfigured() });
@@ -1287,6 +1347,18 @@ async function startServer() {
     }
   } catch (e: any) {
     console.error("[demandAutomation] Falha ao iniciar o agendador:", e?.message || e);
+  }
+
+  // Lembretes da Agenda: intervalo curto (1 min) porque regras do tipo "1h antes"
+  // precisam de precisão que um ciclo de 10 minutos não entrega.
+  try {
+    if (await isDbConfigured()) {
+      startAgendaReminderScheduler(1);
+    } else {
+      console.warn("[agendaReminders] Banco não configurado — lembretes da Agenda desativados.");
+    }
+  } catch (e: any) {
+    console.error("[agendaReminders] Falha ao iniciar o agendador:", e?.message || e);
   }
 
   app.listen(PORT, "0.0.0.0", () => {

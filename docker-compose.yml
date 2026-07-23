@@ -23,6 +23,75 @@ services:
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
     restart: always
 
+  # ---------------------------------------------------------------------------
+  # Evolution API — gateway de WhatsApp (NÃO OFICIAL, via WhatsApp Web/Baileys).
+  #
+  # Fica num PROFILE opcional: `docker compose up` continua subindo só api+frontend.
+  # Para incluir:  docker compose --profile whatsapp up -d
+  #
+  # ⚠️ NUNCA pareie o WhatsApp principal do escritório aqui. Use um chip dedicado.
+  #    A Meta pode banir números que usam clientes não oficiais, e você perderia a
+  #    linha comercial junto com todo o histórico de conversas com clientes.
+  #
+  # Não publicamos a porta no host: só o crm-api fala com este serviço, pela rede
+  # interna do compose (EVOLUTION_BASE_URL=http://evolution-api:8080).
+  # Para ler o QR code na primeira vez, use um túnel temporário:
+  #    docker compose exec evolution-api sh   (ou publique 8080 só durante o pareamento)
+  # ---------------------------------------------------------------------------
+  evolution-api:
+    image: atendai/evolution-api:v2.1.1
+    container_name: cbc-evolution
+    profiles: ["whatsapp"]
+    expose:
+      - "8080"
+    environment:
+      - SERVER_URL=http://evolution-api:8080
+      # Chave que o crm-api envia no header `apikey`. Gere uma aleatória e longa.
+      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY}
+      - AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES=false
+      # Banco próprio do Evolution — separado do banco do CRM de propósito.
+      - DATABASE_ENABLED=true
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://evolution:${EVOLUTION_DB_PASSWORD}@evolution-db:5432/evolution
+      - DATABASE_SAVE_DATA_INSTANCE=true
+      - DATABASE_SAVE_DATA_NEW_MESSAGE=false
+      - DATABASE_SAVE_MESSAGE_UPDATE=false
+      - DATABASE_SAVE_DATA_CONTACTS=false
+      - DATABASE_SAVE_DATA_CHATS=false
+      - CACHE_REDIS_ENABLED=true
+      - CACHE_REDIS_URI=redis://evolution-redis:6379/1
+      - CACHE_LOCAL_ENABLED=false
+      # Só enviamos mensagens; não precisamos receber nada de volta.
+      - WEBHOOK_GLOBAL_ENABLED=false
+      - QRCODE_LIMIT=10
+      - LOG_LEVEL=ERROR
+    depends_on:
+      - evolution-db
+      - evolution-redis
+    volumes:
+      - evolution_instances:/evolution/instances
+    restart: always
+
+  evolution-db:
+    image: postgres:16-alpine
+    container_name: cbc-evolution-db
+    profiles: ["whatsapp"]
+    environment:
+      - POSTGRES_USER=evolution
+      - POSTGRES_PASSWORD=${EVOLUTION_DB_PASSWORD}
+      - POSTGRES_DB=evolution
+    volumes:
+      - evolution_db:/var/lib/postgresql/data
+    restart: always
+
+  evolution-redis:
+    image: redis:7-alpine
+    container_name: cbc-evolution-redis
+    profiles: ["whatsapp"]
+    volumes:
+      - evolution_redis:/data
+    restart: always
+
   # Servidor Frontend Nginx para servir arquivos estáticos e encaminhar requisições da API para o backend
   frontend:
     build:
@@ -38,3 +107,8 @@ services:
     depends_on:
       - crm-api
     restart: always
+
+volumes:
+  evolution_instances:
+  evolution_db:
+  evolution_redis:
