@@ -25,6 +25,8 @@ export const ALLOWED_COLLECTIONS = new Set<string>([
   "demands", "demand_templates", "demand_settings",
   // Notificações internas
   "notifications",
+  // Agenda (compromissos + modelos de lembrete reutilizáveis)
+  "appointments", "reminder_templates",
 ]);
 
 // Coleções que só o admin/marketing podem ler/escrever (não são de cliente).
@@ -39,6 +41,8 @@ export const ADMIN_ONLY_COLLECTIONS = new Set<string>([
   "demands", "demand_templates", "demand_settings",
   // Notificações: cada admin só acessa as suas (filtragem extra em listCollectionForUser).
   "notifications",
+  // Agenda: uso interno da equipe. Cliente não enxerga os compromissos do escritório.
+  "appointments", "reminder_templates",
 ]);
 
 export function assertAllowed(collection: string): void {
@@ -59,9 +63,20 @@ function stripSecrets(collection: string, doc: any): any {
     return safe;
   }
   if (collection === "settings" && doc && typeof doc === "object") {
-    // Config do Telegram nunca sai com o token em claro.
-    const { botToken, ...safe } = doc;
-    return { ...safe, botTokenSet: !!botToken };
+    // Credenciais nunca saem em claro por este endpoint genérico. O doc settings/whatsapp
+    // é lido pela UI através de /api/whatsapp/config, que devolve versão mascarada.
+    const {
+      botToken,
+      evolutionApiKey, cloudAccessToken, twilioAuthToken,
+      ...safe
+    } = doc;
+    return {
+      ...safe,
+      botTokenSet: !!botToken,
+      evolutionApiKeySet: !!evolutionApiKey,
+      cloudAccessTokenSet: !!cloudAccessToken,
+      twilioAuthTokenSet: !!twilioAuthToken,
+    };
   }
   return doc;
 }

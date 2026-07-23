@@ -54,6 +54,7 @@ import { subscribeCollection, saveDoc, removeDoc } from '../lib/firebaseDb';
 import { uploadFileToFirebase } from '../lib/firebaseStorage';
 import { getTelegramConfig, buildTelegramFileName } from '../lib/telegramService';
 import { TelegramSettings } from './TelegramSettings';
+import WhatsAppSettings from './WhatsAppSettings';
 import ContractGeneration from './ContractGeneration';
 import Demandas from './Demandas';
 import NotificationBell from './NotificationBell';
@@ -61,6 +62,8 @@ import NotificationBell from './NotificationBell';
 
 interface AdminDashboardProps {
   role?: string;
+  /** Id do usuário logado — a Agenda usa para registrar quem criou o compromisso. */
+  currentUserId?: string;
   clients: Client[];
   projects: Project[];
   transactions: Transaction[];
@@ -89,6 +92,7 @@ type TabType = 'resumo' | 'clientes' | 'projetos' | 'escritorio' | 'marketing' |
 
 export default function AdminDashboard({
   role,
+  currentUserId = '',
   clients,
   projects,
   transactions,
@@ -3107,6 +3111,7 @@ export default function AdminDashboard({
             <OfficeManagement
               clients={clients}
               onAddClient={onAddClient}
+              currentUserId={currentUserId}
             />
           )}
 
@@ -3115,7 +3120,12 @@ export default function AdminDashboard({
           )}
 
           {activeTab === 'telegram' && (
-            <TelegramSettings />
+            <div className="space-y-10">
+              <TelegramSettings />
+              <div className="border-t border-stone-200 pt-8">
+                <WhatsAppSettings />
+              </div>
+            </div>
           )}
 
         </div>

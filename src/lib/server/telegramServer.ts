@@ -61,15 +61,21 @@ async function parseTelegramResponse(res: Response, fallback: string): Promise<a
   return data;
 }
 
-export async function sendTestMessage(): Promise<void> {
+/** Envia um texto simples ao chat configurado. Usado pelos lembretes da Agenda. */
+export async function sendTelegramMessage(text: string, chatIdOverride?: string): Promise<void> {
   const c = await getTelegramConfig();
-  if (!c.botToken || !c.chatId) throw new Error("Telegram não configurado no servidor.");
-  const msg = `🔌 *Teste de Integração Chaves Brites Correa*\n\n✅ Sistema conectado ao Telegram!\n📅 ${new Date().toLocaleString("pt-BR")}`;
+  const chatId = chatIdOverride || c.chatId;
+  if (!c.botToken || !chatId) throw new Error("Telegram não configurado no servidor.");
   const res = await fetch(`https://api.telegram.org/bot${c.botToken}/sendMessage`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: c.chatId, text: msg, parse_mode: "Markdown" }),
+    body: JSON.stringify({ chat_id: chatId, text, parse_mode: "Markdown" }),
   });
-  await parseTelegramResponse(res, "Erro ao enviar mensagem de teste.");
+  await parseTelegramResponse(res, "Erro ao enviar mensagem ao Telegram.");
+}
+
+export async function sendTestMessage(): Promise<void> {
+  const msg = `🔌 *Teste de Integração Chaves Brites Correa*\n\n✅ Sistema conectado ao Telegram!\n📅 ${new Date().toLocaleString("pt-BR")}`;
+  await sendTelegramMessage(msg);
 }
 
 /** Envia um documento (base64) ao Telegram e retorna uma URL de proxy do próprio backend. */

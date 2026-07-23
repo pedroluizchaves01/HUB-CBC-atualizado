@@ -43,6 +43,7 @@ export default function App() {
     return (
       <AdminDashboard
         role={currentUser.role}
+        currentUserId={currentUser.id}
         clients={clients}
         projects={projects}
         transactions={transactions}

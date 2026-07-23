@@ -38,6 +38,7 @@ import { initAuth, googleSignIn, getAccessToken } from '../lib/firebaseAuth';
 import { subscribeCollection, saveDoc, removeDoc } from '../lib/firebaseDb';
 import { uploadBase64ToFirebase } from '../lib/firebaseStorage';
 import { getTelegramConfig, buildTelegramFileName } from '../lib/telegramService';
+import Agenda from './Agenda';
 
 // Office interfaces
 export interface OfficeTransaction {
@@ -74,6 +75,8 @@ export interface OfficeLead {
 interface OfficeManagementProps {
   clients: Client[];
   onAddClient: (client: Client, pass: string) => Promise<void>;
+  /** Usado pela Agenda para registrar quem criou o compromisso. */
+  currentUserId?: string;
 }
 
 // Map categories to user-friendly labels and styles
@@ -104,9 +107,9 @@ const CRM_STAGES = [
   { id: 'perdido', label: 'Perdido', color: 'border-t-red-400 bg-red-50 text-red-700' }
 ];
 
-export function OfficeManagement({ clients, onAddClient }: OfficeManagementProps) {
+export function OfficeManagement({ clients, onAddClient, currentUserId = '' }: OfficeManagementProps) {
   // Tabs: 'financeiro' | 'crm'
-  const [activeSubTab, setActiveSubTab] = useState<'financeiro' | 'crm'>('financeiro');
+  const [activeSubTab, setActiveSubTab] = useState<'financeiro' | 'crm' | 'agenda'>('financeiro');
 
   // Modals / Forms States
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
@@ -969,6 +972,20 @@ export function OfficeManagement({ clients, onAddClient }: OfficeManagementProps
               <span>Clientes & Negócios</span>
             </div>
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('agenda')}
+            className={`px-3 py-1.5 text-xs font-mono font-bold uppercase transition-all cursor-pointer ${
+              activeSubTab === 'agenda'
+                ? 'bg-white text-stone-900 border border-stone-200 shadow-sm'
+                : 'text-stone-500 hover:text-stone-900'
+            }`}
+          >
+            <div className="flex items-center gap-1.5">
+              <Calendar size={13} />
+              <span>Agenda</span>
+            </div>
+          </button>
         </div>
       </div>
 
@@ -1267,6 +1284,14 @@ export function OfficeManagement({ clients, onAddClient }: OfficeManagementProps
       {/* ============================================================== */}
       {/* CRM CLIENTS AND NEGOTIATIONS WORKSPACE */}
       {/* ============================================================== */}
+      {activeSubTab === 'agenda' && (
+        <Agenda
+          clients={clients}
+          leads={officeLeads}
+          currentUserId={currentUserId}
+        />
+      )}
+
       {activeSubTab === 'crm' && (
         <div className="space-y-8">
           
