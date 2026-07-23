@@ -26,45 +26,52 @@ services:
   # ---------------------------------------------------------------------------
   # Evolution API — gateway de WhatsApp (NÃO OFICIAL, via WhatsApp Web/Baileys).
   #
-  # Fica num PROFILE opcional: `docker compose up` continua subindo só api+frontend.
-  # Para incluir:  docker compose --profile whatsapp up -d
-  #
   # ⚠️ NUNCA pareie o WhatsApp principal do escritório aqui. Use um chip dedicado.
-  #    A Meta pode banir números que usam clientes não oficiais, e você perderia a
-  #    linha comercial junto com todo o histórico de conversas com clientes.
+  #    A Meta pode banir números que usam clientes não oficiais.
   #
-  # Não publicamos a porta no host: só o crm-api fala com este serviço, pela rede
-  # interna do compose (EVOLUTION_BASE_URL=http://evolution-api:8080).
-  # Para ler o QR code na primeira vez, use um túnel temporário:
-  #    docker compose exec evolution-api sh   (ou publique 8080 só durante o pareamento)
+  # ⚠️ O celular pareado precisa ficar LIGADO e conectado. Se ele passar cerca de
+  #    14 dias offline, o WhatsApp derruba o dispositivo vinculado e os lembretes
+  #    param. A tela de configuração mostra o estado da instância.
+  #
+  # A versão é cravada de propósito: com :latest, um redeploy qualquer pode trazer
+  # uma versão que quebra a sessão pareada — e você descobriria pelo lembrete que
+  # não chegou. Para atualizar, troque a tag conscientemente e refaça o pareamento
+  # se necessário.
+  #
+  # Sem porta publicada: só o crm-api conversa com este serviço, pela rede interna
+  # do compose, em http://evolution-api:8080.
   # ---------------------------------------------------------------------------
   evolution-api:
-    image: atendai/evolution-api:v2.1.1
+    image: evoapicloud/evolution-api:v2.3.6
     container_name: cbc-evolution
-    profiles: ["whatsapp"]
     expose:
       - "8080"
     environment:
       - SERVER_URL=http://evolution-api:8080
-      # Chave que o crm-api envia no header `apikey`. Gere uma aleatória e longa.
+      # Chave que o crm-api envia no header `apikey`. Gere com: openssl rand -hex 32
       - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY}
       - AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES=false
-      # Banco próprio do Evolution — separado do banco do CRM de propósito.
+      # Banco próprio do Evolution — separado do banco do CRM de propósito: se o
+      # Evolution quebrar ou for removido, o CRM não é afetado.
       - DATABASE_ENABLED=true
       - DATABASE_PROVIDER=postgresql
       - DATABASE_CONNECTION_URI=postgresql://evolution:${EVOLUTION_DB_PASSWORD}@evolution-db:5432/evolution
       - DATABASE_SAVE_DATA_INSTANCE=true
+      # Não guardamos mensagens nem contatos: só enviamos lembretes, e guardar
+      # conversas do chip aqui seria dado pessoal sem necessidade (LGPD).
       - DATABASE_SAVE_DATA_NEW_MESSAGE=false
       - DATABASE_SAVE_MESSAGE_UPDATE=false
       - DATABASE_SAVE_DATA_CONTACTS=false
       - DATABASE_SAVE_DATA_CHATS=false
       - CACHE_REDIS_ENABLED=true
       - CACHE_REDIS_URI=redis://evolution-redis:6379/1
+      - CACHE_REDIS_PREFIX_KEY=cbc
       - CACHE_LOCAL_ENABLED=false
-      # Só enviamos mensagens; não precisamos receber nada de volta.
+      # Só enviamos; não precisamos receber nada de volta.
       - WEBHOOK_GLOBAL_ENABLED=false
-      - QRCODE_LIMIT=10
+      - QRCODE_LIMIT=30
       - LOG_LEVEL=ERROR
+      - LOG_COLOR=false
     depends_on:
       - evolution-db
       - evolution-redis
@@ -72,10 +79,27 @@ services:
       - evolution_instances:/evolution/instances
     restart: always
 
+  # ---------------------------------------------------------------------------
+  # Painel do Evolution — usado para criar a instância e ler o QR code.
+  #
+  # Atribua um domínio a ESTE serviço no painel do Coolify apenas durante o
+  # pareamento, e REMOVA o domínio depois. Deixar exposto de forma permanente é
+  # expor a porta de entrada do seu WhatsApp para a internet.
+  # ---------------------------------------------------------------------------
+  evolution-manager:
+    image: evoapicloud/evolution-manager:latest
+    container_name: cbc-evolution-manager
+    expose:
+      - "80"
+    environment:
+      - VITE_EVOLUTION_API_URL=http://evolution-api:8080
+    depends_on:
+      - evolution-api
+    restart: always
+
   evolution-db:
     image: postgres:16-alpine
     container_name: cbc-evolution-db
-    profiles: ["whatsapp"]
     environment:
       - POSTGRES_USER=evolution
       - POSTGRES_PASSWORD=${EVOLUTION_DB_PASSWORD}
@@ -87,7 +111,7 @@ services:
   evolution-redis:
     image: redis:7-alpine
     container_name: cbc-evolution-redis
-    profiles: ["whatsapp"]
+    command: redis-server --appendonly yes
     volumes:
       - evolution_redis:/data
     restart: always
