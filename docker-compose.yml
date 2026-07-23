@@ -86,16 +86,6 @@ services:
   # pareamento, e REMOVA o domínio depois. Deixar exposto de forma permanente é
   # expor a porta de entrada do seu WhatsApp para a internet.
   # ---------------------------------------------------------------------------
-  evolution-manager:
-    image: evoapicloud/evolution-manager:latest
-    container_name: cbc-evolution-manager
-    expose:
-      - "80"
-    environment:
-      - VITE_EVOLUTION_API_URL=http://evolution-api:8080
-    depends_on:
-      - evolution-api
-    restart: always
 
   evolution-db:
     image: postgres:16-alpine
