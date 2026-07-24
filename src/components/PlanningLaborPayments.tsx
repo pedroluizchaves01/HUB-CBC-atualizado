@@ -184,6 +184,8 @@ export const PlanningLaborPayments: React.FC<PlanningLaborPaymentsProps> = ({
   const [batchLoading, setBatchLoading] = useState(false);
   const [batchError, setBatchError] = useState<string | null>(null);
   const [batchSaving, setBatchSaving] = useState(false);
+  const [batchWarnings, setBatchWarnings] = useState<string[]>([]);
+  const [batchEngine, setBatchEngine] = useState<string>('');
   // Cada linha da revisão: o que a IA leu + a decisão de vínculo do usuário.
   // contractId '' = ainda não resolvido; '__new__' = criar contrato com supplierName.
   const [batchRows, setBatchRows] = useState<Array<{
@@ -239,7 +241,11 @@ export const PlanningLaborPayments: React.FC<PlanningLaborPaymentsProps> = ({
       throw new Error(msg);
     }
     const data = await response.json();
-    return Array.isArray(data.payments) ? data.payments : [];
+    return {
+      payments: Array.isArray(data.payments) ? data.payments : [],
+      warnings: Array.isArray(data.warnings) ? data.warnings : [],
+      engine: data.engine || 'ia',
+    };
   };
 
   /** Casa o nome lido pela IA com um contrato ativo (comparação tolerante). */
@@ -266,7 +272,7 @@ export const PlanningLaborPayments: React.FC<PlanningLaborPaymentsProps> = ({
     setPaymentError(null);
     setIsReadingSingle(true);
     try {
-      const parsed = await parsePaymentsFile(file);
+      const { payments: parsed } = await parsePaymentsFile(file);
       if (parsed.length === 0) {
         setPaymentError('Nenhum pagamento foi identificado no arquivo.');
         return;
@@ -302,9 +308,13 @@ export const PlanningLaborPayments: React.FC<PlanningLaborPaymentsProps> = ({
 
     setBatchError(null);
     setBatchLoading(true);
+    setBatchWarnings([]);
+    setBatchEngine('');
     setIsBatchOpen(true);
     try {
-      const parsed = await parsePaymentsFile(file);
+      const { payments: parsed, warnings, engine } = await parsePaymentsFile(file);
+      setBatchWarnings(warnings);
+      setBatchEngine(engine);
       if (parsed.length === 0) {
         setBatchError('Nenhum pagamento foi identificado no arquivo.');
         setBatchRows([]);
@@ -1187,6 +1197,26 @@ export const PlanningLaborPayments: React.FC<PlanningLaborPaymentsProps> = ({
                       {batchError}
                     </div>
                   )}
+                  {batchEngine && (
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <span className={`text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 border ${batchEngine === 'leitor-nativo-pdf' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-violet-50 border-violet-200 text-violet-700'}`}>
+                        {batchEngine === 'leitor-nativo-pdf' ? '✓ Leitura direta (sem IA)' : 'Leitura por IA'}
+                      </span>
+                    </div>
+                  )}
+
+                  {batchWarnings.length > 0 && (
+                    <div className="mb-3 p-2.5 bg-amber-50 border border-amber-200 text-[11px] text-amber-800">
+                      <div className="flex items-center gap-1.5 font-bold mb-1">
+                        <AlertTriangle size={11} /> Avisos da leitura
+                      </div>
+                      <ul className="list-disc list-inside space-y-0.5 text-amber-700">
+                        {batchWarnings.slice(0, 5).map((w, i) => <li key={i}>{w}</li>)}
+                        {batchWarnings.length > 5 && <li>e mais {batchWarnings.length - 5}…</li>}
+                      </ul>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-[10px] font-mono uppercase tracking-wider text-stone-400">
                       {batchRows.filter(r => r.include).length} de {batchRows.length} parcela(s) selecionada(s)

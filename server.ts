@@ -11,6 +11,7 @@ import { saveDocumentToDrive, DRIVE_FOLDERS } from "./src/lib/driveService";
 import { extractReceiptText } from "./src/lib/receiptOcr";
 import { parseBulkTransactionsFromPdf } from "./src/lib/bulkTransactionParser";
 import { parseMaterialListFromPdf } from "./src/lib/materialListParser";
+import { parseLaborPaymentsFromPdf } from "./src/lib/laborPaymentParser";
 import { validateBase64File, RECEIPT_MIMES } from "./src/lib/server/fileValidation";
 import { parseReceiptText } from "./src/lib/receiptParser";
 import { authenticate, createSessionToken, EXTENDED_SESSION_TTL_MS, verifySessionToken as verifySessionTokenForRateLimit } from "./src/lib/server/authService";
@@ -456,6 +457,25 @@ app.post("/api/planning/parse-labor-payments", requireAuth, aiLimiter, async (re
     );
 
     const currentDate = new Date().toISOString().split('T')[0];
+
+    // --- Tentativa 1: leitor NATIVO (sem IA), para PDFs de tabela com camada de texto ---
+    const isPdfNative = mimeType === "application/pdf" || (fileName && fileName.toLowerCase().endsWith(".pdf"));
+    if (isPdfNative) {
+      try {
+        const { payments, warnings } = await parseLaborPaymentsFromPdf(fileBase64);
+        return res.json({
+          success: true,
+          payments,
+          warnings,
+          engine: "leitor-nativo-pdf",
+          driveFile,
+          driveError,
+        });
+      } catch (nativeError: any) {
+        // Não falha aqui: cai para a IA, que lida com layouts irregulares e escaneados.
+        console.warn("Leitor nativo de pagamentos não conseguiu ler o PDF, tentando IA:", nativeError?.message);
+      }
+    }
 
     const prompt = `
 Você é um assistente financeiro de uma construtora, especialista em ler documentos de programação
