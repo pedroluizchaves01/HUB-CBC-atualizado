@@ -1217,6 +1217,31 @@ export const PlanningLaborPayments: React.FC<PlanningLaborPaymentsProps> = ({
                     </div>
                   )}
 
+                  {/* Atalho: aplica um contrato a TODAS as linhas de uma vez.
+                      Essencial quando o PDF é de um único prestador sem nome no documento
+                      (ex.: tabela só de parcelas), evitando selecionar linha por linha. */}
+                  {activeContracts.length > 0 && (
+                    <div className="flex items-center gap-2 mb-3 p-2.5 bg-stone-50 border border-stone-200">
+                      <Link2 size={12} className="text-stone-400 shrink-0" />
+                      <span className="text-[11px] text-stone-500 shrink-0">Vincular todas ao contrato:</span>
+                      <select
+                        defaultValue=""
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (!v) return;
+                          setBatchRows(rows => rows.map(r => ({ ...r, contractId: v })));
+                          e.target.value = '';
+                        }}
+                        className="flex-1 min-w-0 border border-stone-300 p-1 text-[11px] bg-white cursor-pointer focus:outline-none focus:border-stone-500"
+                      >
+                        <option value="">— Escolher e aplicar a todas —</option>
+                        {activeContracts.map(c => (
+                          <option key={c.id} value={c.id}>{c.supplier}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-[10px] font-mono uppercase tracking-wider text-stone-400">
                       {batchRows.filter(r => r.include).length} de {batchRows.length} parcela(s) selecionada(s)

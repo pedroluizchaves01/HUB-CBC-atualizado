@@ -72,19 +72,28 @@ function groupItemsIntoRows(items: TextItem[]): Row[] {
 type ColumnKey = "supplier" | "installment" | "date" | "value";
 
 const HEADER_DEFS: { key: ColumnKey; patterns: RegExp[] }[] = [
-  { key: "supplier", patterns: [/prestador/, /fornecedor/, /empreiteiro/, /credor/, /favorecido/, /benefici/, /nome/, /colaborador/, /pedreiro/, /mao de obra/, /mao-de-obra/] },
-  { key: "installment", patterns: [/parcela/, /parc\b/, /n[°º]/, /numero/, /medicao/, /etapa/, /descricao/, /referencia/, /ref\b/] },
-  { key: "date", patterns: [/data/, /vencimento/, /venc\b/, /pagamento/, /pgto/, /competencia/] },
-  { key: "value", patterns: [/valor/, /r\$/, /montante/, /total/, /quantia/, /pago/] },
+  { key: "supplier", patterns: [/prestador/, /fornecedor/, /empreiteiro/, /credor/, /favorecido/, /benefici/, /colaborador/, /pedreiro/, /mao de obra/, /mao-de-obra/] },
+  // "pagamento nº", "nº", "parcela", "medição" → número da parcela.
+  // IMPORTANTE: precede 'date' para que "pagamento nº" case aqui, não em /pagamento/.
+  { key: "installment", patterns: [/parcela/, /^pagamento\s*n/, /\bn[°ºo]\b/, /n[°º]/, /^n\.?$/, /numero/, /medicao/, /etapa/, /descricao/, /referencia/, /^ref\b/, /^item/] },
+  { key: "date", patterns: [/^data/, /vencimento/, /^venc\b/, /competencia/] },
+  { key: "value", patterns: [/valor/, /r\$/, /montante/, /quantia/, /^pago/, /^total$/] },
 ];
 
-function matchHeaderKeys(cellText: string): ColumnKey[] {
+// A ordem de teste importa: uma célula pode casar mais de um padrão. Retornamos a
+// PRIMEIRA chave da lista acima (mais específica), não todas — assim "pagamento nº"
+// vira installment em vez de installment+date.
+function matchHeaderKey(cellText: string): ColumnKey | null {
   const n = norm(cellText);
-  const matched: ColumnKey[] = [];
   for (const def of HEADER_DEFS) {
-    if (def.patterns.some((p) => p.test(n))) matched.push(def.key);
+    if (def.patterns.some((p) => p.test(n))) return def.key;
   }
-  return matched;
+  return null;
+}
+
+function matchHeaderKeys(cellText: string): ColumnKey[] {
+  const k = matchHeaderKey(cellText);
+  return k ? [k] : [];
 }
 
 function findHeaderRow(rows: Row[]): Row | null {
@@ -96,7 +105,8 @@ function findHeaderRow(rows: Row[]): Row | null {
       // um título como "Programação de Pagamentos - Mão de Obra" seja lido como
       // cabeçalho só porque contém "pagamento" e "mão de obra".
       if (cell.text.length > 30) continue;
-      for (const key of matchHeaderKeys(cell.text)) found.add(key);
+      const k = matchHeaderKey(cell.text);
+      if (k) found.add(k);
     }
     // Precisa de células distintas por chave (um cabeçalho real tem colunas separadas).
     if (found.size >= 3) {
@@ -110,7 +120,8 @@ function findHeaderRow(rows: Row[]): Row | null {
       const found = new Set<ColumnKey>();
       for (const cell of row.cells) {
         if (cell.text.length > 30) continue;
-        for (const key of matchHeaderKeys(cell.text)) found.add(key);
+        const k = matchHeaderKey(cell.text);
+        if (k) found.add(k);
       }
       if (found.size >= 2 && found.has("value")) return row;
     }
@@ -125,12 +136,10 @@ function buildColumnBounds(headerRow: Row): ColumnBounds[] {
   const anchors: { key: ColumnKey; x: number }[] = [];
   const usedKeys = new Set<ColumnKey>();
   for (const cell of headerRow.cells) {
-    for (const key of matchHeaderKeys(cell.text)) {
-      // Um cabeçalho pode casar em mais de um padrão; fica com a 1ª âncora de cada coluna.
-      if (usedKeys.has(key)) continue;
-      usedKeys.add(key);
-      anchors.push({ key, x: cell.x });
-    }
+    const key = matchHeaderKey(cell.text);
+    if (!key || usedKeys.has(key)) continue;
+    usedKeys.add(key);
+    anchors.push({ key, x: cell.x });
   }
   anchors.sort((a, b) => a.x - b.x);
   return anchors.map((a, i) => ({
@@ -145,6 +154,8 @@ function assignRowToColumns(row: Row, bounds: ColumnBounds[]): Partial<Record<Co
   for (const cell of row.cells) {
     const col = bounds.find((c) => cell.x >= c.start && cell.x < c.end);
     if (!col) continue;
+    // Concatena células que caem na mesma coluna — resolve "R$" e "5.440,92"
+    // separados, que o unpdf emite como dois itens de texto.
     result[col.key] = result[col.key] ? `${result[col.key]} ${cell.text}` : cell.text;
   }
   return result;
@@ -251,7 +262,7 @@ export async function parseLaborPaymentsFromPdf(fileBase64: string): Promise<Lab
       const rowText = norm(row.cells.map((c) => c.text).join(" "));
 
       // Pula cabeçalho repetido (relatórios longos) e linhas de total.
-      const isRepeatedHeader = matchHeaderKeys(rowText).length >= 2 && /valor|parcela|data/.test(rowText);
+      const isRepeatedHeader = row.cells.filter(c => matchHeaderKey(c.text)).length >= 2 && /valor|parcela|pagamento|data/.test(rowText);
       if (isRepeatedHeader) continue;
       if (TOTAL_ROW.test(rowText)) continue;
 
