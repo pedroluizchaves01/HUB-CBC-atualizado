@@ -21,6 +21,7 @@ import { Upload, FileUp, Loader2, Check, AlertTriangle, Link2 } from 'lucide-rea
 import { Project } from '../types';
 import { subscribeCollection, saveDoc, removeDoc } from '../lib/firebaseDb';
 import { getAccessToken } from '../lib/firebaseAuth';
+import { generateLaborPaymentsPdf, validateLaborData } from '../lib/pdfReports';
 
 export interface LaborContract {
   id: string;
@@ -629,9 +630,81 @@ export const PlanningLaborPayments: React.FC<PlanningLaborPaymentsProps> = ({
   // Get active project name
   const currentProjectName = projects.find(p => p.id === laborProjectId)?.name || 'Obra Geral';
 
+  // Exportação do relatório em PDF (jsPDF) — gera e baixa direto, com validação prévia.
+  const [pdfValidation, setPdfValidation] = useState<{ errors: string[]; warnings: string[] } | null>(null);
+
+  const handleExportPdf = () => {
+    const data = {
+      projectName: currentProjectName,
+      contracts: activeContracts.map(c => ({ id: c.id, supplier: c.supplier, scope: c.scope, contractValue: c.contractValue })),
+      payments: activePayments.map(p => ({
+        contractId: p.contractId, supplier: p.supplier, paymentDate: p.paymentDate,
+        value: p.value, description: p.description, notes: p.notes,
+      })),
+    };
+    const report = validateLaborData(data);
+    if (!report.ok) {
+      setPdfValidation({ errors: report.errors, warnings: report.warnings });
+      return;
+    }
+    // Há avisos, mas não impeditivos: gera e mostra o resumo depois.
+    try {
+      generateLaborPaymentsPdf(data);
+      setPdfValidation(report.warnings.length ? { errors: [], warnings: report.warnings } : null);
+    } catch (e: any) {
+      setPdfValidation({ errors: [e?.message || 'Falha ao gerar o PDF.'], warnings: [] });
+    }
+  };
+
   return (
     <div className="bg-white border border-stone-200 shadow-xs mb-6">
-      
+
+      {/* Modal de validação da exportação PDF */}
+      {pdfValidation && (
+        <div className="fixed inset-0 z-[60] bg-stone-950/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-stone-200 shadow-xl max-w-md w-full">
+            <div className="flex items-start justify-between border-b border-stone-150 px-5 py-3.5">
+              <h4 className="font-serif text-sm font-bold text-stone-900 flex items-center gap-2">
+                {pdfValidation.errors.length ? (
+                  <><AlertTriangle size={15} className="text-red-600" /> Não foi possível gerar o PDF</>
+                ) : (
+                  <><Check size={15} className="text-emerald-600" /> PDF gerado com avisos</>
+                )}
+              </h4>
+              <button onClick={() => setPdfValidation(null)} className="text-stone-400 hover:text-stone-600 cursor-pointer"><X size={16} /></button>
+            </div>
+            <div className="px-5 py-4 space-y-3 max-h-[60vh] overflow-y-auto">
+              {pdfValidation.errors.length > 0 && (
+                <div className="p-2.5 bg-red-50 border border-red-200">
+                  <p className="text-[11px] font-bold text-red-700 mb-1">Corrija antes de exportar:</p>
+                  <ul className="list-disc list-inside text-[11px] text-red-700 space-y-0.5">
+                    {pdfValidation.errors.map((e, i) => <li key={i}>{e}</li>)}
+                  </ul>
+                </div>
+              )}
+              {pdfValidation.warnings.length > 0 && (
+                <div className="p-2.5 bg-amber-50 border border-amber-200">
+                  <p className="text-[11px] font-bold text-amber-800 mb-1">
+                    {pdfValidation.errors.length ? 'Além disso, verifique:' : 'O PDF foi gerado, mas confira:'}
+                  </p>
+                  <ul className="list-disc list-inside text-[11px] text-amber-700 space-y-0.5">
+                    {pdfValidation.warnings.slice(0, 10).map((wn, i) => <li key={i}>{wn}</li>)}
+                    {pdfValidation.warnings.length > 10 && <li>e mais {pdfValidation.warnings.length - 10}…</li>}
+                  </ul>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 border-t border-stone-150 px-5 py-3">
+              {pdfValidation.errors.length === 0 ? (
+                <button onClick={() => setPdfValidation(null)} className="bg-stone-900 hover:bg-stone-800 text-white py-1.5 px-4 font-mono uppercase text-[9px] tracking-wider font-bold cursor-pointer">Entendi</button>
+              ) : (
+                <button onClick={() => setPdfValidation(null)} className="border border-stone-300 hover:bg-stone-50 text-stone-700 py-1.5 px-4 font-mono uppercase text-[9px] tracking-wider font-bold cursor-pointer">Fechar</button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header bar */}
       <div 
         onClick={() => setIsLaborCollapsed(!isLaborCollapsed)}
@@ -680,12 +753,12 @@ export const PlanningLaborPayments: React.FC<PlanningLaborPaymentsProps> = ({
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => setIsPrintOpen(true)}
+                onClick={handleExportPdf}
                 className="bg-white hover:bg-stone-50 text-stone-800 border border-stone-250 py-1.5 px-3.5 text-[10px] font-mono uppercase tracking-wider font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-                title="Imprimir relatório físico-financeiro de Mão de Obra em A4"
+                title="Gerar relatório físico-financeiro de Mão de Obra em PDF"
               >
                 <Printer size={13} />
-                <span>Imprimir A4</span>
+                <span>Exportar PDF</span>
               </button>
 
               <button

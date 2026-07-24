@@ -25,6 +25,7 @@ import Markdown from 'react-markdown';
 import { Project, Transaction } from '../types';
 import { getAccessToken } from '../lib/firebaseAuth';
 import { generateScheduleFromAnswers } from '../lib/scheduleGenerator';
+import { generateSchedulePdf, validateScheduleData } from '../lib/pdfReports';
 
 interface PlanningScheduleProps {
   timelinePhases: any[];
@@ -274,6 +275,43 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
 
   const totalProjectPlanned = activeProjectPhases.reduce((sum, ph) => sum + ph.costPrev, 0);
   const totalProjectRealized = activeProjectPhases.reduce((sum, ph) => sum + ph.costReal, 0);
+
+  // Exportação do cronograma em PDF (jsPDF), com validação prévia.
+  const [pdfValidation, setPdfValidation] = useState<{ errors: string[]; warnings: string[] } | null>(null);
+
+  const handleExportSchedulePdf = () => {
+    const data = {
+      projectName: activeProj?.name || 'Obra Geral',
+      phases: activeProjectPhases.map((ph: any) => ({
+        name: ph.name, startDate: ph.startDate, endDate: ph.endDate,
+        costPrev: ph.costPrev || 0, costReal: ph.costReal || 0, progress: ph.progress || 0,
+      })),
+      periods,
+      monthlyTotals: monthlyTotals.map((t: any) => ({
+        key: t.key, planned: t.planned, realized: t.realized, avgProgress: t.avgProgress,
+      })),
+      distributionFor: (phase: any, year: number, month: number) => {
+        const d = getPhaseDistributionForMonth(phase, year, month);
+        return { planned: d.planned, realized: d.realized, plannedPhysicalPercent: d.plannedPhysicalPercent };
+      },
+      budget: activeProj?.budget,
+      printType,
+    };
+    const report = validateScheduleData(data);
+    if (!report.ok) {
+      setIsPrintModalOpen(false);
+      setPdfValidation({ errors: report.errors, warnings: report.warnings });
+      return;
+    }
+    try {
+      generateSchedulePdf(data);
+      setIsPrintModalOpen(false);
+      if (report.warnings.length) setPdfValidation({ errors: [], warnings: report.warnings });
+    } catch (e: any) {
+      setIsPrintModalOpen(false);
+      setPdfValidation({ errors: [e?.message || 'Falha ao gerar o PDF.'], warnings: [] });
+    }
+  };
 
   // Actions
   const startEditingPhase = (phase: any) => {
@@ -832,6 +870,50 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
 
   return (
     <div className="bg-white border border-stone-200 shadow-xs mb-6">
+      {/* Modal de validação da exportação PDF */}
+      {pdfValidation && (
+        <div className="fixed inset-0 z-[60] bg-stone-950/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-stone-200 shadow-xl max-w-md w-full">
+            <div className="flex items-start justify-between border-b border-stone-150 px-5 py-3.5">
+              <h4 className="font-serif text-sm font-bold text-stone-900 flex items-center gap-2">
+                {pdfValidation.errors.length ? (
+                  <><AlertTriangle size={15} className="text-red-600" /> Não foi possível gerar o PDF</>
+                ) : (
+                  <><CheckCircle size={15} className="text-emerald-600" /> PDF gerado com avisos</>
+                )}
+              </h4>
+              <button onClick={() => setPdfValidation(null)} className="text-stone-400 hover:text-stone-600 cursor-pointer text-lg leading-none">✕</button>
+            </div>
+            <div className="px-5 py-4 space-y-3 max-h-[60vh] overflow-y-auto">
+              {pdfValidation.errors.length > 0 && (
+                <div className="p-2.5 bg-red-50 border border-red-200">
+                  <p className="text-[11px] font-bold text-red-700 mb-1">Corrija antes de exportar:</p>
+                  <ul className="list-disc list-inside text-[11px] text-red-700 space-y-0.5">
+                    {pdfValidation.errors.map((e, i) => <li key={i}>{e}</li>)}
+                  </ul>
+                </div>
+              )}
+              {pdfValidation.warnings.length > 0 && (
+                <div className="p-2.5 bg-amber-50 border border-amber-200">
+                  <p className="text-[11px] font-bold text-amber-800 mb-1">
+                    {pdfValidation.errors.length ? 'Além disso, verifique:' : 'O PDF foi gerado, mas confira:'}
+                  </p>
+                  <ul className="list-disc list-inside text-[11px] text-amber-700 space-y-0.5">
+                    {pdfValidation.warnings.slice(0, 10).map((wn, i) => <li key={i}>{wn}</li>)}
+                    {pdfValidation.warnings.length > 10 && <li>e mais {pdfValidation.warnings.length - 10}…</li>}
+                  </ul>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 border-t border-stone-150 px-5 py-3">
+              <button onClick={() => setPdfValidation(null)} className={`py-1.5 px-4 font-mono uppercase text-[9px] tracking-wider font-bold cursor-pointer ${pdfValidation.errors.length ? 'border border-stone-300 hover:bg-stone-50 text-stone-700' : 'bg-stone-900 hover:bg-stone-800 text-white'}`}>
+                {pdfValidation.errors.length ? 'Fechar' : 'Entendi'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header bar */}
       <div 
         onClick={() => setIsCronogramaCollapsed(!isCronogramaCollapsed)}
@@ -1776,15 +1858,10 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setIsPrintModalOpen(false);
-                  setTimeout(() => {
-                    window.print();
-                  }, 300);
-                }}
+                onClick={handleExportSchedulePdf}
                 className="bg-stone-900 hover:bg-stone-800 text-white px-5 py-2 font-bold cursor-pointer transition-all flex items-center gap-1.5"
               >
-                <span>🖨️ Abrir Assistente de Impressão</span>
+                <span>📥 Gerar PDF</span>
               </button>
             </div>
           </div>
