@@ -49,7 +49,7 @@ services:
     environment:
       - SERVER_URL=http://evolution-api:8080
       # Chave que o crm-api envia no header `apikey`. Gere com: openssl rand -hex 32
-      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY}
+      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY2}
       - AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES=false
       # Banco próprio do Evolution — separado do banco do CRM de propósito: se o
       # Evolution quebrar ou for removido, o CRM não é afetado.
