@@ -14,13 +14,16 @@ services:
       - "3000"
     environment:
       - NODE_ENV=production
-      # Obrigatórias em produção (ver DEPLOY.md) — configure no painel do Coolify ou em um .env:
-      - DATABASE_URL=${DATABASE_URL} # connection string do Supabase/Postgres (pooler, porta 6543)
-      - SESSION_SECRET=${SESSION_SECRET} # string aleatória longa (>= 32 chars) para assinar sessões
-      # Opcionais:
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-} # só se quiser o motor Gemini; o OCR interno funciona sem
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
-      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - 'DATABASE_URL=${DATABASE_URL}'
+      - 'SESSION_SECRET=${SESSION_SECRET}'
+      - 'GEMINI_API_KEY=${GEMINI_API_KEY:-}'
+      - 'TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}'
+      - 'TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}'
+      - 'WHATSAPP_PROVIDER=evolution'
+      - 'EVOLUTION_BASE_URL=http://evolution-api:8080'
+      - 'EVOLUTION_INSTANCE=cbc'
+      - 'EVOLUTION_API_KEY=${EVOLUTION_API_KEY2}'
+      - 'AGENDA_DEFAULT_PHONE=5567993011525'
     restart: always
 
   # ---------------------------------------------------------------------------
