@@ -426,6 +426,110 @@ REGRAS DE DISTRIBUIÇÃO E AJUSTE:
   }
 });
 
+// AI parsing de pagamentos de mão de obra (único ou em lote) a partir de um PDF.
+// Extrai, por linha: nome do prestador, número da parcela, data e valor.
+// Serve tanto ao "um prestador com várias parcelas" quanto a "vários prestadores
+// misturados" — a IA só extrai linha a linha; o agrupamento é feito no front.
+app.post("/api/planning/parse-labor-payments", requireAuth, aiLimiter, async (req, res) => {
+  try {
+    const { fileBase64, mimeType, fileName, accessToken } = req.body;
+
+    if (!fileBase64 || !mimeType) {
+      return res.status(400).json({ error: "Arquivo ou tipo MIME ausente para a leitura de pagamentos." });
+    }
+
+    const isExcel = mimeType.includes("sheet") || mimeType.includes("excel") || mimeType.includes("csv") ||
+      (fileName && (fileName.toLowerCase().endsWith(".xlsx") || fileName.toLowerCase().endsWith(".xls") || fileName.toLowerCase().endsWith(".csv")));
+    const isAllowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(mimeType) || isExcel;
+
+    if (!isAllowed) {
+      return res.status(400).json({ error: "Formato não suportado. Envie um PDF, uma foto (JPG/PNG) ou uma planilha." });
+    }
+
+    // Guarda o documento original no Drive (não bloqueia a extração se falhar).
+    const { driveFile, driveError } = await saveDocumentToDrive(
+      accessToken,
+      DRIVE_FOLDERS.comprovantes,
+      fileName || "pagamentos-mao-de-obra.pdf",
+      mimeType,
+      fileBase64
+    );
+
+    const currentDate = new Date().toISOString().split('T')[0];
+
+    const prompt = `
+Você é um assistente financeiro de uma construtora, especialista em ler documentos de programação
+e comprovação de pagamentos de mão de obra (empreiteiros, prestadores de serviço).
+
+Analise o documento anexado e extraia TODAS as parcelas de pagamento, sem deixar passar nenhuma linha.
+O documento pode conter as parcelas de um único prestador OU de vários prestadores misturados.
+
+Para CADA parcela, extraia:
+- supplierName: nome do prestador de serviço / empreiteiro responsável por aquele pagamento. Se o
+  documento for de um único prestador e o nome aparecer só no cabeçalho, repita esse nome em todas as linhas.
+- installment: número ou identificação da parcela exatamente como aparece (ex: "1", "2/10", "3ª parcela",
+  "Sinal", "Medição 02"). Se não houver identificação explícita, numere sequencialmente por prestador ("1", "2"...).
+- paymentDate: data do pagamento no formato YYYY-MM-DD. Se a data vier como DD/MM/AAAA, converta.
+  Se alguma parcela não tiver data, use ${currentDate}.
+- value: valor do pagamento em reais, como número (use ponto decimal, sem "R$" nem separador de milhar).
+
+REGRAS:
+- Não invente parcelas que não existem no documento.
+- Não some nem agrupe valores: cada linha do documento é uma parcela.
+- Ignore linhas de total/subtotal — elas não são parcelas.
+- Preserve a ordem em que aparecem no documento.
+
+Retorne obrigatoriamente no formato do esquema JSON definido.
+`;
+
+    let contents: any[] = [];
+    const isPdf = mimeType === "application/pdf" || (fileName && fileName.toLowerCase().endsWith(".pdf"));
+    const isImage = mimeType.startsWith("image/");
+
+    if (isPdf || isImage) {
+      contents.push({ inlineData: { data: fileBase64, mimeType: isPdf ? "application/pdf" : mimeType } });
+      contents.push({ text: prompt });
+    } else {
+      const spreadsheetCsv = getSpreadsheetDataAsText(fileBase64);
+      contents.push({ text: prompt + "\n\nCONTEÚDO DA PLANILHA EM CSV:\n" + spreadsheetCsv });
+    }
+
+    const responseSchema = {
+      type: Type.OBJECT,
+      properties: {
+        payments: {
+          type: Type.ARRAY,
+          description: "Todas as parcelas de pagamento extraídas do documento",
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              supplierName: { type: Type.STRING, description: "Nome do prestador de serviço / empreiteiro" },
+              installment: { type: Type.STRING, description: "Número/identificação da parcela" },
+              paymentDate: { type: Type.STRING, description: "Data do pagamento em YYYY-MM-DD" },
+              value: { type: Type.NUMBER, description: "Valor da parcela em reais" },
+            },
+            required: ["supplierName", "installment", "paymentDate", "value"],
+          },
+        },
+      },
+      required: ["payments"],
+    };
+
+    const result = await callGeminiForJson({
+      model: "gemini-3.5-flash",
+      contents,
+      responseSchema,
+      context: "pagamentos de mão de obra",
+    });
+
+    const payments = Array.isArray(result?.payments) ? result.payments : [];
+    return res.json({ success: true, payments, driveFile, driveError });
+  } catch (error: any) {
+    console.error("Erro no processamento da IA para pagamentos de mão de obra:", error);
+    return res.status(500).json({ error: error.message || "Erro desconhecido ao processar o arquivo com IA." });
+  }
+});
+
 // AI Document parsing endpoint for materials lists
 app.post("/api/planning/parse-materials", requireAuth, aiLimiter, async (req, res) => {
   try {

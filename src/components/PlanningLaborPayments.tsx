@@ -17,8 +17,10 @@ import {
   X,
   CreditCard
 } from 'lucide-react';
+import { Upload, FileUp, Loader2, Check, AlertTriangle, Link2 } from 'lucide-react';
 import { Project } from '../types';
 import { subscribeCollection, saveDoc, removeDoc } from '../lib/firebaseDb';
+import { getAccessToken } from '../lib/firebaseAuth';
 
 export interface LaborContract {
   id: string;
@@ -172,6 +174,241 @@ export const PlanningLaborPayments: React.FC<PlanningLaborPaymentsProps> = ({
     notes: ''
   });
   const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  // --- Leitura de PDF: estado compartilhado ---
+  // Leitura do PDF no modal de pagamento único (preenche o form).
+  const [isReadingSingle, setIsReadingSingle] = useState(false);
+
+  // Fluxo de lote: modal próprio com tabela de revisão.
+  const [isBatchOpen, setIsBatchOpen] = useState(false);
+  const [batchLoading, setBatchLoading] = useState(false);
+  const [batchError, setBatchError] = useState<string | null>(null);
+  const [batchSaving, setBatchSaving] = useState(false);
+  // Cada linha da revisão: o que a IA leu + a decisão de vínculo do usuário.
+  // contractId '' = ainda não resolvido; '__new__' = criar contrato com supplierName.
+  const [batchRows, setBatchRows] = useState<Array<{
+    id: string;
+    supplierName: string;
+    installment: string;
+    paymentDate: string;
+    value: number;
+    contractId: string;
+    include: boolean;
+  }>>([]);
+
+  /** Lê um arquivo como base64 (sem o prefixo data:). */
+  const fileToBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve((reader.result as string).split(',')[1]);
+      reader.onerror = () => reject(new Error('Falha ao ler o arquivo.'));
+      reader.readAsDataURL(file);
+    });
+
+  const mimeFor = (file: File): string => {
+    if (file.type) return file.type;
+    const ext = file.name.toLowerCase().split('.').pop();
+    if (ext === 'pdf') return 'application/pdf';
+    if (ext === 'png') return 'image/png';
+    if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+    if (ext === 'xlsx') return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    if (ext === 'csv') return 'text/csv';
+    return 'application/octet-stream';
+  };
+
+  /** Chama o parser no servidor e devolve as parcelas lidas. */
+  const parsePaymentsFile = async (file: File) => {
+    if (file.size > 5 * 1024 * 1024) {
+      throw new Error('O arquivo excede o limite de 5MB.');
+    }
+    const base64 = await fileToBase64(file);
+    const accessToken = await getAccessToken();
+    const response = await fetch('/api/planning/parse-labor-payments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fileBase64: base64,
+        mimeType: mimeFor(file),
+        fileName: file.name,
+        accessToken: accessToken || undefined,
+      }),
+    });
+    if (!response.ok) {
+      let msg = 'Falha ao analisar o arquivo.';
+      try { const j = await response.json(); if (j?.error) msg = j.error; } catch {}
+      throw new Error(msg);
+    }
+    const data = await response.json();
+    return Array.isArray(data.payments) ? data.payments : [];
+  };
+
+  /** Casa o nome lido pela IA com um contrato ativo (comparação tolerante). */
+  const matchContractId = (supplierName: string): string => {
+    const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+    const target = norm(supplierName || '');
+    if (!target) return '';
+    const exact = activeContracts.find(c => norm(c.supplier) === target);
+    if (exact) return exact.id;
+    // Casamento parcial: um contém o outro (ex: "João Silva" ~ "João Silva ME").
+    const partial = activeContracts.find(c => {
+      const n = norm(c.supplier);
+      return n.includes(target) || target.includes(n);
+    });
+    return partial ? partial.id : '';
+  };
+
+  // --- PDF no modal ÚNICO: lê e preenche o formulário ---
+  const handleSingleFileRead = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // permite reler o mesmo arquivo
+    if (!file) return;
+
+    setPaymentError(null);
+    setIsReadingSingle(true);
+    try {
+      const parsed = await parsePaymentsFile(file);
+      if (parsed.length === 0) {
+        setPaymentError('Nenhum pagamento foi identificado no arquivo.');
+        return;
+      }
+      // Se vier mais de uma parcela, avisa e leva a primeira; o resto é caso de lote.
+      const first = parsed[0];
+      const matched = matchContractId(first.supplierName);
+      setPaymentForm(prev => ({
+        ...prev,
+        contractId: matched || prev.contractId,
+        paymentDate: first.paymentDate || prev.paymentDate,
+        value: first.value != null ? String(first.value) : prev.value,
+        description: first.installment ? `Parcela ${first.installment}` : prev.description,
+      }));
+      if (parsed.length > 1) {
+        setPaymentError(`O arquivo tem ${parsed.length} parcelas. Preenchi a primeira — para lançar todas de uma vez, use "Importar em Lote".`);
+      }
+      if (first.supplierName && !matched) {
+        setPaymentError((prevMsg) => (prevMsg ? prevMsg + ' ' : '') + `Prestador "${first.supplierName}" não corresponde a um contrato existente — selecione o contrato manualmente.`);
+      }
+    } catch (err: any) {
+      setPaymentError(err.message || 'Não foi possível ler o arquivo.');
+    } finally {
+      setIsReadingSingle(false);
+    }
+  };
+
+  // --- PDF em LOTE: lê e abre a tabela de revisão ---
+  const handleBatchFileRead = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    setBatchError(null);
+    setBatchLoading(true);
+    setIsBatchOpen(true);
+    try {
+      const parsed = await parsePaymentsFile(file);
+      if (parsed.length === 0) {
+        setBatchError('Nenhum pagamento foi identificado no arquivo.');
+        setBatchRows([]);
+        return;
+      }
+      setBatchRows(parsed.map((p: any, i: number) => ({
+        id: `row-${Date.now()}-${i}`,
+        supplierName: p.supplierName || '',
+        installment: p.installment || String(i + 1),
+        paymentDate: p.paymentDate || new Date().toISOString().split('T')[0],
+        value: Number(p.value) || 0,
+        contractId: matchContractId(p.supplierName),
+        include: true,
+      })));
+    } catch (err: any) {
+      setBatchError(err.message || 'Não foi possível ler o arquivo.');
+      setBatchRows([]);
+    } finally {
+      setBatchLoading(false);
+    }
+  };
+
+  const openBatchFilePicker = () => {
+    setBatchRows([]);
+    setBatchError(null);
+    document.getElementById('labor-batch-file-input')?.click();
+  };
+
+  const updateBatchRow = (id: string, patch: Partial<typeof batchRows[number]>) => {
+    setBatchRows(rows => rows.map(r => (r.id === id ? { ...r, ...patch } : r)));
+  };
+
+  /** Salva o lote: cria contratos marcados como novos e grava os pagamentos. */
+  const handleSaveBatch = async () => {
+    setBatchError(null);
+    const toSave = batchRows.filter(r => r.include);
+
+    if (toSave.length === 0) {
+      setBatchError('Nenhuma parcela marcada para importar.');
+      return;
+    }
+    const unresolved = toSave.filter(r => !r.contractId);
+    if (unresolved.length > 0) {
+      setBatchError(`${unresolved.length} parcela(s) sem contrato definido. Vincule a um contrato ou escolha "Criar contrato" em cada uma.`);
+      return;
+    }
+
+    setBatchSaving(true);
+    try {
+      // 1) Cria os contratos novos primeiro, reaproveitando um mesmo prestador.
+      //    Chave por nome normalizado, para não criar dois contratos iguais no lote.
+      const norm = (s: string) => s.toLowerCase().trim();
+      const createdByName = new Map<string, string>();
+
+      for (const row of toSave) {
+        if (row.contractId !== '__new__') continue;
+        const key = norm(row.supplierName);
+        if (createdByName.has(key)) continue;
+        const newId = `lc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        const newContract: LaborContract = {
+          id: newId,
+          projectId: laborProjectId,
+          supplier: row.supplierName.trim(),
+          scope: 'Criado automaticamente pela importação de pagamentos',
+          contractValue: 0,
+          notes: undefined,
+        };
+        await saveDoc('labor_contracts', newId, newContract);
+        createdByName.set(key, newId);
+      }
+
+      // 2) Grava os pagamentos, resolvendo os contratos recém-criados.
+      let saved = 0;
+      for (const row of toSave) {
+        const contractId = row.contractId === '__new__'
+          ? createdByName.get(norm(row.supplierName))!
+          : row.contractId;
+        const contract = contracts.find(c => c.id === contractId);
+        const supplier = contract?.supplier || row.supplierName.trim();
+
+        const payId = `pay-${Date.now()}-${saved}-${Math.random().toString(36).slice(2, 6)}`;
+        const payment: LaborPayment = {
+          id: payId,
+          projectId: laborProjectId,
+          contractId,
+          supplier,
+          paymentDate: row.paymentDate,
+          value: row.value,
+          description: /parcela|medi|sinal/i.test(row.installment) ? row.installment : `Parcela ${row.installment}`,
+          notes: undefined,
+        };
+        await saveDoc('labor_payments', payId, payment);
+        saved++;
+      }
+
+      setIsBatchOpen(false);
+      setBatchRows([]);
+    } catch (err: any) {
+      console.error('Erro ao salvar lote de pagamentos:', err);
+      setBatchError(err.message || 'Falha ao salvar os pagamentos no banco de dados.');
+    } finally {
+      setBatchSaving(false);
+    }
+  };
 
   const [isPrintOpen, setIsPrintOpen] = useState(false);
 
@@ -459,6 +696,25 @@ export const PlanningLaborPayments: React.FC<PlanningLaborPaymentsProps> = ({
                 <Plus size={13} />
                 <span>Programar Pagamento</span>
               </button>
+
+              <button
+                type="button"
+                onClick={openBatchFilePicker}
+                disabled={activeContracts.length === 0}
+                title="Ler um PDF com várias parcelas e lançar todas de uma vez"
+                className="border border-stone-300 hover:border-stone-900 text-stone-700 py-1.5 px-3.5 text-[10px] font-mono uppercase tracking-wider font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <FileUp size={13} />
+                <span>Importar em Lote</span>
+              </button>
+
+              <input
+                id="labor-batch-file-input"
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls,.csv,application/pdf,image/*"
+                onChange={handleBatchFileRead}
+                className="hidden"
+              />
             </div>
           </div>
 
@@ -760,6 +1016,27 @@ export const PlanningLaborPayments: React.FC<PlanningLaborPaymentsProps> = ({
 
             <form onSubmit={handleSavePayment} className="space-y-4 text-xs font-sans">
               
+              {/* Ler PDF/foto e preencher o formulário (só ao criar, não ao editar). */}
+              {!editingPayment && (
+                <div className="border border-dashed border-stone-300 bg-stone-50 p-2.5 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-[11px] text-stone-500">
+                    <Upload size={13} className="text-stone-400 shrink-0" />
+                    <span>Tem o comprovante? Leia o arquivo e os campos são preenchidos.</span>
+                  </div>
+                  <label className={`shrink-0 border border-stone-300 bg-white hover:border-stone-900 text-stone-700 py-1 px-2.5 text-[9px] font-mono uppercase tracking-wider font-bold transition-all flex items-center gap-1.5 ${isReadingSingle ? 'opacity-60 cursor-wait' : 'cursor-pointer'}`}>
+                    {isReadingSingle ? <Loader2 size={12} className="animate-spin" /> : <FileUp size={12} />}
+                    <span>{isReadingSingle ? 'Lendo…' : 'Ler PDF'}</span>
+                    <input
+                      type="file"
+                      accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/*"
+                      onChange={handleSingleFileRead}
+                      disabled={isReadingSingle}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              )}
+
               {paymentError && (
                 <div className="p-2.5 bg-red-50 border border-red-200 text-red-700 text-[11px] font-sans">
                   {paymentError}
@@ -862,6 +1139,165 @@ export const PlanningLaborPayments: React.FC<PlanningLaborPaymentsProps> = ({
               </div>
 
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: REVISÃO DE IMPORTAÇÃO EM LOTE */}
+      {isBatchOpen && (
+        <div className="fixed inset-0 z-50 bg-stone-950/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-stone-200 shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col text-left">
+            <div className="flex justify-between items-start border-b border-stone-150 px-6 py-3.5 shrink-0">
+              <div>
+                <h4 className="font-serif text-sm font-bold text-stone-900 uppercase">Importar Pagamentos em Lote</h4>
+                <p className="text-[11px] text-stone-500 mt-0.5">
+                  Confira cada parcela e o contrato vinculado antes de salvar.
+                </p>
+              </div>
+              <button
+                onClick={() => { setIsBatchOpen(false); setBatchRows([]); }}
+                className="text-stone-400 hover:text-stone-600 cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              {batchLoading ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-3 text-stone-500">
+                  <Loader2 size={22} className="animate-spin" />
+                  <p className="text-xs font-mono uppercase tracking-wider">Lendo o arquivo…</p>
+                </div>
+              ) : batchError && batchRows.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-14 gap-3 text-center">
+                  <AlertTriangle size={20} className="text-amber-500" />
+                  <p className="text-xs text-stone-600 max-w-sm">{batchError}</p>
+                  <button
+                    type="button"
+                    onClick={openBatchFilePicker}
+                    className="mt-1 border border-stone-300 hover:border-stone-900 text-stone-700 py-1.5 px-3 text-[9px] font-mono uppercase tracking-wider font-bold cursor-pointer"
+                  >
+                    Escolher outro arquivo
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {batchError && (
+                    <div className="mb-3 p-2.5 bg-red-50 border border-red-200 text-red-700 text-[11px]">
+                      {batchError}
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-stone-400">
+                      {batchRows.filter(r => r.include).length} de {batchRows.length} parcela(s) selecionada(s)
+                    </span>
+                    <span className="text-[11px] font-mono text-stone-600">
+                      Total: {formatCurrency(batchRows.filter(r => r.include).reduce((s, r) => s + r.value, 0))}
+                    </span>
+                  </div>
+
+                  <div className="border border-stone-200">
+                    <table className="w-full text-[11px]">
+                      <thead>
+                        <tr className="bg-stone-50 border-b border-stone-200 text-stone-400 font-mono uppercase text-[9px] tracking-wider">
+                          <th className="p-2 text-center w-8"></th>
+                          <th className="p-2 text-left">Prestador → Contrato</th>
+                          <th className="p-2 text-left w-24">Parcela</th>
+                          <th className="p-2 text-left w-32">Data</th>
+                          <th className="p-2 text-right w-28">Valor</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {batchRows.map((row) => {
+                          const unresolved = row.include && !row.contractId;
+                          return (
+                            <tr key={row.id} className={`border-b border-stone-100 ${!row.include ? 'opacity-40' : ''} ${unresolved ? 'bg-amber-50' : ''}`}>
+                              <td className="p-2 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={row.include}
+                                  onChange={(e) => updateBatchRow(row.id, { include: e.target.checked })}
+                                  className="accent-stone-900 cursor-pointer"
+                                />
+                              </td>
+                              <td className="p-2">
+                                <div className="flex items-center gap-1.5 text-stone-500 mb-1">
+                                  <span className="truncate max-w-[140px]" title={row.supplierName}>{row.supplierName || '—'}</span>
+                                  <Link2 size={10} className="text-stone-300 shrink-0" />
+                                </div>
+                                <select
+                                  value={row.contractId}
+                                  onChange={(e) => updateBatchRow(row.id, { contractId: e.target.value })}
+                                  className={`w-full border p-1 text-[11px] bg-white cursor-pointer focus:outline-none ${unresolved ? 'border-amber-400 focus:border-amber-500' : 'border-stone-300 focus:border-stone-500'}`}
+                                >
+                                  <option value="">— Selecione o contrato —</option>
+                                  {activeContracts.map(c => (
+                                    <option key={c.id} value={c.id}>{c.supplier}</option>
+                                  ))}
+                                  {row.supplierName && (
+                                    <option value="__new__">➕ Criar contrato "{row.supplierName}"</option>
+                                  )}
+                                </select>
+                              </td>
+                              <td className="p-2">
+                                <input
+                                  type="text"
+                                  value={row.installment}
+                                  onChange={(e) => updateBatchRow(row.id, { installment: e.target.value })}
+                                  className="w-full border border-stone-300 p-1 text-[11px] focus:outline-none focus:border-stone-500"
+                                />
+                              </td>
+                              <td className="p-2">
+                                <input
+                                  type="date"
+                                  value={row.paymentDate}
+                                  onChange={(e) => updateBatchRow(row.id, { paymentDate: e.target.value })}
+                                  className="w-full border border-stone-300 p-1 text-[11px] font-mono focus:outline-none focus:border-stone-500"
+                                />
+                              </td>
+                              <td className="p-2">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={row.value}
+                                  onChange={(e) => updateBatchRow(row.id, { value: parseFloat(e.target.value) || 0 })}
+                                  className="w-full border border-stone-300 p-1 text-[11px] font-mono text-right focus:outline-none focus:border-stone-500"
+                                />
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-[10px] text-stone-400 mt-2">
+                    Linhas em amarelo precisam de um contrato. Você pode vincular a um existente ou criar um novo na hora
+                    (o novo contrato entra com valor zero — ajuste depois na lista de contratos).
+                  </p>
+                </>
+              )}
+            </div>
+
+            {!batchLoading && batchRows.length > 0 && (
+              <div className="flex justify-end gap-2 border-t border-stone-150 px-6 py-3.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => { setIsBatchOpen(false); setBatchRows([]); }}
+                  className="border border-stone-300 hover:bg-stone-50 text-stone-700 py-1.5 px-4 font-mono uppercase text-[9px] tracking-wider font-bold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveBatch}
+                  disabled={batchSaving}
+                  className="bg-stone-900 hover:bg-stone-850 disabled:opacity-50 text-white py-1.5 px-4 font-mono uppercase text-[9px] tracking-wider font-bold cursor-pointer flex items-center gap-1.5"
+                >
+                  {batchSaving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                  {batchSaving ? 'Salvando…' : `Importar ${batchRows.filter(r => r.include).length} parcela(s)`}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
