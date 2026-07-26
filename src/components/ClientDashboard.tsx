@@ -25,6 +25,7 @@ import AcompanhamentoFisico from './AcompanhamentoFisico';
 import QuotationMaps from './QuotationMaps';
 import { subscribeCollection } from '../lib/firebaseDb';
 import { generateClientContractPdf } from '../lib/pdfReports';
+import { formatDateBR } from '../lib/formatDate';
 
 
 interface ClientDashboardProps {
@@ -440,7 +441,7 @@ export default function ClientDashboard({ client, projects, transactions, docume
                       <Calendar size={14} className="text-stone-400 flex-shrink-0" />
                       <div className="text-xs">
                         <p className="text-[9px] font-mono text-stone-400 uppercase tracking-wider">Iniciada em</p>
-                        <p>{new Date(selectedProject.startDate).toLocaleDateString('pt-BR')}</p>
+                        <p>{formatDateBR(selectedProject.startDate)}</p>
                       </div>
                     </div>
                   </div>
@@ -929,7 +930,7 @@ export default function ClientDashboard({ client, projects, transactions, docume
               <div className="grid grid-cols-2 gap-4 border-b border-stone-100 pb-3">
                 <div>
                   <p className="text-[10px] font-mono text-stone-400 uppercase tracking-wider">Data do Lançamento</p>
-                  <p className="text-stone-800 mt-0.5">{new Date(selectedTx.date).toLocaleDateString('pt-BR')}</p>
+                  <p className="text-stone-800 mt-0.5">{formatDateBR(selectedTx.date)}</p>
                 </div>
                 <div>
                   <p className="text-[10px] font-mono text-stone-400 uppercase tracking-wider">Categoria</p>

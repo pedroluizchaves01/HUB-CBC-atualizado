@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSortableData, SortableHeader } from '../lib/useSortableData';
+import { formatDateBR } from '../lib/formatDate';
 import { 
   TrendingUp, 
   Plus, 
@@ -1575,7 +1576,7 @@ export default function AcompanhamentoFinanceiro({
                 sortedProjectTransactions.map((tx) => (
                   <tr key={tx.id} className="hover:bg-stone-50/50 align-middle">
                     <td className="p-3 font-mono text-[11px] text-stone-500">
-                      {tx.date}
+                      {formatDateBR(tx.date)}
                     </td>
                     <td className="p-3">
                       <div className="font-bold text-stone-900">{tx.supplier}</div>

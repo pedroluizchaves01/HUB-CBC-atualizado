@@ -29,6 +29,7 @@ import { MaterialItem, Project } from '../types';
 import { getAccessToken } from '../lib/firebaseAuth';
 import { generateMaterialsPdf, validateMaterialsData } from '../lib/pdfReports';
 import { useSortableData, SortableHeader } from '../lib/useSortableData';
+import { formatDateBR } from '../lib/formatDate';
 
 interface PlanningMaterialsProps {
   materialsList: MaterialItem[];
@@ -1453,12 +1454,12 @@ export const PlanningMaterials: React.FC<PlanningMaterialsProps> = ({
 
                         {/* Data do Pedido */}
                         <td className="p-3 text-center font-mono text-stone-600 text-[10px]">
-                          {item.orderDate || <span className="text-stone-300">-</span>}
+                          {item.orderDate ? formatDateBR(item.orderDate) : <span className="text-stone-300">-</span>}
                         </td>
 
                         {/* Data de Entrega */}
                         <td className="p-3 text-center font-mono text-stone-600 text-[10px]">
-                          {item.deliveryDate || <span className="text-stone-300">Não def.</span>}
+                          {item.deliveryDate ? formatDateBR(item.deliveryDate) : <span className="text-stone-300">Não def.</span>}
                         </td>
 
                         {/* Ações */}

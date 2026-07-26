@@ -36,6 +36,7 @@ import {
 import { motion } from 'motion/react';
 import { initAuth, googleSignIn, getAccessToken } from '../lib/firebaseAuth';
 import { useSortableData, SortableHeader } from '../lib/useSortableData';
+import { formatDateBR } from '../lib/formatDate';
 import { subscribeCollection, saveDoc, removeDoc } from '../lib/firebaseDb';
 import { uploadBase64ToFirebase } from '../lib/firebaseStorage';
 import { getTelegramConfig, buildTelegramFileName } from '../lib/telegramService';
@@ -1202,7 +1203,7 @@ export function OfficeManagement({ clients, onAddClient, currentUserId = '' }: O
                       return (
                         <tr key={tx.id} className="hover:bg-stone-50/50 transition-colors">
                           <td className="p-4 font-mono text-[10.5px] text-stone-500 whitespace-nowrap">
-                            {new Date(tx.date).toLocaleDateString('pt-BR')}
+                            {formatDateBR(tx.date)}
                           </td>
                           <td className="p-4">
                             <span className="font-sans font-bold text-stone-900 block">
