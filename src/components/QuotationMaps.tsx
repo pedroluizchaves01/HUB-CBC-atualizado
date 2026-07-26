@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useSortableData, SortableHeader } from '../lib/useSortableData';
 import { 
   ClipboardList, 
   CheckCircle2, 
@@ -374,6 +375,14 @@ export default function QuotationMaps({
   const [supplierSearchQuery, setSupplierSearchQuery] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('');
   const [materialSearchQuery, setMaterialSearchQuery] = useState('');
+
+  // Lista de materiais do histórico, filtrada pela busca e ordenável por cabeçalho.
+  const filteredUnifiedMaterials = unifiedMaterials.filter(
+    m => m.name.toLowerCase().includes(materialSearchQuery.toLowerCase())
+  );
+  const { sorted: sortedUnifiedMaterials, getSortProps: matHistSortProps } = useSortableData(
+    filteredUnifiedMaterials, { key: 'lastUpdated', direction: 'desc', type: 'date' }
+  );
 
   // Load Unified Databases from Firestore or seed defaults
   useEffect(() => {
@@ -3974,18 +3983,17 @@ export default function QuotationMaps({
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-stone-50 font-mono text-[9px] uppercase tracking-wider text-stone-500 border-b border-stone-200">
-                  <th className="p-3">Material</th>
-                  <th className="p-3 text-center">Unidade</th>
-                  <th className="p-3 text-right">Preço Médio Pago</th>
-                  <th className="p-3 text-center">Qtd. Total Paga</th>
-                  <th className="p-3 text-right">Total Acumulado</th>
-                  <th className="p-3">Última Atualização</th>
+                  <SortableHeader label="Material" sortKeyName="name" type="text" className="p-3 text-left" {...matHistSortProps()} />
+                  <SortableHeader label="Unidade" sortKeyName="unit" type="text" align="center" className="p-3 text-center" {...matHistSortProps()} />
+                  <SortableHeader label="Preço Médio Pago" sortKeyName="averageValue" type="number" align="right" className="p-3 text-right" {...matHistSortProps()} />
+                  <SortableHeader label="Qtd. Total Paga" sortKeyName="totalQuantityPaid" type="number" align="center" className="p-3 text-center" {...matHistSortProps()} />
+                  <SortableHeader label="Total Acumulado" sortKeyName="totalSpent" type="number" align="right" className="p-3 text-right" {...matHistSortProps()} />
+                  <SortableHeader label="Última Atualização" sortKeyName="lastUpdated" type="date" className="p-3 text-left" {...matHistSortProps()} />
                   <th className="p-3">Histórico de Obras / Fornecedores</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100 font-sans">
-                {unifiedMaterials
-                  .filter(m => m.name.toLowerCase().includes(materialSearchQuery.toLowerCase()))
+                {sortedUnifiedMaterials
                   .map((mat) => (
                     <tr key={mat.id} className="hover:bg-stone-50/50 align-top">
                       <td className="p-3 font-medium text-stone-900">

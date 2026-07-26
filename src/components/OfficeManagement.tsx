@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { initAuth, googleSignIn, getAccessToken } from '../lib/firebaseAuth';
+import { useSortableData, SortableHeader } from '../lib/useSortableData';
 import { subscribeCollection, saveDoc, removeDoc } from '../lib/firebaseDb';
 import { uploadBase64ToFirebase } from '../lib/firebaseStorage';
 import { getTelegramConfig, buildTelegramFileName } from '../lib/telegramService';
@@ -585,6 +586,11 @@ export function OfficeManagement({ clients, onAddClient, currentUserId = '' }: O
       return matchesSearch && matchesType && matchesStatus && matchesCategory;
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [officeTransactions, txSearch, txTypeFilter, txStatusFilter, txCategoryFilter]);
+
+  // Ordenação por clique no cabeçalho (padrão inicial: data, mais recente primeiro).
+  const { sorted: sortedTransactions, getSortProps: txSortProps } = useSortableData(
+    filteredTransactions, { key: 'date', direction: 'desc', type: 'date' }
+  );
 
   const filteredLeads = useMemo(() => {
     return officeLeads.filter(lead => {
@@ -1178,16 +1184,16 @@ export function OfficeManagement({ clients, onAddClient, currentUserId = '' }: O
                 <table className="w-full text-left text-xs">
                   <thead>
                     <tr className="bg-stone-50 text-stone-500 font-mono text-[9px] uppercase border-b border-stone-200">
-                      <th className="p-4 font-bold">Data</th>
-                      <th className="p-4 font-bold">Descrição</th>
-                      <th className="p-4 font-bold">Categoria</th>
-                      <th className="p-4 font-bold">Status</th>
-                      <th className="p-4 font-bold text-right">Valor</th>
+                      <SortableHeader label="Data" sortKeyName="date" type="date" className="p-4 font-bold text-left" {...txSortProps()} />
+                      <SortableHeader label="Descrição" sortKeyName="description" type="text" className="p-4 font-bold text-left" {...txSortProps()} />
+                      <SortableHeader label="Categoria" sortKeyName="category" type="text" className="p-4 font-bold text-left" {...txSortProps()} />
+                      <SortableHeader label="Status" sortKeyName="status" type="text" className="p-4 font-bold text-left" {...txSortProps()} />
+                      <SortableHeader label="Valor" sortKeyName="value" type="number" align="right" className="p-4 font-bold text-right" {...txSortProps()} />
                       <th className="p-4 font-bold text-center">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-100">
-                    {filteredTransactions.map((tx) => {
+                    {sortedTransactions.map((tx) => {
                       const isEntry = tx.type === 'entrada';
                       const categoryInfo = isEntry 
                         ? ENTRY_CATEGORIES[tx.category as keyof typeof ENTRY_CATEGORIES]

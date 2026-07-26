@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useSortableData, SortableHeader } from '../lib/useSortableData';
 import { 
   Megaphone, 
   Calendar as CalendarIcon, 
@@ -551,6 +552,11 @@ export function MarketingManagement() {
     });
   }, [outbounds, searchQuery]);
 
+  // Ordenação por clique no cabeçalho da tabela de ações outbound.
+  const { sorted: sortedOutbounds, getSortProps: outSortProps } = useSortableData(
+    filteredOutbounds, { key: 'plannedDate', direction: 'desc', type: 'date' }
+  );
+
   const filteredPostsList = useMemo(() => {
     return posts.filter(item => {
       const query = searchQuery.toLowerCase();
@@ -1099,25 +1105,25 @@ export function MarketingManagement() {
                 <table className="w-full text-left text-xs border-collapse min-w-[900px]">
                   <thead>
                     <tr className="bg-stone-50 border-b border-stone-200 font-mono text-[9px] uppercase tracking-wider text-stone-500">
-                      <th className="py-2.5 px-4 border-r border-stone-200 w-[200px]">Nome da Ação Outbound</th>
-                      <th className="py-2.5 px-3 border-r border-stone-200 w-[140px]">Tipo de Ação</th>
-                      <th className="py-2.5 px-3 border-r border-stone-200 w-[150px]">Contato / Destinatário</th>
-                      <th className="py-2.5 px-3 border-r border-stone-200 w-[120px]">Data Planejada</th>
-                      <th className="py-2.5 px-3 border-r border-stone-200 w-[110px]">Custo (R$)</th>
-                      <th className="py-2.5 px-3 border-r border-stone-200 w-[120px]">Status</th>
+                      <SortableHeader label="Nome da Ação Outbound" sortKeyName="name" type="text" className="py-2.5 px-4 border-r border-stone-200 w-[200px] text-left" {...outSortProps()} />
+                      <SortableHeader label="Tipo de Ação" sortKeyName="type" type="text" className="py-2.5 px-3 border-r border-stone-200 w-[140px] text-left" {...outSortProps()} />
+                      <SortableHeader label="Contato / Destinatário" sortKeyName="contact" type="text" className="py-2.5 px-3 border-r border-stone-200 w-[150px] text-left" {...outSortProps()} />
+                      <SortableHeader label="Data Planejada" sortKeyName="plannedDate" type="date" align="center" className="py-2.5 px-3 border-r border-stone-200 w-[120px] text-center" {...outSortProps()} />
+                      <SortableHeader label="Custo (R$)" sortKeyName="cost" type="number" align="right" className="py-2.5 px-3 border-r border-stone-200 w-[110px] text-right" {...outSortProps()} />
+                      <SortableHeader label="Status" sortKeyName="status" type="text" className="py-2.5 px-3 border-r border-stone-200 w-[120px] text-left" {...outSortProps()} />
                       <th className="py-2.5 px-3 border-r border-stone-200">Notas de Prospecção</th>
                       <th className="py-2.5 px-3 text-center w-[100px]">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-100">
-                    {filteredOutbounds.length === 0 ? (
+                    {sortedOutbounds.length === 0 ? (
                       <tr>
                         <td colSpan={8} className="py-12 text-center text-stone-400 font-mono">
                           Nenhuma ação outbound de captação localizada. Clique em "Adicionar Linha" para iniciar.
                         </td>
                       </tr>
                     ) : (
-                      filteredOutbounds.map((item) => {
+                      sortedOutbounds.map((item) => {
                         const isEditing = editingRowId === item.id;
 
                         return (

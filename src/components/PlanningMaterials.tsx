@@ -28,6 +28,7 @@ import Markdown from 'react-markdown';
 import { MaterialItem, Project } from '../types';
 import { getAccessToken } from '../lib/firebaseAuth';
 import { generateMaterialsPdf, validateMaterialsData } from '../lib/pdfReports';
+import { useSortableData, SortableHeader } from '../lib/useSortableData';
 
 interface PlanningMaterialsProps {
   materialsList: MaterialItem[];
@@ -583,6 +584,11 @@ export const PlanningMaterials: React.FC<PlanningMaterialsProps> = ({
                           (m.notes && m.notes.toLowerCase().includes(searchTerm.toLowerCase()));
     return matchesSearch;
   });
+
+  // Ordenação por clique no cabeçalho da lista de materiais.
+  const { sorted: sortedMaterials, getSortProps: matSortProps } = useSortableData(
+    filteredMaterials, { key: 'orderDate', direction: 'desc', type: 'date' }
+  );
 
   // helper function to parse old quantity formats (e.g. "50 sacos" -> { value: 50, unit: "sacos" })
   const parseQuantityStr = (qtyStr: string) => {
@@ -1384,18 +1390,18 @@ export const PlanningMaterials: React.FC<PlanningMaterialsProps> = ({
                 <thead>
                   <tr className="bg-stone-100 text-[8px] font-mono uppercase tracking-wider text-stone-500 border-b border-stone-200 text-left">
                     <th className="p-3 font-bold w-16 text-center">Nº</th>
-                    <th className="p-3 font-bold w-60">Material / Insumo</th>
-                    <th className="p-3 font-bold w-32 text-center">Quantidade</th>
-                    <th className="p-3 font-bold w-40">Fornecedor</th>
-                    <th className="p-3 font-bold w-32 text-right">Valor Unitário</th>
-                    <th className="p-3 font-bold w-32 text-right">Valor Total</th>
-                    <th className="p-3 font-bold w-28 text-center">Data do Pedido</th>
-                    <th className="p-3 font-bold w-28 text-center">Data de Entrega</th>
+                    <SortableHeader label="Material / Insumo" sortKeyName="name" type="text" className="p-3 font-bold w-60 text-left" {...matSortProps()} />
+                    <SortableHeader label="Quantidade" sortKeyName="quantity" type="number" align="center" className="p-3 font-bold w-32 text-center" {...matSortProps()} />
+                    <SortableHeader label="Fornecedor" sortKeyName="supplier" type="text" className="p-3 font-bold w-40 text-left" {...matSortProps()} />
+                    <SortableHeader label="Valor Unitário" sortKeyName="unitValue" type="number" align="right" className="p-3 font-bold w-32 text-right" {...matSortProps()} />
+                    <SortableHeader label="Valor Total" sortKeyName="estimatedValue" type="number" align="right" className="p-3 font-bold w-32 text-right" {...matSortProps()} />
+                    <SortableHeader label="Data do Pedido" sortKeyName="orderDate" type="date" align="center" className="p-3 font-bold w-28 text-center" {...matSortProps()} />
+                    <SortableHeader label="Data de Entrega" sortKeyName="deliveryDate" type="date" align="center" className="p-3 font-bold w-28 text-center" {...matSortProps()} />
                     <th className="p-3 font-bold w-20 text-center">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-150 bg-white">
-                  {filteredMaterials.map((item, index) => {
+                  {sortedMaterials.map((item, index) => {
                     const parsedQty = parseQuantityStr(item.quantity);
                     const qtyVal = parsedQty.value;
                     const qtyUnit = item.unit || parsedQty.unit;

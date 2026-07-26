@@ -22,6 +22,7 @@ import { Project } from '../types';
 import { subscribeCollection, saveDoc, removeDoc } from '../lib/firebaseDb';
 import { getAccessToken } from '../lib/firebaseAuth';
 import { generateLaborPaymentsPdf, validateLaborData } from '../lib/pdfReports';
+import { useSortableData, SortableHeader } from '../lib/useSortableData';
 
 export interface LaborContract {
   id: string;
@@ -153,6 +154,11 @@ export const PlanningLaborPayments: React.FC<PlanningLaborPaymentsProps> = ({
   // Filtering variables
   const activeContracts = contracts.filter(c => resolveProjectId(c.projectId) === laborProjectId);
   const activePayments = payments.filter(p => resolveProjectId(p.projectId) === laborProjectId);
+
+  // Ordenação por clique no cabeçalho da lista de pagamentos.
+  const { sorted: sortedPayments, getSortProps: paySortProps } = useSortableData(
+    activePayments, { key: 'paymentDate', direction: 'desc', type: 'date' }
+  );
 
   // Forms state
   const [isContractFormOpen, setIsContractFormOpen] = useState(false);
@@ -896,16 +902,16 @@ export const PlanningLaborPayments: React.FC<PlanningLaborPaymentsProps> = ({
                   <thead>
                     <tr className="bg-stone-50 font-mono text-[9px] uppercase tracking-wider text-stone-500 border-b border-stone-200">
                       <th className="p-3 w-12 text-center">#</th>
-                      <th className="p-3">Fornecedor / Prestador</th>
-                      <th className="p-3">Descrição / Parcela</th>
-                      <th className="p-3 w-32 text-center">Data Prevista</th>
-                      <th className="p-3 w-40 text-right">Valor da Parcela</th>
+                      <SortableHeader label="Fornecedor / Prestador" sortKeyName="supplier" type="text" className="p-3 text-left" {...paySortProps()} />
+                      <SortableHeader label="Descrição / Parcela" sortKeyName="description" type="text" className="p-3 text-left" {...paySortProps()} />
+                      <SortableHeader label="Data Prevista" sortKeyName="paymentDate" type="date" align="center" className="p-3 w-32 text-center" {...paySortProps()} />
+                      <SortableHeader label="Valor da Parcela" sortKeyName="value" type="number" align="right" className="p-3 w-40 text-right" {...paySortProps()} />
                       <th className="p-3 w-44 text-right">% do Contrato</th>
                       <th className="p-3 w-20 text-center">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-150 font-sans">
-                    {activePayments.map((p, idx) => {
+                    {sortedPayments.map((p, idx) => {
                       const associatedContract = getContractForPayment(p);
                       const contractVal = associatedContract?.contractValue || 0;
                       const paymentPercent = contractVal > 0 ? (p.value / contractVal) * 100 : 0;

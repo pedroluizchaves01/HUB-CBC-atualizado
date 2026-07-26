@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useSortableData, SortableHeader } from '../lib/useSortableData';
 import { 
   TrendingUp, 
   Plus, 
@@ -427,6 +428,11 @@ export default function AcompanhamentoFinanceiro({
   const projectTransactions = transactions
     .filter(t => t.projectId === projectId)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  // Ordenação por clique no cabeçalho.
+  const { sorted: sortedProjectTransactions, getSortProps: finSortProps } = useSortableData(
+    projectTransactions, { key: 'date', direction: 'desc', type: 'date' }
+  );
 
   const totalSpent = projectTransactions.reduce((acc, t) => acc + t.value, 0);
 
@@ -1549,24 +1555,24 @@ export default function AcompanhamentoFinanceiro({
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-stone-50 font-mono text-[9px] uppercase tracking-wider text-stone-500 border-b border-stone-200">
-                <th className="p-3 w-28">Data</th>
-                <th className="p-3">Fornecedor / Prestador</th>
-                <th className="p-3">Descrição</th>
-                <th className="p-3 w-32">Categoria</th>
-                <th className="p-3 text-right w-32">Valor</th>
+                <SortableHeader label="Data" sortKeyName="date" type="date" className="p-3 w-28 text-left" {...finSortProps()} />
+                <SortableHeader label="Fornecedor / Prestador" sortKeyName="supplier" type="text" className="p-3 text-left" {...finSortProps()} />
+                <SortableHeader label="Descrição" sortKeyName="description" type="text" className="p-3 text-left" {...finSortProps()} />
+                <SortableHeader label="Categoria" sortKeyName="category" type="text" className="p-3 w-32 text-left" {...finSortProps()} />
+                <SortableHeader label="Valor" sortKeyName="value" type="number" align="right" className="p-3 text-right w-32" {...finSortProps()} />
                 <th className="p-3 text-center w-24">Comprovante</th>
                 <th className="p-3 text-center w-12">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-150 font-sans">
-              {projectTransactions.length === 0 ? (
+              {sortedProjectTransactions.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="p-6 text-center text-stone-400 text-xs">
                     Nenhum pagamento ou gasto registrado para esta obra.
                   </td>
                 </tr>
               ) : (
-                projectTransactions.map((tx) => (
+                sortedProjectTransactions.map((tx) => (
                   <tr key={tx.id} className="hover:bg-stone-50/50 align-middle">
                     <td className="p-3 font-mono text-[11px] text-stone-500">
                       {tx.date}
