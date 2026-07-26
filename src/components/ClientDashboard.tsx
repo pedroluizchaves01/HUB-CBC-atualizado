@@ -24,6 +24,7 @@ import { motion } from 'motion/react';
 import AcompanhamentoFisico from './AcompanhamentoFisico';
 import QuotationMaps from './QuotationMaps';
 import { subscribeCollection } from '../lib/firebaseDb';
+import { generateClientContractPdf } from '../lib/pdfReports';
 
 
 interface ClientDashboardProps {
@@ -598,7 +599,14 @@ export default function ClientDashboard({ client, projects, transactions, docume
                         <div className="pt-2 flex justify-end gap-1.5 font-sans">
                           <button
                             type="button"
-                            onClick={() => alert('Download do contrato em PDF simulado com sucesso.')}
+                            onClick={() => generateClientContractPdf({
+                              projectName: selectedProject.name,
+                              budgetLabel: formatCurrency(selectedProject.budget),
+                              object: contractForm.object,
+                              paymentTerms: contractForm.paymentTerms,
+                              penalties: contractForm.penalties,
+                              signed: contractForm.isSigned,
+                            })}
                             className="bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-700 px-2 py-1 text-[8px] font-mono uppercase flex items-center gap-1 cursor-pointer"
                           >
                             Download

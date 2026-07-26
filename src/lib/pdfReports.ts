@@ -189,10 +189,6 @@ export function generateSchedulePdf(data: ScheduleReportData): void {
   const m = 12;
 
   const totalPrev = data.phases.reduce((s, p) => s + (p.costPrev || 0), 0);
-  const totalReal = data.phases.reduce((s, p) => s + (p.costReal || 0), 0);
-  const avgProgress = data.phases.length
-    ? data.phases.reduce((s, p) => s + (p.progress || 0), 0) / data.phases.length
-    : 0;
 
   let firstPage = true;
 
@@ -202,14 +198,16 @@ export function generateSchedulePdf(data: ScheduleReportData): void {
     drawHeader(doc, title, subtitle, data.projectName);
   };
 
-  // Resumo executivo (cards) — sempre no topo do documento.
+  // Resumo executivo (cards) — baseline: só valores previstos.
   const drawSummary = (y: number): number => {
+    const start0 = data.phases.map(p => p.startDate).filter(Boolean).sort()[0];
+    const end0 = data.phases.map(p => p.endDate).filter(Boolean).sort().slice(-1)[0];
     const cardW = (w - 2 * m - 3 * 4) / 4;
     const cards: [string, string, [number, number, number]][] = [
       ["Etapas", String(data.phases.length), BRAND.ink],
       ["Custo Previsto Total", fmtMoney(totalPrev), BRAND.ink],
-      ["Custo Realizado Total", fmtMoney(totalReal), BRAND.good],
-      ["Progresso Médio", `${avgProgress.toFixed(1)}%`, BRAND.good],
+      ["Início Planejado", start0 ? fmtDateBR(start0) : "—", BRAND.ink],
+      ["Término Planejado", end0 ? fmtDateBR(end0) : "—", BRAND.ink],
     ];
     cards.forEach(([label, value, color], i) => {
       const x = m + i * (cardW + 4);
@@ -237,7 +235,7 @@ export function generateSchedulePdf(data: ScheduleReportData): void {
     // Colunas fixas + uma coluna por mês. autoTable quebra em várias páginas
     // horizontalmente quando não cabe, sem cortar nada.
     const monthCols = data.periods.map((p) => p.label);
-    const head = [["Etapa / Serviço", "Início", "Término", "Progr.", "Custo Prev.", ...monthCols]];
+    const head = [["Etapa / Serviço", "Início", "Término", "Custo Prev.", ...monthCols]];
 
     const body = data.phases.map((phase) => {
       const monthCells = data.periods.map((per) => {
@@ -250,7 +248,6 @@ export function generateSchedulePdf(data: ScheduleReportData): void {
         phase.name || "—",
         fmtDateBR(phase.startDate),
         fmtDateBR(phase.endDate),
-        `${(phase.progress || 0).toFixed(0)}%`,
         fmtMoney(phase.costPrev).replace("R$ ", ""),
         ...monthCells,
       ];
@@ -258,7 +255,7 @@ export function generateSchedulePdf(data: ScheduleReportData): void {
 
     // Linha de totais mensais
     const totalRow = [
-      "TOTAL PREVISTO / MÊS", "", "", "",
+      "TOTAL PREVISTO / MÊS", "", "",
       fmtMoney(totalPrev).replace("R$ ", ""),
       ...data.periods.map((per) => {
         const mt = data.monthlyTotals.find((t) => t.key === per.key);
@@ -276,11 +273,10 @@ export function generateSchedulePdf(data: ScheduleReportData): void {
       headStyles: { fillColor: BRAND.headBg, textColor: BRAND.headText, fontSize: 6.5, fontStyle: "bold", halign: "center" },
       alternateRowStyles: { fillColor: BRAND.zebra },
       columnStyles: {
-        0: { cellWidth: 42, halign: "left", fontStyle: "bold" },
-        1: { cellWidth: 18, halign: "center" },
-        2: { cellWidth: 18, halign: "center" },
-        3: { cellWidth: 12, halign: "center" },
-        4: { cellWidth: 20, halign: "right" },
+        0: { cellWidth: 46, halign: "left", fontStyle: "bold" },
+        1: { cellWidth: 20, halign: "center" },
+        2: { cellWidth: 20, halign: "center" },
+        3: { cellWidth: 22, halign: "right" },
       },
       didParseCell: (hook) => {
         // Destaca a linha de total (última do corpo).
@@ -292,7 +288,7 @@ export function generateSchedulePdf(data: ScheduleReportData): void {
       },
       // Colunas mensais alinhadas à direita e estreitas.
       willDrawCell: (hook) => {
-        if (hook.section !== "head" && hook.column.index >= 5) {
+        if (hook.section !== "head" && hook.column.index >= 4) {
           hook.cell.styles.halign = "right";
         }
       },
@@ -318,8 +314,7 @@ export function generateSchedulePdf(data: ScheduleReportData): void {
     y = sectionTitle(doc, "Cronograma Sintético — Resumo por Etapa", y) + 2;
 
     const head = [[
-      "Etapa / Serviço", "Início", "Término", "Duração",
-      "Custo Previsto", "Custo Realizado", "Progresso Físico",
+      "Etapa / Serviço", "Início", "Término", "Duração", "Custo Previsto",
     ]];
 
     const body = data.phases.map((phase) => {
@@ -334,14 +329,12 @@ export function generateSchedulePdf(data: ScheduleReportData): void {
         fmtDateBR(phase.endDate),
         days ? `${days} d` : "—",
         fmtMoney(phase.costPrev),
-        fmtMoney(phase.costReal),
-        `${(phase.progress || 0).toFixed(0)}%`,
       ];
     });
 
     body.push([
       "TOTAL GERAL", "", "", "",
-      fmtMoney(totalPrev), fmtMoney(totalReal), `${avgProgress.toFixed(0)}%`,
+      fmtMoney(totalPrev),
     ]);
 
     autoTable(doc, {
@@ -355,7 +348,7 @@ export function generateSchedulePdf(data: ScheduleReportData): void {
       columnStyles: {
         0: { cellWidth: "auto", halign: "left", fontStyle: "bold" },
         1: { halign: "center" }, 2: { halign: "center" }, 3: { halign: "center" },
-        4: { halign: "right" }, 5: { halign: "right" }, 6: { halign: "center" },
+        4: { halign: "right" },
       },
       didParseCell: (hook) => {
         if (hook.section === "body" && hook.row.index === body.length - 1) {
@@ -366,18 +359,23 @@ export function generateSchedulePdf(data: ScheduleReportData): void {
       },
     });
 
-    // Curva S — evolução acumulada por mês
+    // Curva S — evolução PREVISTA acumulada por mês (baseline, sem realizado)
     let curveY = ((doc as any).lastAutoTable?.finalY || y) + 6;
     if (curveY > doc.internal.pageSize.getHeight() - 40) { doc.addPage(); drawHeader(doc, "Cronograma Físico-Financeiro", "Sintético", data.projectName); curveY = 32; }
-    curveY = sectionTitle(doc, "Evolução Financeira Mensal (Curva S)", curveY) + 2;
+    curveY = sectionTitle(doc, "Evolução Financeira Prevista (Curva S Planejada)", curveY) + 2;
 
-    const curveHead = [["Mês", "Previsto no Mês", "Realizado no Mês", "% Físico Médio"]];
+    // Acumulado previsto para a curva S.
+    let cumulative = 0;
+    const curveHead = [["Mês", "Previsto no Mês", "Previsto Acumulado", "% Físico Médio"]];
     const curveBody = data.periods.map((per) => {
       const mt = data.monthlyTotals.find((t) => t.key === per.key);
+      const planned = mt?.planned || 0;
+      cumulative += planned;
+      const pct = totalPrev > 0 ? (cumulative / totalPrev) * 100 : 0;
       return [
         per.label,
-        mt && mt.planned > 0 ? fmtMoney(mt.planned) : "—",
-        mt && mt.realized > 0 ? fmtMoney(mt.realized) : "—",
+        planned > 0 ? fmtMoney(planned) : "—",
+        planned > 0 || cumulative > 0 ? `${fmtMoney(cumulative)}  (${pct.toFixed(0)}%)` : "—",
         mt ? `${mt.avgProgress}%` : "—",
       ];
     });
@@ -401,6 +399,194 @@ export function generateSchedulePdf(data: ScheduleReportData): void {
 
   const safeName = (data.projectName || "obra").replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-").toLowerCase();
   doc.save(`cronograma-${data.printType}-${safeName}.pdf`);
+}
+
+// ===========================================================================
+// RELATÓRIO 4: RESUMO DE CONTRATO (painel do cliente)
+// ===========================================================================
+
+export interface ClientContractData {
+  projectName: string;
+  clientName?: string;
+  budgetLabel: string;
+  object: string;
+  paymentTerms: string;
+  penalties: string;
+  signed?: boolean;
+}
+
+export function generateClientContractPdf(data: ClientContractData): void {
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const w = doc.internal.pageSize.getWidth();
+  const m = 18;
+  const contentW = w - 2 * m;
+
+  drawHeader(doc, "Contrato de Prestação de Serviços", "Via do Cliente", data.projectName);
+
+  let y = 34;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(...BRAND.ink);
+  doc.text("INSTRUMENTO PARTICULAR DE CONTRATO", w / 2, y, { align: "center" });
+  y += 8;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(...BRAND.ink);
+
+  const para = (label: string, text: string, yPos: number): number => {
+    doc.setFont("helvetica", "bold");
+    const lblW = doc.getTextWidth(label + " ");
+    doc.text(label, m, yPos);
+    doc.setFont("helvetica", "normal");
+    const lines = doc.splitTextToSize(text, contentW - lblW);
+    doc.text(lines, m + lblW, yPos);
+    // Linhas seguintes já indentadas; recuo total = altura do bloco.
+    const extra = doc.splitTextToSize(text, contentW).length;
+    return yPos + Math.max(lines.length, 1) * 5 + 3;
+  };
+
+  y = para("CONTRATANTE:", `Proprietário associado à obra ${data.projectName}.`, y);
+  y = para("CONTRATADA:", "Chaves Brites Correa Arquitetura e Engenharia.", y);
+  if (data.clientName) y = para("CLIENTE:", data.clientName, y);
+  y += 2;
+
+  y = para("CLÁUSULA 1ª (OBJETO):", data.object, y);
+  y = para("CLÁUSULA 2ª (ORÇAMENTO):", `Valor global estimado de ${data.budgetLabel}. ${data.paymentTerms}`, y);
+  y = para("CLÁUSULA 3ª (PENALIDADES):", data.penalties, y);
+
+  y += 6;
+  if (data.signed) {
+    doc.setDrawColor(4, 120, 87);
+    doc.setFillColor(236, 253, 245);
+    doc.rect(m, y, contentW, 14, "FD");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(4, 120, 87);
+    doc.text("✓ ASSINADO DIGITALMENTE", w / 2, y + 6, { align: "center" });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(...BRAND.soft);
+    doc.text("Documento autenticado eletronicamente pelo sistema HUB CBC.", w / 2, y + 10.5, { align: "center" });
+  }
+
+  drawFooterAll(doc);
+  const safeName = (data.projectName || "obra").replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-").toLowerCase();
+  doc.save(`contrato-${safeName}.pdf`);
+}
+
+// ===========================================================================
+// RELATÓRIO 3: LISTA DE MATERIAIS
+// ===========================================================================
+
+export interface MaterialItemInput {
+  name: string;
+  quantity: string;
+  unit?: string;
+  unitValue?: number;
+  supplier: string;
+  estimatedValue: number;
+  orderDate: string;
+  deliveryDate?: string;
+  status?: string;
+}
+export interface MaterialsReportData {
+  projectName: string;
+  materials: MaterialItemInput[];
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  cotacao: "Cotação", pedido: "Pedido", entregue: "Entregue", atrasado: "Atrasado",
+};
+
+export function validateMaterialsData(data: MaterialsReportData): ValidationReport {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  if (!data.materials || data.materials.length === 0) {
+    errors.push("Nenhum material cadastrado para este projeto.");
+  }
+  (data.materials || []).forEach((mm, i) => {
+    const label = mm.name?.trim() || `Item ${i + 1}`;
+    if (!mm.name?.trim()) warnings.push(`Item ${i + 1} está sem descrição.`);
+    if (!mm.supplier?.trim()) warnings.push(`"${label}" está sem fornecedor.`);
+    if (!(mm.estimatedValue > 0)) warnings.push(`"${label}" está com valor total zerado.`);
+  });
+  return { ok: errors.length === 0, errors, warnings };
+}
+
+export function generateMaterialsPdf(data: MaterialsReportData): void {
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const w = doc.internal.pageSize.getWidth();
+  const m = 12;
+
+  const totalValue = data.materials.reduce((s, it) => s + (it.estimatedValue || 0), 0);
+  const suppliers = new Set(data.materials.map((it) => (it.supplier || "").trim()).filter(Boolean));
+
+  drawHeader(doc, "Lista de Materiais", "Planejamento de Suprimentos", data.projectName);
+
+  let y = 32;
+  const cardW = (w - 2 * m - 2 * 4) / 3;
+  const cards: [string, string][] = [
+    ["Itens", String(data.materials.length)],
+    ["Valor Total Estimado", fmtMoney(totalValue)],
+    ["Fornecedores", String(suppliers.size)],
+  ];
+  cards.forEach(([label, value], i) => {
+    const x = m + i * (cardW + 4);
+    doc.setFillColor(...BRAND.zebra);
+    doc.setDrawColor(...BRAND.line);
+    doc.setLineWidth(0.2);
+    doc.rect(x, y, cardW, 13, "FD");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.5);
+    doc.setTextColor(...BRAND.soft);
+    doc.text(label.toUpperCase(), x + 2, y + 4.5);
+    doc.setFontSize(11);
+    doc.setTextColor(...BRAND.ink);
+    doc.text(value, x + 2, y + 10.5);
+  });
+  y += 13 + 5;
+  y = sectionTitle(doc, "Relação de Materiais e Serviços", y) + 2;
+
+  const body: any[] = data.materials.map((it, i) => [
+    String(i + 1),
+    it.name || "—",
+    `${it.quantity || ""}${it.unit ? " " + it.unit : ""}`.trim() || "—",
+    it.supplier || "—",
+    it.unitValue ? fmtMoney(it.unitValue) : "—",
+    fmtMoney(it.estimatedValue),
+    it.deliveryDate ? fmtDateBR(it.deliveryDate) : "—",
+    it.status ? (STATUS_LABEL[it.status] || it.status) : "—",
+  ]);
+  body.push([
+    { content: "TOTAL GERAL", colSpan: 5, styles: { halign: "right", fillColor: BRAND.headBg, textColor: BRAND.headText, fontStyle: "bold" } },
+    { content: fmtMoney(totalValue), styles: { halign: "right", fillColor: BRAND.headBg, textColor: BRAND.headText, fontStyle: "bold" } },
+    { content: "", colSpan: 2, styles: { fillColor: BRAND.headBg } },
+  ]);
+
+  autoTable(doc, {
+    head: [["Nº", "Material / Serviço", "Quant.", "Fornecedor", "Valor Unit.", "Valor Total", "Entrega", "Status"]],
+    body,
+    startY: y,
+    margin: { left: m, right: m },
+    styles: { fontSize: 7.5, cellPadding: 1.6, overflow: "linebreak", lineColor: BRAND.line, lineWidth: 0.1, textColor: BRAND.ink },
+    headStyles: { fillColor: BRAND.headBg, textColor: BRAND.headText, fontStyle: "bold", halign: "center", fontSize: 7 },
+    alternateRowStyles: { fillColor: BRAND.zebra },
+    columnStyles: {
+      0: { cellWidth: 8, halign: "center" },
+      1: { cellWidth: "auto", fontStyle: "bold" },
+      2: { cellWidth: 20, halign: "center" },
+      3: { cellWidth: 30 },
+      4: { cellWidth: 22, halign: "right" },
+      5: { cellWidth: 24, halign: "right" },
+      6: { cellWidth: 20, halign: "center" },
+      7: { cellWidth: 18, halign: "center" },
+    },
+  });
+
+  drawFooterAll(doc);
+  const safeName = (data.projectName || "obra").replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-").toLowerCase();
+  doc.save(`materiais-${safeName}.pdf`);
 }
 
 // ===========================================================================
