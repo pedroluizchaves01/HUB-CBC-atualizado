@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Calendar, 
   Sliders, 
@@ -12,6 +12,7 @@ import {
   PiggyBank, 
   ChevronDown, 
   ChevronUp, 
+  GripVertical,
   Check, 
   Printer, 
   Download,
@@ -107,6 +108,65 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
   const [phaseDeleteConfirm, setPhaseDeleteConfirm] = useState<{ isOpen: boolean; phaseId: string; phaseName: string } | null>(null);
 
   const activeProjectPhases = timelinePhases.filter(ph => ph.projectId === cronogramaProjectId);
+
+  // Ordena as fases pela ordem manual (campo 'order'); para dados legados sem 'order',
+  // usa a data de início como critério — o que já corrige etapas fora de sequência
+  // (ex.: Canteiro aparecendo depois de Vedação).
+  const orderedPhases = useMemo(() => {
+    const withOrder = [...activeProjectPhases];
+    withOrder.sort((a, b) => {
+      const ao = a.order, bo = b.order;
+      const aHas = typeof ao === 'number';
+      const bHas = typeof bo === 'number';
+      if (aHas && bHas) return ao - bo;
+      if (aHas) return -1;         // quem tem ordem manual vem antes
+      if (bHas) return 1;
+      // Ambos sem ordem: por data de início; empate, por término.
+      const ad = new Date((a.startDate || '') + 'T00:00:00').getTime() || 0;
+      const bd = new Date((b.startDate || '') + 'T00:00:00').getTime() || 0;
+      if (ad !== bd) return ad - bd;
+      const ae = new Date((a.endDate || '') + 'T00:00:00').getTime() || 0;
+      const be = new Date((b.endDate || '') + 'T00:00:00').getTime() || 0;
+      return ae - be;
+    });
+    return withOrder;
+  }, [activeProjectPhases]);
+
+  // Drag-and-drop de reordenação das etapas.
+  const [dragPhaseId, setDragPhaseId] = useState<string | null>(null);
+  const [dragOverPhaseId, setDragOverPhaseId] = useState<string | null>(null);
+
+  /** Reatribui 'order' sequencial (0,1,2…) a todas as fases do projeto e persiste. */
+  const persistPhaseOrder = (orderedIds: string[]) => {
+    const orderMap = new Map(orderedIds.map((id, i) => [id, i]));
+    setTimelinePhases(prev => prev.map(ph =>
+      orderMap.has(ph.id) ? { ...ph, order: orderMap.get(ph.id) } : ph
+    ));
+  };
+
+  /** Move a fase arrastada para a posição da fase-alvo e persiste a nova ordem. */
+  const handleDropOnPhase = (targetId: string) => {
+    if (!dragPhaseId || dragPhaseId === targetId) {
+      setDragPhaseId(null); setDragOverPhaseId(null); return;
+    }
+    const ids = orderedPhases.map(p => p.id);
+    const from = ids.indexOf(dragPhaseId);
+    const to = ids.indexOf(targetId);
+    if (from === -1 || to === -1) { setDragPhaseId(null); setDragOverPhaseId(null); return; }
+    ids.splice(to, 0, ids.splice(from, 1)[0]);
+    persistPhaseOrder(ids);
+    setDragPhaseId(null); setDragOverPhaseId(null);
+  };
+
+  /** Move uma fase uma posição para cima ou para baixo (alternativa acessível ao arrastar). */
+  const movePhase = (phaseId: string, direction: -1 | 1) => {
+    const ids = orderedPhases.map(p => p.id);
+    const idx = ids.indexOf(phaseId);
+    const swap = idx + direction;
+    if (idx === -1 || swap < 0 || swap >= ids.length) return;
+    [ids[idx], ids[swap]] = [ids[swap], ids[idx]];
+    persistPhaseOrder(ids);
+  };
   const activeProj = projects.find(p => p.id === cronogramaProjectId);
 
   // Helper date parsing and scheduling math
@@ -180,7 +240,7 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
   };
 
   // Todos os meses do projeto (usados para agregados financeiros e Curva S).
-  const periods = getProjectPeriods(activeProjectPhases);
+  const periods = getProjectPeriods(orderedPhases);
   // Subconjunto exibido nas tabelas (máx. 18 colunas por desempenho/layout).
   const displayPeriods = periods.slice(0, 18);
 
@@ -236,7 +296,7 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
     let weightedProgressSum = 0;
     let totalWeight = 0;
 
-    activeProjectPhases.forEach(phase => {
+    orderedPhases.forEach(phase => {
       const dist = getPhaseDistributionForMonth(phase, period.year, period.month);
       totalPlanned += dist.planned;
       totalRealized += dist.realized;
@@ -273,8 +333,7 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
   // Apenas os meses exibidos nas tabelas (mantém acumulados corretos até cada coluna).
   const monthlyTotalsWithCumulative = monthlyTotalsWithCumulativeAll.slice(0, 18);
 
-  const totalProjectPlanned = activeProjectPhases.reduce((sum, ph) => sum + ph.costPrev, 0);
-  const totalProjectRealized = activeProjectPhases.reduce((sum, ph) => sum + ph.costReal, 0);
+  const totalProjectPlanned = orderedPhases.reduce((sum, ph) => sum + ph.costPrev, 0);
 
   // Exportação do cronograma em PDF (jsPDF), com validação prévia.
   const [pdfValidation, setPdfValidation] = useState<{ errors: string[]; warnings: string[] } | null>(null);
@@ -282,7 +341,7 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
   const handleExportSchedulePdf = () => {
     const data = {
       projectName: activeProj?.name || 'Obra Geral',
-      phases: activeProjectPhases.map((ph: any) => ({
+      phases: orderedPhases.map((ph: any) => ({
         name: ph.name, startDate: ph.startDate, endDate: ph.endDate,
         costPrev: ph.costPrev || 0, costReal: ph.costReal || 0, progress: ph.progress || 0,
       })),
@@ -824,37 +883,11 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
             );
           })()}
 
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 border-t border-stone-200 pt-4">
-            <div className="md:col-span-4">
-              <label className="block text-[8px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Custo Realizado Acumulado (R$)</label>
-              <input
-                type="number"
-                placeholder="Ex: 24000"
-                className="w-full bg-[#FAF9F6] border border-stone-200 py-1.5 px-3 text-xs focus:outline-none focus:border-stone-400 font-mono"
-                value={phaseInput.costReal}
-                onChange={(e) => setPhaseInput({ ...phaseInput, costReal: e.target.value })}
-              />
-            </div>
-
-            <div className="md:col-span-4">
-              <label className="block text-[8px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Progresso Físico Realizado (%)</label>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                step="1"
-                className="w-full mt-2 cursor-pointer h-1.5 bg-stone-200 rounded-lg appearance-none accent-stone-850"
-                value={phaseInput.progress}
-                onChange={(e) => setPhaseInput({ ...phaseInput, progress: Number(e.target.value) })}
-              />
-              <div className="flex justify-between items-center text-[9px] font-mono text-stone-500 mt-1">
-                <span>0%</span>
-                <span className="text-stone-900 font-bold font-sans text-xs">{phaseInput.progress}% realizado</span>
-                <span>100%</span>
-              </div>
-            </div>
-
-            <div className="md:col-span-4 flex items-end">
+          <div className="grid grid-cols-1 gap-4 border-t border-stone-200 pt-4">
+            {/* Custo Realizado e Progresso Realizado foram removidos do planejamento:
+                planejamento é a linha de base (baseline). O realizado é registrado e
+                exibido exclusivamente no módulo de Acompanhamento. */}
+            <div className="flex items-end">
               <button
                 type="submit"
                 className="w-full bg-stone-950 hover:bg-stone-800 text-white font-mono uppercase tracking-wider text-[10px] py-2.5 px-4 font-bold transition-all shadow-md cursor-pointer"
@@ -1348,7 +1381,7 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
               {/* RENDER ANALYTICAL VIEW */}
               {planningViewMode === 'analytical' && (
                 <div className="space-y-4">
-                  {activeProjectPhases.length === 0 ? (
+                  {orderedPhases.length === 0 ? (
                     <div className="text-center py-12 border border-dashed border-stone-200 text-stone-400 text-xs font-serif italic">
                       Nenhuma etapa ou fase de planejamento cadastrada para esta obra. Use o formulário ou a IA para começar.
                     </div>
@@ -1359,7 +1392,6 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
                           <tr className="bg-stone-100 text-[8px] font-mono uppercase tracking-wider text-stone-500 border-b border-stone-200">
                             <th className="border-r border-stone-200 p-2.5 text-left w-64 min-w-[240px]">Etapa / Descrição do Serviço</th>
                             <th className="border-r border-stone-200 p-2.5 text-center w-28">Prazos Limites</th>
-                            <th className="border-r border-stone-200 p-2.5 text-center w-16">Progresso</th>
                             <th className="border-r border-stone-200 p-2.5 text-right w-24">Custo Previsto</th>
                             {displayPeriods.map(period => (
                               <th key={period.key} className="border-r border-stone-200 p-2 text-center min-w-[100px] bg-stone-50">
@@ -1370,14 +1402,54 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-stone-200 bg-white">
-                          {activeProjectPhases.map(phase => {
+                          {orderedPhases.map((phase, phaseIdx) => {
                             return (
-                              <tr key={phase.id} className="hover:bg-stone-50/50 align-middle">
+                              <tr
+                                key={phase.id}
+                                draggable
+                                onDragStart={() => setDragPhaseId(phase.id)}
+                                onDragOver={(e) => { e.preventDefault(); setDragOverPhaseId(phase.id); }}
+                                onDragLeave={() => setDragOverPhaseId(prev => prev === phase.id ? null : prev)}
+                                onDrop={() => handleDropOnPhase(phase.id)}
+                                onDragEnd={() => { setDragPhaseId(null); setDragOverPhaseId(null); }}
+                                className={`align-middle transition-colors ${
+                                  dragPhaseId === phase.id ? 'opacity-40' : ''
+                                } ${
+                                  dragOverPhaseId === phase.id && dragPhaseId !== phase.id
+                                    ? 'bg-[#C2703D]/10 border-t-2 border-[#C2703D]'
+                                    : 'hover:bg-stone-50/50'
+                                }`}
+                              >
                                 <td className="border-r border-stone-200 p-2.5 font-bold text-stone-900">
-                                  <div className="space-y-1">
-                                    <p className="leading-tight">{phase.name}</p>
-                                    <div className="w-full bg-stone-200 h-1.5 rounded-full overflow-hidden mt-1 max-w-[200px]">
-                                      <div className="bg-stone-800 h-1.5 transition-all duration-300" style={{ width: `${phase.progress}%` }} />
+                                  <div className="flex items-start gap-2">
+                                    {/* Alça de arrastar + setas para reordenar (acessível). */}
+                                    <div className="flex flex-col items-center gap-0.5 pt-0.5 flex-shrink-0">
+                                      <span className="cursor-grab active:cursor-grabbing text-stone-300 hover:text-stone-500" title="Arraste para reordenar">
+                                        <GripVertical size={14} />
+                                      </span>
+                                      <div className="flex flex-col">
+                                        <button
+                                          type="button"
+                                          onClick={() => movePhase(phase.id, -1)}
+                                          disabled={phaseIdx === 0}
+                                          title="Mover para cima"
+                                          className="text-stone-300 hover:text-stone-700 disabled:opacity-20 disabled:hover:text-stone-300 cursor-pointer leading-none"
+                                        >
+                                          <ChevronUp size={11} />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => movePhase(phase.id, 1)}
+                                          disabled={phaseIdx === orderedPhases.length - 1}
+                                          title="Mover para baixo"
+                                          className="text-stone-300 hover:text-stone-700 disabled:opacity-20 disabled:hover:text-stone-300 cursor-pointer leading-none"
+                                        >
+                                          <ChevronDown size={11} />
+                                        </button>
+                                      </div>
+                                    </div>
+                                    <div className="space-y-1 pt-0.5">
+                                      <p className="leading-tight">{phase.name}</p>
                                     </div>
                                   </div>
                                 </td>
@@ -1387,9 +1459,6 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
                                     <span className="block text-stone-300">até</span>
                                     <span className="block text-stone-800 font-bold">{phase.endDate}</span>
                                   </div>
-                                </td>
-                                <td className="border-r border-stone-200 p-2 text-center font-mono font-bold text-stone-800">
-                                  {phase.progress}%
                                 </td>
                                 <td className="border-r border-stone-200 p-2 text-right font-mono text-stone-700 font-medium">
                                   {formatCurrency(phase.costPrev)}
@@ -1450,7 +1519,7 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
               {/* RENDER SYNTHETIC VIEW */}
               {planningViewMode === 'synthetic' && (
                 <div className="space-y-4">
-                  {activeProjectPhases.length === 0 ? (
+                  {orderedPhases.length === 0 ? (
                     <div className="text-center py-12 border border-dashed border-stone-200 text-stone-400 text-xs font-serif italic">
                       Nenhuma etapa ou fase de planejamento cadastrada para esta obra. Use o formulário para começar.
                     </div>
@@ -1498,35 +1567,7 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
                           </tr>
 
                           <tr className="hover:bg-stone-50/20">
-                            <td className="p-3 font-mono font-bold text-stone-700">3. Realizado Mensal (Custos)</td>
-                            {monthlyTotalsWithCumulative.map(item => (
-                              <td key={item.key} className="p-3 text-center font-mono text-stone-850">
-                                {item.realized > 0 ? formatCurrency(item.realized) : <span className="text-stone-300">-</span>}
-                              </td>
-                            ))}
-                            <td className="p-3 text-right font-mono font-bold text-stone-900 bg-stone-100">
-                              {formatCurrency(totalProjectRealized)}
-                            </td>
-                          </tr>
-
-                          <tr className="hover:bg-stone-50/20 bg-stone-50/10">
-                            <td className="p-3 font-mono font-bold text-stone-700">4. Realizado Acumulado</td>
-                            {monthlyTotalsWithCumulative.map(item => {
-                              const pct = totalProjectPlanned > 0 ? (item.cumulativeRealized / totalProjectPlanned) * 100 : 0;
-                              return (
-                                <td key={item.key} className="p-3 text-center font-mono">
-                                  <span className="block text-stone-900 font-bold">{formatCurrency(item.cumulativeRealized)}</span>
-                                  <span className="block text-[8px] text-stone-400">({pct.toFixed(0)}%)</span>
-                                </td>
-                              );
-                            })}
-                            <td className="p-3 text-right font-mono font-bold text-stone-900 bg-stone-100">
-                              -
-                            </td>
-                          </tr>
-
-                          <tr className="hover:bg-stone-50/20">
-                            <td className="p-3 font-mono font-bold text-stone-700">5. Progresso Físico Médio</td>
+                            <td className="p-3 font-mono font-bold text-stone-700">3. Progresso Físico Médio</td>
                             {monthlyTotalsWithCumulative.map(item => (
                               <td key={item.key} className="p-3 text-center font-mono font-bold text-stone-900">
                                 {item.planned > 0 ? `${item.avgProgress}%` : <span className="text-stone-300">-</span>}
@@ -1559,12 +1600,8 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
 
                 {(() => {
                   if (!activeProj) return null;
-                  const txs = transactions.filter(t => t.projectId === cronogramaProjectId);
-                  const totalSpent = txs.reduce((acc, t) => acc + t.value, 0);
                   const budget = activeProj.budget;
                   const bufferVal = (budget * bufferSlider) / 100;
-                  const currentBalance = budget - totalSpent;
-                  const safetyAlert = currentBalance < bufferVal;
 
                   return (
                     <div className="space-y-4">
@@ -1594,33 +1631,33 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
                           <span className="text-stone-800 font-bold">{formatCurrency(budget)}</span>
                         </div>
                         <div className="flex justify-between text-[10px]">
-                          <span>REALIZADO GLOBAL:</span>
-                          <span className="text-stone-800 font-bold">{formatCurrency(totalSpent)}</span>
+                          <span>PREVISTO NO CRONOGRAMA:</span>
+                          <span className="text-stone-800 font-bold">{formatCurrency(totalProjectPlanned)}</span>
                         </div>
                         <div className="flex justify-between text-[10px] bg-amber-50 px-1 py-0.5">
                           <span>RESERVA (BUFFER):</span>
                           <span className="text-amber-800 font-bold">{formatCurrency(bufferVal)}</span>
                         </div>
                         <div className="flex justify-between text-[10px] border-t border-stone-200 pt-1">
-                          <span>SALDO ATUAL:</span>
-                          <span className={`font-bold ${currentBalance >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{formatCurrency(currentBalance)}</span>
+                          <span>DISPONÍVEL APÓS RESERVA:</span>
+                          <span className={`font-bold ${(budget - bufferVal - totalProjectPlanned) >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{formatCurrency(budget - bufferVal - totalProjectPlanned)}</span>
                         </div>
                       </div>
 
-                      {safetyAlert ? (
+                      {(totalProjectPlanned > budget - bufferVal) ? (
                         <div className="border border-red-200 bg-red-50 p-2.5 text-red-950 flex items-start gap-2 text-[10px] leading-relaxed font-sans">
                           <AlertTriangle size={14} className="text-red-600 flex-shrink-0 mt-0.5" />
                           <div>
-                            <strong className="font-bold">⚠️ Risco Orçamentário!</strong>
-                            <p className="mt-0.5 text-red-800">Saldo menor que buffer de segurança.</p>
+                            <strong className="font-bold">⚠️ Cronograma acima do limite!</strong>
+                            <p className="mt-0.5 text-red-800">O previsto ultrapassa o orçado menos a reserva de segurança.</p>
                           </div>
                         </div>
                       ) : (
                         <div className="border border-emerald-200 bg-emerald-50 p-2.5 text-emerald-950 flex items-start gap-2 text-[10px] leading-relaxed font-sans">
                           <CheckCircle size={14} className="text-emerald-600 flex-shrink-0 mt-0.5" />
                           <div>
-                            <strong className="font-bold">✓ Margem Assegurada</strong>
-                            <p className="mt-0.5 text-emerald-800 font-medium">Saldo suficiente para contingências.</p>
+                            <strong className="font-bold">✓ Planejamento dentro do orçamento</strong>
+                            <p className="mt-0.5 text-emerald-800 font-medium">O previsto cabe no orçado com a reserva preservada.</p>
                           </div>
                         </div>
                       )}
@@ -1748,7 +1785,7 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-150 bg-white">
-                    {activeProjectPhases.map(phase => (
+                    {orderedPhases.map(phase => (
                       <tr key={phase.id} className="hover:bg-stone-50/50">
                         <td className="p-3 font-bold font-serif text-stone-900">{phase.name}</td>
                         <td className="p-3 text-center font-mono text-[10px] text-stone-600">
