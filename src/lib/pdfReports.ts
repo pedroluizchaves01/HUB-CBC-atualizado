@@ -125,6 +125,94 @@ function sectionTitle(doc: jsPDF, text: string, y: number): number {
   return y + 6;
 }
 
+/**
+ * Desenha o gráfico da Curva S (percentual acumulado previsto por mês).
+ * Recebe os pontos {label, percent} e a posição/tamanho da área do gráfico.
+ * Retorna o Y ao final do gráfico.
+ */
+function drawSCurveChart(
+  doc: jsPDF,
+  points: { label: string; percent: number }[],
+  x: number, y: number, width: number, height: number,
+): number {
+  const padL = 14;   // espaço para rótulos do eixo Y (0–100%)
+  const padB = 10;   // espaço para rótulos do eixo X (meses)
+  const padT = 3;
+  const plotX = x + padL;
+  const plotY = y + padT;
+  const plotW = width - padL - 2;
+  const plotH = height - padB - padT;
+
+  // Fundo suave da área de plotagem.
+  doc.setFillColor(250, 250, 249);
+  doc.setDrawColor(...BRAND.line);
+  doc.setLineWidth(0.2);
+  doc.rect(plotX, plotY, plotW, plotH, "FD");
+
+  // Linhas de grade horizontais + rótulos do eixo Y (0, 25, 50, 75, 100%).
+  doc.setFontSize(6);
+  doc.setFont("helvetica", "normal");
+  for (let g = 0; g <= 100; g += 25) {
+    const gy = plotY + plotH - (g / 100) * plotH;
+    doc.setDrawColor(...(g === 0 ? BRAND.line : [232, 230, 228] as [number, number, number]));
+    doc.setLineWidth(0.1);
+    doc.line(plotX, gy, plotX + plotW, gy);
+    doc.setTextColor(...BRAND.soft);
+    doc.text(`${g}%`, plotX - 2, gy + 1.5, { align: "right" });
+  }
+
+  if (points.length === 0) return y + height;
+
+  // Coordenadas de cada ponto.
+  const stepX = points.length > 1 ? plotW / (points.length - 1) : 0;
+  const coords = points.map((p, i) => ({
+    px: plotX + (points.length > 1 ? i * stepX : plotW / 2),
+    py: plotY + plotH - (Math.max(0, Math.min(100, p.percent)) / 100) * plotH,
+    label: p.label,
+    percent: p.percent,
+  }));
+
+  // Área sob a curva (preenchimento suave) — desenhada como uma série de trapézios.
+  doc.setFillColor(194, 112, 61); // terracota BRAND-like
+  (doc as any).setGState && (doc as any).setGState(new (doc as any).GState({ opacity: 0.10 }));
+  for (let i = 0; i < coords.length - 1; i++) {
+    const a = coords[i], b = coords[i + 1];
+    // Trapézio: a.px..b.px na base, subindo até a curva.
+    doc.triangle(a.px, plotY + plotH, b.px, plotY + plotH, a.px, a.py, "F");
+    doc.triangle(b.px, plotY + plotH, b.px, b.py, a.px, a.py, "F");
+  }
+  (doc as any).setGState && (doc as any).setGState(new (doc as any).GState({ opacity: 1 }));
+
+  // Linha da curva.
+  doc.setDrawColor(194, 112, 61);
+  doc.setLineWidth(0.7);
+  for (let i = 0; i < coords.length - 1; i++) {
+    doc.line(coords[i].px, coords[i].py, coords[i + 1].px, coords[i + 1].py);
+  }
+
+  // Marcadores nos pontos + rótulos do eixo X.
+  doc.setFontSize(5.5);
+  coords.forEach((c, i) => {
+    doc.setFillColor(194, 112, 61);
+    doc.circle(c.px, c.py, 0.9, "F");
+    // Rótulo do mês: mostra 1 a cada N para não sobrepor quando há muitos meses.
+    const showEvery = points.length > 14 ? 3 : points.length > 8 ? 2 : 1;
+    if (i % showEvery === 0 || i === coords.length - 1) {
+      doc.setTextColor(...BRAND.soft);
+      doc.text(c.label, c.px, plotY + plotH + 4, { align: "center" });
+    }
+  });
+
+  // Rótulo do ponto final (100% ou o máximo atingido), destacado.
+  const last = coords[coords.length - 1];
+  doc.setFontSize(6.5);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(194, 112, 61);
+  doc.text(`${last.percent.toFixed(0)}%`, last.px, last.py - 2.5, { align: "right" });
+
+  return y + height;
+}
+
 // ===========================================================================
 // RELATÓRIO 1: CRONOGRAMA FÍSICO-FINANCEIRO (analítico + sintético)
 // ===========================================================================
@@ -363,6 +451,24 @@ export function generateSchedulePdf(data: ScheduleReportData): void {
     let curveY = ((doc as any).lastAutoTable?.finalY || y) + 6;
     if (curveY > doc.internal.pageSize.getHeight() - 40) { doc.addPage(); drawHeader(doc, "Cronograma Físico-Financeiro", "Sintético", data.projectName); curveY = 32; }
     curveY = sectionTitle(doc, "Evolução Financeira Prevista (Curva S Planejada)", curveY) + 2;
+
+    // Monta os pontos de percentual acumulado previsto para o gráfico.
+    let cumForChart = 0;
+    const chartPoints = data.periods.map((per) => {
+      const mt = data.monthlyTotals.find((t) => t.key === per.key);
+      cumForChart += mt?.planned || 0;
+      return { label: per.label, percent: totalPrev > 0 ? (cumForChart / totalPrev) * 100 : 0 };
+    });
+
+    // Desenha o gráfico da curva. Se não couber na página, quebra antes.
+    const chartHeight = 46;
+    if (curveY + chartHeight > doc.internal.pageSize.getHeight() - 16) {
+      doc.addPage();
+      drawHeader(doc, "Cronograma Físico-Financeiro", "Sintético", data.projectName);
+      curveY = sectionTitle(doc, "Evolução Financeira Prevista (Curva S Planejada)", 32) + 2;
+    }
+    const wS = doc.internal.pageSize.getWidth();
+    curveY = drawSCurveChart(doc, chartPoints, m, curveY, wS - 2 * m, chartHeight) + 4;
 
     // Acumulado previsto para a curva S.
     let cumulative = 0;
