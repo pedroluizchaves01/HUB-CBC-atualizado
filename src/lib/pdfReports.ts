@@ -126,6 +126,67 @@ function sectionTitle(doc: jsPDF, text: string, y: number): number {
 }
 
 /**
+ * Desenha o gráfico de BARRAS do desembolso mensal (valor previsto em cada mês).
+ * Complementa a curva S (que é o acumulado). Retorna o Y ao final.
+ */
+function drawMonthlyBarsChart(
+  doc: jsPDF,
+  bars: { label: string; value: number }[],
+  x: number, y: number, width: number, height: number,
+  fmtCompact: (v: number) => string,
+): number {
+  const padL = 18;   // rótulos do eixo Y (valores)
+  const padB = 10;   // rótulos do eixo X (meses)
+  const padT = 4;
+  const plotX = x + padL;
+  const plotY = y + padT;
+  const plotW = width - padL - 2;
+  const plotH = height - padB - padT;
+
+  doc.setFillColor(250, 250, 249);
+  doc.setDrawColor(...BRAND.line);
+  doc.setLineWidth(0.2);
+  doc.rect(plotX, plotY, plotW, plotH, "FD");
+
+  const maxV = Math.max(1, ...bars.map(b => b.value));
+
+  // Grade horizontal + rótulos de valor (0, meio, máximo).
+  doc.setFontSize(5.5);
+  doc.setFont("helvetica", "normal");
+  for (let g = 0; g <= 2; g++) {
+    const frac = g / 2;
+    const gy = plotY + plotH - frac * plotH;
+    doc.setDrawColor(...(g === 0 ? BRAND.line : [232, 230, 228] as [number, number, number]));
+    doc.setLineWidth(0.1);
+    doc.line(plotX, gy, plotX + plotW, gy);
+    doc.setTextColor(...BRAND.soft);
+    doc.text(fmtCompact(maxV * frac), plotX - 2, gy + 1.5, { align: "right" });
+  }
+
+  if (bars.length === 0) return y + height;
+
+  // Barras.
+  const slot = plotW / bars.length;
+  const barW = Math.min(slot * 0.62, 14);
+  const showEvery = bars.length > 14 ? 3 : bars.length > 8 ? 2 : 1;
+  doc.setFontSize(5.5);
+  bars.forEach((b, i) => {
+    const cx = plotX + i * slot + slot / 2;
+    const bh = (b.value / maxV) * plotH;
+    const by = plotY + plotH - bh;
+    doc.setFillColor(62, 124, 139); // azul-petróleo, distinto da curva terracota
+    doc.rect(cx - barW / 2, by, barW, bh, "F");
+    // Rótulo do mês.
+    if (i % showEvery === 0 || i === bars.length - 1) {
+      doc.setTextColor(...BRAND.soft);
+      doc.text(b.label, cx, plotY + plotH + 4, { align: "center" });
+    }
+  });
+
+  return y + height;
+}
+
+/**
  * Desenha o gráfico da Curva S (percentual acumulado previsto por mês).
  * Recebe os pontos {label, percent} e a posição/tamanho da área do gráfico.
  * Retorna o Y ao final do gráfico.
@@ -459,20 +520,42 @@ export function generateSchedulePdf(data: ScheduleReportData): void {
       cumForChart += mt?.planned || 0;
       return { label: per.label, percent: totalPrev > 0 ? (cumForChart / totalPrev) * 100 : 0 };
     });
+    // Pontos do desembolso mensal (valor previsto em cada mês) para o gráfico de barras.
+    const barPoints = data.periods.map((per) => {
+      const mt = data.monthlyTotals.find((t) => t.key === per.key);
+      return { label: per.label, value: mt?.planned || 0 };
+    });
+    // Formatador compacto para os eixos (ex.: "R$ 60k").
+    const fmtCompact = (v: number) => {
+      if (v >= 1000000) return `${(v / 1000000).toFixed(1)}M`;
+      if (v >= 1000) return `${Math.round(v / 1000)}k`;
+      return String(Math.round(v));
+    };
 
-    // Desenha o gráfico da curva. Se não couber na página, quebra antes.
-    const chartHeight = 46;
+    const wS = doc.internal.pageSize.getWidth();
+    const chartHeight = 44;
+
+    // --- GRÁFICO 1: Desembolso mensal (barras) ---
     if (curveY + chartHeight > doc.internal.pageSize.getHeight() - 16) {
       doc.addPage();
       drawHeader(doc, "Cronograma Físico-Financeiro", "Sintético", data.projectName);
-      curveY = sectionTitle(doc, "Evolução Financeira Prevista (Curva S Planejada)", 32) + 2;
+      curveY = 32;
     }
-    const wS = doc.internal.pageSize.getWidth();
+    curveY = sectionTitle(doc, "Desembolso Mensal Previsto (R$ por mês)", curveY) + 2;
+    curveY = drawMonthlyBarsChart(doc, barPoints, m, curveY, wS - 2 * m, chartHeight, fmtCompact) + 6;
+
+    // --- GRÁFICO 2: Curva S acumulada (linha) ---
+    if (curveY + chartHeight > doc.internal.pageSize.getHeight() - 16) {
+      doc.addPage();
+      drawHeader(doc, "Cronograma Físico-Financeiro", "Sintético", data.projectName);
+      curveY = 32;
+    }
+    curveY = sectionTitle(doc, "Evolução Acumulada Prevista (Curva S)", curveY) + 2;
     curveY = drawSCurveChart(doc, chartPoints, m, curveY, wS - 2 * m, chartHeight) + 4;
 
     // Acumulado previsto para a curva S.
     let cumulative = 0;
-    const curveHead = [["Mês", "Previsto no Mês", "Previsto Acumulado", "% Físico Médio"]];
+    const curveHead = [["Mês", "Previsto no Mês", "Previsto Acumulado", "% Físico Acumulado"]];
     const curveBody = data.periods.map((per) => {
       const mt = data.monthlyTotals.find((t) => t.key === per.key);
       const planned = mt?.planned || 0;
@@ -482,7 +565,10 @@ export function generateSchedulePdf(data: ScheduleReportData): void {
         per.label,
         planned > 0 ? fmtMoney(planned) : "—",
         planned > 0 || cumulative > 0 ? `${fmtMoney(cumulative)}  (${pct.toFixed(0)}%)` : "—",
-        mt ? `${mt.avgProgress}%` : "—",
+        // Avanço físico ACUMULADO previsto até o mês (sobe de ~0% a 100%, acompanha a
+        // curva). Antes usava o progresso do mês isolado (avgProgress), que oscilava
+        // e começava alto — o que confundia a leitura.
+        cumulative > 0 ? `${pct.toFixed(0)}%` : "—",
       ];
     });
 
