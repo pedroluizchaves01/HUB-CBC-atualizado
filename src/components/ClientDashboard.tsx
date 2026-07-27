@@ -23,6 +23,7 @@ import {
 import { motion } from 'motion/react';
 import AcompanhamentoFisico from './AcompanhamentoFisico';
 import QuotationMaps from './QuotationMaps';
+import ClientAcompanhamentoDashboard from './ClientAcompanhamentoDashboard';
 import { subscribeCollection } from '../lib/firebaseDb';
 import { generateClientContractPdf } from '../lib/pdfReports';
 import { formatDateBR } from '../lib/formatDate';
@@ -856,29 +857,42 @@ export default function ClientDashboard({ client, projects, transactions, docume
                 {/* Sub Tab: ACOMPANHAMENTO */}
                 {activeDocClassTab === 'acompanhamento' && (
                   <div className="space-y-6">
-                    {/* Acompanhamento Físico (Previsto x Executado) em modo leitura */}
-                    {selectedProjectId && (
-                      <AcompanhamentoFisico
-                        projectId={selectedProjectId}
-                        project={projects.find(p => p.id === selectedProjectId)}
-                        timelinePhases={timelinePhases}
-                        weeklyLogs={physicalWeeklyLogs}
-                        readOnly={true}
-                        transactions={transactions}
+                    {/* Painel visual e didático — a visão principal do cliente. */}
+                    {selectedProjectId && selectedProject && (
+                      <ClientAcompanhamentoDashboard
+                        project={selectedProject}
+                        transactions={projectTransactions}
+                        phases={timelinePhases.filter((p: any) => p.projectId === selectedProjectId)}
                       />
                     )}
 
-                    {/* Módulo de Mapas de Cotação Comparativo em modo leitura / autorização */}
+                    {/* Detalhamento técnico — recolhido por padrão, para quem quiser aprofundar. */}
                     {selectedProjectId && (
-                      <QuotationMaps
-                        projectId={selectedProjectId}
-                        project={projects.find(p => p.id === selectedProjectId)}
-                        readOnly={true}
-                        clientName={client.name}
-                        addTransaction={onAddTransaction}
-                      />
+                      <details className="group bg-white border border-stone-200 rounded-2xl overflow-hidden">
+                        <summary className="cursor-pointer select-none px-6 py-4 flex items-center justify-between hover:bg-stone-50 transition-colors">
+                          <span className="text-sm font-semibold text-stone-700">Ver detalhamento técnico completo</span>
+                          <span className="text-[10px] font-mono uppercase tracking-widest text-stone-400 group-open:hidden">Abrir ▾</span>
+                          <span className="text-[10px] font-mono uppercase tracking-widest text-stone-400 hidden group-open:inline">Fechar ▴</span>
+                        </summary>
+                        <div className="border-t border-stone-150 p-4 space-y-6">
+                          <AcompanhamentoFisico
+                            projectId={selectedProjectId}
+                            project={projects.find(p => p.id === selectedProjectId)}
+                            timelinePhases={timelinePhases}
+                            weeklyLogs={physicalWeeklyLogs}
+                            readOnly={true}
+                            transactions={transactions}
+                          />
+                          <QuotationMaps
+                            projectId={selectedProjectId}
+                            project={projects.find(p => p.id === selectedProjectId)}
+                            readOnly={true}
+                            clientName={client.name}
+                            addTransaction={onAddTransaction}
+                          />
+                        </div>
+                      </details>
                     )}
-
                   </div>
                 )}
 
