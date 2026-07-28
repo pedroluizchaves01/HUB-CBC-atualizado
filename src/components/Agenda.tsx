@@ -64,7 +64,6 @@ const EMPTY_FORM = {
 export default function Agenda({ clients, leads, currentUserId }: AgendaProps) {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [templates, setTemplates] = useState<ReminderTemplate[]>([]);
-  const [defaultRecipient, setDefaultRecipient] = useState<AppointmentRecipient | null>(null);
   const [whatsappReady, setWhatsappReady] = useState<boolean | null>(null);
   const [whatsappProblem, setWhatsappProblem] = useState<string | null>(null);
 
@@ -91,19 +90,9 @@ export default function Agenda({ clients, leads, currentUserId }: AgendaProps) {
     return () => { unsubAppts?.(); unsubTpls?.(); };
   }, []);
 
-  // Telefone padrão (o seu) e saúde da integração vêm da config do WhatsApp.
+  // Saúde da integração do WhatsApp (o telefone de destino agora é por compromisso).
   const loadWhatsAppState = useCallback(async () => {
     try {
-      const cfg: any = await apiGet('/api/whatsapp/config');
-      if (cfg?.defaultRecipientPhone) {
-        setDefaultRecipient({
-          name: cfg.defaultRecipientName || 'Meu telefone',
-          phone: cfg.defaultRecipientPhone,
-          source: 'manual',
-        });
-      } else {
-        setDefaultRecipient(null);
-      }
       const status: any = await apiGet('/api/whatsapp/status');
       setWhatsappReady(!!status?.enabled && !!status?.configured && !status?.problem);
       setWhatsappProblem(status?.problem || null);
@@ -197,10 +186,8 @@ export default function Agenda({ clients, leads, currentUserId }: AgendaProps) {
       linkId: appt.clientId || appt.leadId || '',
     });
     setRules(appt.reminders.map(({ fireAt, sentAt, attempts, lastError, skipped, ...rule }) => rule));
-    // O destinatário padrão é reaplicado no save; aqui listamos só os extras.
-    setExtraRecipients(
-      (appt.recipients || []).filter((r) => !defaultRecipient || r.phone !== defaultRecipient.phone)
-    );
+    // Todos os destinatários salvos são editáveis (não há mais número fixo reaplicado).
+    setExtraRecipients([...(appt.recipients || [])]);
     setFormError(null);
     setSaveTemplateName('');
     setIsModalOpen(true);
@@ -233,14 +220,15 @@ export default function Agenda({ clients, leads, currentUserId }: AgendaProps) {
     if (!startAt) return setFormError('Informe data e hora.');
 
     const recipients: AppointmentRecipient[] = [];
-    if (defaultRecipient) recipients.push(defaultRecipient);
+    // Não há mais número fixo automático: os destinatários são os que você preenche
+    // no compromisso (digitados ou puxados do cadastro de cliente/lead).
     for (const extra of extraRecipients) {
       const phone = normalizePhoneBR(extra.phone);
       if (!phone) return setFormError(`Telefone inválido: ${extra.phone}`);
       if (!recipients.some((r) => r.phone === phone)) recipients.push({ ...extra, phone });
     }
     if (recipients.length === 0 && rules.some((r) => r.channel === 'whatsapp')) {
-      return setFormError('Nenhum telefone definido. Configure seu telefone em Configurações › WhatsApp.');
+      return setFormError('Adicione ao menos um telefone para receber os lembretes por WhatsApp.');
     }
 
     setSaving(true);
@@ -664,9 +652,7 @@ export default function Agenda({ clients, leads, currentUserId }: AgendaProps) {
                       Lembretes
                     </h4>
                     <p className="text-[11px] text-stone-500 mt-0.5">
-                      {defaultRecipient
-                        ? <>Enviados para <span className="font-mono text-stone-700">{formatPhoneBR(defaultRecipient.phone)}</span></>
-                        : <span className="text-amber-700">Configure seu telefone em Configurações › WhatsApp</span>}
+                      Enviados aos telefones definidos em "Quem recebe os lembretes", abaixo.
                     </p>
                   </div>
                   {templates.length > 0 && (
@@ -787,24 +773,47 @@ export default function Agenda({ clients, leads, currentUserId }: AgendaProps) {
                 )}
               </div>
 
-              {/* Destinatários extras */}
+              {/* Destinatários */}
               <div className="border-t border-stone-200 pt-4">
                 <div className="flex items-center justify-between mb-2">
                   <h4 className="font-mono text-[10px] font-bold uppercase tracking-wider text-stone-900">
-                    Avisar também
+                    Quem recebe os lembretes
                   </h4>
-                  <button
-                    type="button"
-                    onClick={() => setExtraRecipients((p) => [...p, { name: '', phone: '', source: 'manual' }])}
-                    className="flex items-center gap-1 text-[10px] font-mono font-bold uppercase text-stone-500 hover:text-stone-900 cursor-pointer"
-                  >
-                    <Plus size={10} /> Adicionar
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {/* Atalho: puxa o telefone do cliente/lead vinculado em um clique. */}
+                    {form.linkType !== 'none' && form.linkId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const src: any = form.linkType === 'client'
+                            ? clients.find((c) => c.id === form.linkId)
+                            : leads.find((l) => l.id === form.linkId);
+                          if (!src || !src.phone) { setFormError('O cadastro vinculado não tem telefone.'); return; }
+                          const nm = src.contactPerson || src.name || '';
+                          setExtraRecipients((p) =>
+                            p.some((x) => x.phone === src.phone)
+                              ? p
+                              : [...p, { name: nm, phone: src.phone, source: form.linkType as any }]
+                          );
+                        }}
+                        className="flex items-center gap-1 text-[10px] font-mono font-bold uppercase text-stone-500 hover:text-stone-900 cursor-pointer"
+                      >
+                        <User size={10} /> Usar telefone do vínculo
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setExtraRecipients((p) => [...p, { name: '', phone: '', source: 'manual' }])}
+                      className="flex items-center gap-1 text-[10px] font-mono font-bold uppercase text-stone-500 hover:text-stone-900 cursor-pointer"
+                    >
+                      <Plus size={10} /> Adicionar
+                    </button>
+                  </div>
                 </div>
 
                 {extraRecipients.length === 0 ? (
                   <p className="text-[11px] text-stone-400">
-                    Só você recebe. Adicione alguém se quiser que a pessoa também seja avisada.
+                    Adicione um ou mais telefones para receber os lembretes deste compromisso — digite manualmente ou puxe do cadastro vinculado.
                   </p>
                 ) : (
                   <div className="space-y-2">
