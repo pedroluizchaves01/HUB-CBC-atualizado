@@ -17,6 +17,8 @@ export const ALLOWED_COLLECTIONS = new Set<string>([
   "office_transactions", "office_leads",
   // Mão de obra
   "labor_contracts", "labor_payments",
+  // Medições (boletins de medição por período)
+  "measurements",
   // Marketing
   "marketing_outbound", "marketing_posts", "marketing_press", "marketing_settings",
   // Cotações
@@ -97,7 +99,7 @@ export interface Requester {
 // Coleções ligadas a um projeto (têm campo projectId) — usadas para filtrar por cliente.
 const PROJECT_SCOPED = new Set<string>([
   "transactions", "documents", "materials", "daily_logs", "timeline_phases",
-  "punch_lists", "weekly_logs", "regulatory_steps",
+  "punch_lists", "weekly_logs", "regulatory_steps", "measurements",
 ]);
 
 /**
@@ -159,8 +161,68 @@ export function assertCanWrite(collection: string, req: Requester): void {
   if (collection === "users" || collection === "settings" || ADMIN_ONLY_COLLECTIONS.has(collection)) {
     throw new Error("Você não tem permissão para alterar estes dados.");
   }
-  // Demais escritas de cliente (ex.: comprovantes) são permitidas; a associação ao
-  // projeto/cliente é garantida pela UI + validação de projectId poderia ser reforçada aqui.
+  // Demais escritas de cliente (ex.: comprovantes) são permitidas; a checagem de POSSE
+  // do documento específico é feita por assertCanWriteDoc (abaixo).
+}
+
+/**
+ * Verifica se o solicitante pode escrever/excluir ESTE documento específico.
+ * Corrige o IDOR de escrita/exclusão: além da regra de coleção/papel, para 'client'
+ * confirma que o registro pertence a um projeto do próprio cliente (ou ao próprio
+ * cliente, em 'clients'/'projects'). Admin e marketing seguem só a regra de coleção.
+ */
+export async function assertCanWriteDoc(
+  collection: string,
+  id: string,
+  req: Requester,
+  incomingData?: any,
+): Promise<void> {
+  // 1) Regra de coleção/papel (lança se a coleção for proibida ao papel).
+  assertCanWrite(collection, req);
+
+  // 2) Admin e marketing (nas coleções deles) não precisam de checagem de posse.
+  if (req.role !== "client") return;
+
+  const clientId = req.clientId;
+  if (!clientId) throw new Error("Você não tem permissão para alterar estes dados.");
+
+  // 3) Coleções ligadas a projeto: o doc existente E o novo projectId devem ser do cliente.
+  if (PROJECT_SCOPED.has(collection)) {
+    const projects = await listCollection("projects");
+    const myProjectIds = new Set(
+      projects.filter((p) => p.clientId === clientId).map((p) => p.id),
+    );
+    const existing = await getDocById(collection, id).catch(() => null);
+    if (existing && !myProjectIds.has(existing.projectId)) {
+      throw new Error("Você não tem permissão para alterar estes dados.");
+    }
+    // Impede "mover" o registro para um projeto que não é do cliente (ou criar já em outro).
+    if (incomingData && incomingData.projectId && !myProjectIds.has(incomingData.projectId)) {
+      throw new Error("Projeto inválido para este cliente.");
+    }
+    return;
+  }
+
+  // 4) 'projects': só o próprio projeto do cliente.
+  if (collection === "projects") {
+    const existing = await getDocById(collection, id).catch(() => null);
+    if (existing && existing.clientId !== clientId) {
+      throw new Error("Você não tem permissão para alterar estes dados.");
+    }
+    if (incomingData && incomingData.clientId && incomingData.clientId !== clientId) {
+      throw new Error("Você não tem permissão para alterar estes dados.");
+    }
+    return;
+  }
+
+  // 5) 'clients': só o próprio registro.
+  if (collection === "clients") {
+    if (id !== clientId) throw new Error("Você não tem permissão para alterar estes dados.");
+    return;
+  }
+
+  // 6) Qualquer outra coleção não coberta: negar por padrão para 'client'.
+  throw new Error("Você não tem permissão para alterar estes dados.");
 }
 
 export async function getDocById(collection: string, id: string): Promise<any | null> {

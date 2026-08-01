@@ -44,6 +44,7 @@ import {
 import { motion } from 'motion/react';
 import { PlanningMaterials } from './PlanningMaterials';
 import { PlanningSchedule } from './PlanningSchedule';
+import Measurements from './Measurements';
 import { PlanningLaborPayments } from './PlanningLaborPayments';
 import AcompanhamentoFinanceiro from './AcompanhamentoFinanceiro';
 import AcompanhamentoFisico from './AcompanhamentoFisico';
@@ -88,7 +89,7 @@ interface AdminDashboardProps {
   onDeleteContract: (id: string) => Promise<void>;
 }
 
-type TabType = 'resumo' | 'clientes' | 'projetos' | 'escritorio' | 'marketing' | 'classe_administrativo' | 'classe_planejamento' | 'classe_acompanhamento' | 'contratos' | 'demandas' | 'telegram';
+type TabType = 'resumo' | 'clientes' | 'projetos' | 'escritorio' | 'marketing' | 'classe_administrativo' | 'classe_planejamento' | 'classe_acompanhamento' | 'contratos' | 'demandas' | 'telegram' | 'medicoes';
 
 export default function AdminDashboard({
   role,
@@ -284,6 +285,9 @@ export default function AdminDashboard({
   const [punchLists, setPunchListsState] = useState<any[]>([]);
   const [regulatorySteps, setRegulatoryStepsState] = useState<any[]>([]);
   const [physicalWeeklyLogs, setPhysicalWeeklyLogsState] = useState<any[]>([]);
+  const [measurements, setMeasurementsState] = useState<any[]>([]);
+  const [laborContracts, setLaborContractsState] = useState<any[]>([]);
+  const [laborPayments, setLaborPaymentsState] = useState<any[]>([]);
 
   // Subscriptions to Firestore
   React.useEffect(() => {
@@ -293,11 +297,17 @@ export default function AdminDashboard({
     const unsubPunch = subscribeCollection('punch_lists', setPunchListsState, INITIAL_PUNCH_LISTS, 'cbc_punch_lists_v2');
     const unsubReg = subscribeCollection('regulatory_steps', setRegulatoryStepsState, INITIAL_REGULATORY_STEPS, 'cbc_regulatory_steps_v2');
     const unsubWeekly = subscribeCollection('weekly_logs', setPhysicalWeeklyLogsState, INITIAL_WEEKLY_LOGS, 'cbc_physical_weekly_logs_v2');
+    const unsubMeasurements = subscribeCollection('measurements', setMeasurementsState, [], 'cbc_measurements_v1');
+    const unsubLaborC = subscribeCollection('labor_contracts', setLaborContractsState, [], 'cbc_labor_contracts_v1');
+    const unsubLaborP = subscribeCollection('labor_payments', setLaborPaymentsState, [], 'cbc_labor_payments_v1');
 
     return () => {
       unsubMaterials();
       unsubDailyLogs();
       unsubTimeline();
+      unsubMeasurements();
+      unsubLaborC();
+      unsubLaborP();
       unsubPunch();
       unsubReg();
       unsubWeekly();
@@ -1560,6 +1570,22 @@ export default function AdminDashboard({
                 </button>
 
                 <button
+                  id="nav_btn_medicoes"
+                  onClick={() => setActiveTab('medicoes')}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-mono uppercase tracking-wider transition-all rounded-xl text-left cursor-pointer ${
+                    activeTab === 'medicoes' 
+                      ? 'bg-gradient-to-r from-[#FF5A35]/15 to-[#7C3AED]/5 text-white border-l-2 border-[#FF5A35] font-bold' 
+                      : 'text-slate-400 hover:text-white hover:bg-white/[0.02]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <FileText size={14} className={activeTab === 'medicoes' ? 'text-[#FF5A35]' : 'text-slate-400'} />
+                    <span>5. Medições</span>
+                  </div>
+                  <ChevronRight size={12} className="opacity-40" />
+                </button>
+
+                <button
                   id="nav_btn_demandas"
                   onClick={() => setActiveTab('demandas')}
                   className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-mono uppercase tracking-wider transition-all rounded-xl text-left cursor-pointer ${
@@ -1570,7 +1596,7 @@ export default function AdminDashboard({
                 >
                   <div className="flex items-center gap-2.5">
                     <Kanban size={14} className={activeTab === 'demandas' ? 'text-[#FF5A35]' : 'text-slate-400'} />
-                    <span>5. Demandas</span>
+                    <span>6. Demandas</span>
                   </div>
                   <ChevronRight size={12} className="opacity-40" />
                 </button>
@@ -3117,6 +3143,20 @@ export default function AdminDashboard({
 
           {activeTab === 'marketing' && (
             <MarketingManagement />
+          )}
+
+          {activeTab === 'medicoes' && (
+            <Measurements
+              projects={projects}
+              transactions={transactions}
+              weeklyLogs={physicalWeeklyLogs}
+              timelinePhases={timelinePhases}
+              laborContracts={laborContracts}
+              laborPayments={laborPayments}
+              measurements={measurements}
+              onSaveMeasurement={async (mm) => { await saveDoc('measurements', mm.id, mm); }}
+              onDeleteMeasurement={async (id) => { await removeDoc('measurements', id); }}
+            />
           )}
 
           {activeTab === 'telegram' && (

@@ -95,6 +95,7 @@ export default function ClientDashboard({ client, projects, transactions, docume
   const [timelinePhases, setTimelinePhases] = useState<any[]>([]);
   const [punchLists, setPunchLists] = useState<any[]>([]);
   const [physicalWeeklyLogs, setPhysicalWeeklyLogs] = useState<any[]>([]);
+  const [measurements, setMeasurements] = useState<any[]>([]);
   const [regulatorySteps, setRegulatorySteps] = useState<any[]>([]);
 
   useEffect(() => {
@@ -134,6 +135,7 @@ export default function ClientDashboard({ client, projects, transactions, docume
     const unsubTimeline = subscribeCollection('timeline_phases', setTimelinePhases, INITIAL_TIMELINE_PHASES, 'cbc_timeline_phases_v2');
     const unsubPunch = subscribeCollection('punch_lists', setPunchLists, INITIAL_PUNCH_LISTS, 'cbc_punch_lists_v2');
     const unsubWeekly = subscribeCollection('weekly_logs', setPhysicalWeeklyLogs, [], 'cbc_physical_weekly_logs_v2');
+    const unsubMeasurements = subscribeCollection('measurements', setMeasurements, [], 'cbc_measurements_v1');
     const unsubReg = subscribeCollection('regulatory_steps', setRegulatorySteps, INITIAL_REGULATORY_STEPS, 'cbc_regulatory_steps_v2');
 
     return () => {
@@ -141,6 +143,7 @@ export default function ClientDashboard({ client, projects, transactions, docume
       unsubTimeline();
       unsubPunch();
       unsubWeekly();
+      unsubMeasurements();
       unsubReg();
     };
   }, []);
@@ -863,6 +866,7 @@ export default function ClientDashboard({ client, projects, transactions, docume
                         project={selectedProject}
                         transactions={projectTransactions}
                         phases={timelinePhases.filter((p: any) => p.projectId === selectedProjectId)}
+                        measurements={measurements.filter((mm: any) => mm.projectId === selectedProjectId && mm.released)}
                       />
                     )}
 

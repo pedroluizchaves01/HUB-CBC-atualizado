@@ -949,3 +949,320 @@ export function generateLaborPaymentsPdf(data: LaborReportData): void {
   const safeName = (data.projectName || "obra").replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-").toLowerCase();
   doc.save(`pagamentos-mao-de-obra-${safeName}.pdf`);
 }
+
+// ===========================================================================
+// BOLETIM DE MEDIÇÃO — documento formal de avanço da obra por período
+// ===========================================================================
+
+export interface BulletinPhoto {
+  url: string;          // base64 (data:image/...) ou URL
+  caption?: string;     // legenda editável
+}
+export interface BulletinExpense {
+  date: string;
+  description: string;
+  category: string;     // rótulo já legível
+  supplier: string;
+  value: number;
+}
+export interface BulletinLaborPayment {
+  supplier: string;
+  description: string;
+  paymentDate: string;
+  value: number;
+  contractValue: number;    // valor total do contrato (para o %)
+  contractPaidTotal: number; // total já pago do contrato (acumulado)
+}
+export interface BulletinPhaseProgress {
+  name: string;
+  progressStart: number; // % no início do período
+  progressEnd: number;   // % no fim do período
+}
+export interface MeasurementBulletinData {
+  projectName: string;
+  clientName?: string;
+  measurementNumber: string;       // "01", "02"... (editável)
+  periodStart: string;             // YYYY-MM-DD
+  periodEnd: string;
+  emissionDate?: string;           // default: hoje
+  // Resumo (editável)
+  summaryText?: string;            // resumo do acumulado total (texto livre)
+  // Percentuais
+  physicalProgressPeriod: number;  // % avanço físico do período
+  physicalProgressTotal: number;   // % avanço físico acumulado
+  financialProgressPeriod: number; // % avanço financeiro do período
+  financialProgressTotal: number;  // % avanço financeiro acumulado
+  budgetTotal: number;             // orçamento total da obra
+  spentPeriod: number;             // gasto no período
+  spentTotal: number;              // gasto acumulado
+  // Blocos
+  expenses: BulletinExpense[];
+  laborPayments: BulletinLaborPayment[];
+  phaseProgress: BulletinPhaseProgress[];
+  photos: BulletinPhoto[];
+  responsibleTechnical?: string;   // nome do responsável técnico CBC
+}
+
+export function validateMeasurementBulletinData(data: MeasurementBulletinData): ValidationReport {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  if (!data.periodStart || !data.periodEnd) errors.push("Informe o período (início e fim) da medição.");
+  else if (new Date(data.periodStart) > new Date(data.periodEnd)) errors.push("A data de início é posterior à de término.");
+  if (!data.measurementNumber?.trim()) warnings.push("A medição está sem número.");
+  if (data.expenses.length === 0) warnings.push("Nenhum gasto encontrado no período.");
+  if (data.photos.length === 0) warnings.push("Nenhuma foto no relatório fotográfico.");
+  if (data.phaseProgress.length === 0) warnings.push("Nenhum avanço físico de etapa no período.");
+  return { ok: errors.length === 0, errors, warnings };
+}
+
+export async function generateMeasurementBulletinPdf(data: MeasurementBulletinData): Promise<void> {
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const w = doc.internal.pageSize.getWidth();
+  const h = doc.internal.pageSize.getHeight();
+  const m = 14;
+
+  const emission = data.emissionDate || new Date().toISOString().slice(0, 10);
+  const num = (data.measurementNumber || "01").trim();
+
+  // Cabeçalho específico do boletim.
+  const drawBulletinHeader = () => {
+    doc.setFillColor(...BRAND.headBg);
+    doc.rect(0, 0, w, 26, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.text(COMPANY.toUpperCase(), m, 11);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(200, 195, 190);
+    doc.text(COMPANY_SUB, m, 16);
+    // Bloco à direita
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(255, 255, 255);
+    doc.text(`BOLETIM DE MEDIÇÃO Nº ${num}`, w - m, 11, { align: "right" });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(200, 195, 190);
+    doc.text(`Emissão: ${fmtDateBR(emission)}`, w - m, 16, { align: "right" });
+    doc.text(`Período: ${fmtDateBR(data.periodStart)} a ${fmtDateBR(data.periodEnd)}`, w - m, 21, { align: "right" });
+  };
+
+  let pageNum = 1;
+  const footer = () => {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(...BRAND.soft);
+    doc.setDrawColor(...BRAND.line);
+    doc.setLineWidth(0.2);
+    doc.line(m, h - 12, w - m, h - 12);
+    doc.text(`${COMPANY} — Boletim de Medição Nº ${num}`, m, h - 8);
+    doc.text(`Página ${pageNum}`, w - m, h - 8, { align: "right" });
+  };
+
+  const newPage = () => { footer(); doc.addPage(); pageNum++; drawBulletinHeader(); };
+  const ensure = (needed: number, y: number): number => {
+    if (y + needed > h - 16) { newPage(); return 32; }
+    return y;
+  };
+
+  drawBulletinHeader();
+  let y = 32;
+
+  // Identificação da obra/cliente.
+  doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(...BRAND.ink);
+  doc.text("Obra / Projeto:", m, y);
+  doc.setFont("helvetica", "normal");
+  doc.text(data.projectName || "—", m + 26, y);
+  if (data.clientName) {
+    doc.setFont("helvetica", "bold"); doc.text("Cliente:", m, y + 5);
+    doc.setFont("helvetica", "normal"); doc.text(data.clientName, m + 26, y + 5);
+    y += 5;
+  }
+  y += 8;
+
+  // -------- RESUMO EXECUTIVO (cards de %) --------
+  y = sectionTitle(doc, "Resumo do Período", y) + 3;
+  const cardW = (w - 2 * m - 3 * 3) / 4;
+  const cards: [string, string, [number, number, number]][] = [
+    ["Avanço Físico (Período)", `${data.physicalProgressPeriod.toFixed(1)}%`, BRAND.ink],
+    ["Avanço Físico (Acum.)", `${data.physicalProgressTotal.toFixed(1)}%`, BRAND.good],
+    ["Avanço Financ. (Período)", `${data.financialProgressPeriod.toFixed(1)}%`, BRAND.ink],
+    ["Avanço Financ. (Acum.)", `${data.financialProgressTotal.toFixed(1)}%`, BRAND.good],
+  ];
+  cards.forEach(([label, value, color], i) => {
+    const x = m + i * (cardW + 3);
+    doc.setFillColor(...BRAND.zebra); doc.setDrawColor(...BRAND.line); doc.setLineWidth(0.2);
+    doc.rect(x, y, cardW, 15, "FD");
+    doc.setFont("helvetica", "bold"); doc.setFontSize(5.6); doc.setTextColor(...BRAND.soft);
+    doc.text(label.toUpperCase(), x + 2, y + 4);
+    doc.setFontSize(13); doc.setTextColor(...color);
+    doc.text(value, x + 2, y + 11);
+  });
+  y += 15 + 4;
+
+  // Linha de valores (orçamento / gasto período / gasto acumulado).
+  doc.setFillColor(...BRAND.zebra); doc.setDrawColor(...BRAND.line);
+  doc.rect(m, y, w - 2 * m, 10, "FD");
+  doc.setFont("helvetica", "bold"); doc.setFontSize(6); doc.setTextColor(...BRAND.soft);
+  const vCol = (w - 2 * m) / 3;
+  const vals: [string, string][] = [
+    ["ORÇAMENTO TOTAL DA OBRA", fmtMoney(data.budgetTotal)],
+    ["INVESTIDO NO PERÍODO", fmtMoney(data.spentPeriod)],
+    ["INVESTIDO ACUMULADO", fmtMoney(data.spentTotal)],
+  ];
+  vals.forEach(([l, v], i) => {
+    doc.setFont("helvetica", "bold"); doc.setFontSize(5.6); doc.setTextColor(...BRAND.soft);
+    doc.text(l, m + i * vCol + 2, y + 3.5);
+    doc.setFontSize(9); doc.setTextColor(...BRAND.ink);
+    doc.text(v, m + i * vCol + 2, y + 8);
+  });
+  y += 10 + 6;
+
+  // -------- RESUMO TEXTUAL (acumulado) --------
+  if (data.summaryText && data.summaryText.trim()) {
+    y = ensure(30, y);
+    y = sectionTitle(doc, "Situação Geral da Obra", y) + 3;
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor(...BRAND.ink);
+    const lines = doc.splitTextToSize(data.summaryText.trim(), w - 2 * m);
+    doc.text(lines, m, y);
+    y += lines.length * 4.4 + 6;
+  }
+
+  // -------- AVANÇO FÍSICO DAS ETAPAS (com barras) --------
+  if (data.phaseProgress.length > 0) {
+    y = ensure(20, y);
+    y = sectionTitle(doc, "Avanço Físico das Etapas no Período", y) + 3;
+    doc.setFontSize(7.5);
+    data.phaseProgress.forEach((ph) => {
+      y = ensure(9, y);
+      const delta = ph.progressEnd - ph.progressStart;
+      doc.setFont("helvetica", "bold"); doc.setTextColor(...BRAND.ink); doc.setFontSize(7.5);
+      doc.text(ph.name, m, y);
+      doc.setFont("helvetica", "normal"); doc.setTextColor(...BRAND.soft); doc.setFontSize(7);
+      doc.text(`${ph.progressStart.toFixed(0)}% → ${ph.progressEnd.toFixed(0)}%  (+${delta.toFixed(0)}%)`, w - m, y, { align: "right" });
+      // Barra: base (início) + avanço do período em destaque.
+      const barY = y + 1.5, barW = w - 2 * m, barH = 2.4;
+      doc.setFillColor(...BRAND.zebra); doc.rect(m, barY, barW, barH, "F");
+      doc.setFillColor(214, 211, 209); doc.rect(m, barY, barW * (ph.progressStart / 100), barH, "F");
+      doc.setFillColor(194, 112, 61); // terracota: avanço do período
+      const startX = m + barW * (ph.progressStart / 100);
+      doc.rect(startX, barY, barW * (Math.max(0, delta) / 100), barH, "F");
+      y += 6.5;
+    });
+    y += 3;
+  }
+
+  // -------- PLANILHA DE GASTOS DO PERÍODO --------
+  y = ensure(24, y);
+  y = sectionTitle(doc, "Gastos do Período", y) + 2;
+  const expBody = data.expenses.map((e) => [
+    fmtDateBR(e.date), e.description || "—", e.category || "—", e.supplier || "—", fmtMoney(e.value),
+  ]);
+  const expTotal = data.expenses.reduce((s, e) => s + (e.value || 0), 0);
+  expBody.push([
+    { content: "TOTAL DO PERÍODO", colSpan: 4, styles: { halign: "right", fontStyle: "bold", fillColor: BRAND.headBg, textColor: BRAND.headText } } as any,
+    { content: fmtMoney(expTotal), styles: { halign: "right", fontStyle: "bold", fillColor: BRAND.headBg, textColor: BRAND.headText } } as any,
+  ]);
+  autoTable(doc, {
+    head: [["Data", "Descrição", "Categoria", "Fornecedor", "Valor"]],
+    body: expBody,
+    startY: y,
+    margin: { left: m, right: m },
+    styles: { fontSize: 7, cellPadding: 1.4, overflow: "linebreak", lineColor: BRAND.line, lineWidth: 0.1, textColor: BRAND.ink },
+    headStyles: { fillColor: BRAND.headBg, textColor: BRAND.headText, fontStyle: "bold", fontSize: 7, halign: "center" },
+    alternateRowStyles: { fillColor: BRAND.zebra },
+    columnStyles: { 0: { cellWidth: 20, halign: "center" }, 2: { cellWidth: 30 }, 3: { cellWidth: 34 }, 4: { cellWidth: 26, halign: "right" } },
+    didDrawPage: () => { /* autoTable gerencia páginas próprias */ },
+  });
+  y = ((doc as any).lastAutoTable?.finalY || y) + 6;
+
+  // -------- PAGAMENTOS DE MÃO DE OBRA --------
+  if (data.laborPayments.length > 0) {
+    y = ensure(24, y);
+    y = sectionTitle(doc, "Pagamentos de Mão de Obra no Período", y) + 2;
+    const labBody = data.laborPayments.map((p) => {
+      const pctContract = p.contractValue > 0 ? (p.contractPaidTotal / p.contractValue) * 100 : 0;
+      return [
+        p.supplier || "—", p.description || "—", fmtDateBR(p.paymentDate),
+        fmtMoney(p.value), fmtMoney(p.contractValue), `${pctContract.toFixed(0)}%`,
+      ];
+    });
+    const labTotal = data.laborPayments.reduce((s, p) => s + (p.value || 0), 0);
+    labBody.push([
+      { content: "TOTAL PAGO NO PERÍODO", colSpan: 3, styles: { halign: "right", fontStyle: "bold", fillColor: BRAND.headBg, textColor: BRAND.headText } } as any,
+      { content: fmtMoney(labTotal), styles: { halign: "right", fontStyle: "bold", fillColor: BRAND.headBg, textColor: BRAND.headText } } as any,
+      { content: "", colSpan: 2, styles: { fillColor: BRAND.headBg } } as any,
+    ]);
+    autoTable(doc, {
+      head: [["Prestador", "Descrição", "Data", "Valor Pago", "Vlr. Contrato", "% Contrato"]],
+      body: labBody,
+      startY: y,
+      margin: { left: m, right: m },
+      styles: { fontSize: 7, cellPadding: 1.4, overflow: "linebreak", lineColor: BRAND.line, lineWidth: 0.1, textColor: BRAND.ink },
+      headStyles: { fillColor: BRAND.headBg, textColor: BRAND.headText, fontStyle: "bold", fontSize: 7, halign: "center" },
+      alternateRowStyles: { fillColor: BRAND.zebra },
+      columnStyles: { 2: { cellWidth: 20, halign: "center" }, 3: { cellWidth: 26, halign: "right" }, 4: { cellWidth: 26, halign: "right" }, 5: { cellWidth: 20, halign: "center" } },
+    });
+    y = ((doc as any).lastAutoTable?.finalY || y) + 6;
+  }
+
+  // -------- RELATÓRIO FOTOGRÁFICO --------
+  if (data.photos.length > 0) {
+    newPage(); y = 32;
+    y = sectionTitle(doc, "Relatório Fotográfico", y) + 4;
+    const gap = 4;
+    const cols = 2;
+    const cellW = (w - 2 * m - (cols - 1) * gap) / cols;
+    const imgH = 52;
+    let col = 0;
+    let rowY = y;
+    for (let i = 0; i < data.photos.length; i++) {
+      const photo = data.photos[i];
+      if (col === 0) { rowY = ensure(imgH + 12, rowY); }
+      const x = m + col * (cellW + gap);
+      // Moldura
+      doc.setDrawColor(...BRAND.line); doc.setLineWidth(0.2);
+      doc.setFillColor(248, 248, 247);
+      doc.rect(x, rowY, cellW, imgH, "FD");
+      try {
+        // Detecta formato pela assinatura do data URL.
+        const fmt = /png/i.test(photo.url) ? "PNG" : "JPEG";
+        doc.addImage(photo.url, fmt, x + 1, rowY + 1, cellW - 2, imgH - 2, undefined, "FAST");
+      } catch {
+        doc.setFont("helvetica", "italic"); doc.setFontSize(7); doc.setTextColor(...BRAND.soft);
+        doc.text("(imagem indisponível)", x + cellW / 2, rowY + imgH / 2, { align: "center" });
+      }
+      // Legenda
+      const cap = photo.caption?.trim() || `Foto ${i + 1}`;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(6.5); doc.setTextColor(...BRAND.ink);
+      const capLines = doc.splitTextToSize(cap, cellW);
+      doc.text(capLines.slice(0, 2), x, rowY + imgH + 3.5);
+
+      col++;
+      if (col >= cols) { col = 0; rowY += imgH + 12; }
+    }
+    if (col !== 0) rowY += imgH + 12;
+    y = rowY + 2;
+  }
+
+  // -------- ASSINATURAS --------
+  y = ensure(40, y);
+  y = sectionTitle(doc, "Aprovação da Medição", y) + 12;
+  const sigW = (w - 2 * m - 20) / 2;
+  const drawSig = (x: number, label: string, sub: string) => {
+    doc.setDrawColor(...BRAND.ink); doc.setLineWidth(0.3);
+    doc.line(x, y, x + sigW, y);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(...BRAND.ink);
+    doc.text(label, x + sigW / 2, y + 4.5, { align: "center" });
+    doc.setFont("helvetica", "normal"); doc.setFontSize(6.5); doc.setTextColor(...BRAND.soft);
+    doc.text(sub, x + sigW / 2, y + 8.5, { align: "center" });
+  };
+  drawSig(m, data.clientName || "Cliente", "Contratante");
+  drawSig(m + sigW + 20, data.responsibleTechnical || COMPANY, "Responsável Técnico");
+  y += 16;
+
+  footer();
+  const safeName = (data.projectName || "obra").replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-").toLowerCase();
+  doc.save(`medicao-${num}-${safeName}.pdf`);
+}
