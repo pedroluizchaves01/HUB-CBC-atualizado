@@ -107,6 +107,41 @@ export interface PhysicalWeeklyLog {
   }[];
 }
 
+// Boletim de Medição — documento formal de avanço da obra por período.
+export interface MeasurementBulletin {
+  id: string;
+  projectId: string;
+  number: string;                  // "01", "02"... (editável)
+  periodStart: string;             // YYYY-MM-DD
+  periodEnd: string;
+  emissionDate: string;            // YYYY-MM-DD
+  summaryText: string;             // resumo editável da situação geral
+  responsibleTechnical: string;    // nome do responsável técnico
+  // Percentuais (editáveis; preenchidos automaticamente na criação)
+  physicalProgressPeriod: number;
+  physicalProgressTotal: number;
+  financialProgressPeriod: number;
+  financialProgressTotal: number;
+  spentPeriod: number;
+  spentTotal: number;
+  // Fotos com legendas editáveis (base64 ou url)
+  photos: { id: string; url: string; caption: string }[];
+  // Snapshot dos dados usados (para o documento não mudar depois)
+  phaseProgress: { name: string; progressStart: number; progressEnd: number }[];
+  // Snapshot dos pagamentos de mão de obra do período (gravado na criação pelo admin,
+  // para que o cliente possa ver no PDF sem acessar a coleção sensível labor_payments).
+  laborPaymentsSnapshot?: {
+    supplier: string; description: string; paymentDate: string;
+    value: number; contractValue: number; contractPaidTotal: number;
+  }[];
+  // Snapshot dos gastos do período (mesma lógica: documento imutável e autossuficiente).
+  expensesSnapshot?: {
+    date: string; description: string; category: string; supplier: string; value: number;
+  }[];
+  released: boolean;               // se true, o cliente vê esta medição
+  createdAt: string;
+}
+
 export interface QuotationItem {
   id: string;
   name: string;

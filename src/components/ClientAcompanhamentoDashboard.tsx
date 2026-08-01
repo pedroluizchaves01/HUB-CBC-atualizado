@@ -14,6 +14,21 @@ import {
   TrendingUp, Wallet, CheckCircle2, Clock,
 } from 'lucide-react';
 import { Transaction, TransactionCategory, Project } from '../types';
+import { generateMeasurementBulletinPdf } from '../lib/pdfReports';
+
+interface MeasurementLite {
+  id: string; projectId: string; number: string;
+  periodStart: string; periodEnd: string; emissionDate: string;
+  summaryText: string; responsibleTechnical: string;
+  physicalProgressPeriod: number; physicalProgressTotal: number;
+  financialProgressPeriod: number; financialProgressTotal: number;
+  spentPeriod: number; spentTotal: number;
+  photos: { id: string; url: string; caption: string }[];
+  phaseProgress: { name: string; progressStart: number; progressEnd: number }[];
+  expensesSnapshot?: { date: string; description: string; category: string; supplier: string; value: number }[];
+  laborPaymentsSnapshot?: { supplier: string; description: string; paymentDate: string; value: number; contractValue: number; contractPaidTotal: number }[];
+  released: boolean;
+}
 
 interface Phase {
   id: string; projectId: string; name: string;
@@ -25,6 +40,7 @@ interface Props {
   project: Project;
   transactions: Transaction[]; // já do projeto
   phases: Phase[];             // já do projeto
+  measurements?: MeasurementLite[]; // medições liberadas ao cliente
 }
 
 const CATEGORY_META: Record<TransactionCategory, { label: string; short: string; color: string; Icon: React.ComponentType<any> }> = {
@@ -85,7 +101,7 @@ function ProgressRing({ percent }: { percent: number }) {
 // ---------------------------------------------------------------------------
 // Componente principal
 // ---------------------------------------------------------------------------
-export default function ClientAcompanhamentoDashboard({ project, transactions, phases }: Props) {
+export default function ClientAcompanhamentoDashboard({ project, transactions, phases, measurements = [] }: Props) {
   // Avanço físico ponderado pelo custo previsto de cada etapa (mais fiel que média simples).
   const physicalProgress = useMemo(() => {
     if (!phases.length) return 0;
@@ -121,6 +137,66 @@ export default function ClientAcompanhamentoDashboard({ project, transactions, p
 
   return (
     <div className="space-y-6">
+      {/* Boletins de medição liberados — a informação principal para o cliente. */}
+      {measurements.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
+          className="bg-gradient-to-br from-[#C2703D]/8 to-transparent border border-[#C2703D]/20 rounded-2xl p-6"
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <FileCheck size={18} className="text-[#C2703D]" />
+            <h3 className="text-lg font-bold text-stone-900" style={{ fontFamily: 'var(--font-serif)' }}>Boletins de Medição</h3>
+          </div>
+          <p className="text-xs text-stone-500 mb-4">Relatórios oficiais de avanço da sua obra, período a período.</p>
+          <div className="space-y-2">
+            {[...measurements].sort((a, b) => (b.number || '').localeCompare(a.number || '', undefined, { numeric: true })).map((mm) => (
+              <div key={mm.id} className="flex items-center justify-between bg-white border border-stone-200 rounded-xl p-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-[#C2703D]/10 flex items-center justify-center flex-shrink-0">
+                    <span className="text-sm font-bold text-[#C2703D]">{mm.number}</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-stone-800">
+                      Medição nº {mm.number}
+                    </p>
+                    <p className="text-[11px] text-stone-500">
+                      {new Date(mm.periodStart + 'T00:00:00').toLocaleDateString('pt-BR')} a {new Date(mm.periodEnd + 'T00:00:00').toLocaleDateString('pt-BR')} · avanço +{mm.physicalProgressPeriod.toFixed(1)}%
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => generateMeasurementBulletinPdf({
+                    projectName: project.name,
+                    clientName: (project as any).clientName,
+                    measurementNumber: mm.number,
+                    periodStart: mm.periodStart, periodEnd: mm.periodEnd, emissionDate: mm.emissionDate,
+                    summaryText: mm.summaryText,
+                    physicalProgressPeriod: mm.physicalProgressPeriod,
+                    physicalProgressTotal: mm.physicalProgressTotal,
+                    financialProgressPeriod: mm.financialProgressPeriod,
+                    financialProgressTotal: mm.financialProgressTotal,
+                    budgetTotal: project.budget || 0,
+                    spentPeriod: mm.spentPeriod, spentTotal: mm.spentTotal,
+                    expenses: (mm.expensesSnapshot && mm.expensesSnapshot.length > 0)
+                      ? mm.expensesSnapshot
+                      : transactions
+                          .filter(t => (t.date || '').slice(0, 10) >= mm.periodStart && (t.date || '').slice(0, 10) <= mm.periodEnd)
+                          .map(t => ({ date: t.date, description: t.description, category: CATEGORY_META[t.category]?.short || t.category, supplier: t.supplier, value: t.value })),
+                    laborPayments: mm.laborPaymentsSnapshot || [],
+                    phaseProgress: mm.phaseProgress,
+                    photos: mm.photos.map(p => ({ url: p.url, caption: p.caption })),
+                    responsibleTechnical: mm.responsibleTechnical,
+                  })}
+                  className="flex items-center gap-1.5 bg-[#C2703D] hover:bg-[#a85f32] text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                >
+                  <TrendingUp size={13} /> Baixar PDF
+                </button>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
       {/* Saudação */}
       <div>
         <h2 className="text-2xl md:text-3xl font-bold text-stone-900" style={{ fontFamily: 'var(--font-serif)' }}>
