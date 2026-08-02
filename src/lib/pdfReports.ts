@@ -13,6 +13,7 @@
 
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { LOGO_BLACK, LOGO_WHITE, LOGO_ASPECT } from "./brandAssets";
 
 // ---------------------------------------------------------------------------
 // Identidade visual
@@ -58,20 +59,29 @@ function drawHeader(doc: jsPDF, title: string, subtitle: string, projectName: st
   const w = doc.internal.pageSize.getWidth();
   const m = 12;
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
-  doc.setTextColor(...BRAND.ink);
-  doc.text(COMPANY.toUpperCase(), m, 14);
+  // Logo da empresa (substitui o nome em texto). Largura 42mm, proporção 3.76:1.
+  const logoW = 42;
+  const logoH = logoW / LOGO_ASPECT;
+  try {
+    doc.addImage(LOGO_BLACK, "PNG", m, 7, logoW, logoH, undefined, "FAST");
+  } catch {
+    // Fallback: se a imagem falhar, mantém o nome em texto.
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(...BRAND.ink);
+    doc.text(COMPANY.toUpperCase(), m, 14);
+  }
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
+  doc.setFontSize(7);
   doc.setTextColor(...BRAND.soft);
-  doc.text(COMPANY_SUB, m, 18.5);
+  doc.text(COMPANY_SUB, m, 20);
 
   // Bloco direito
   doc.setFontSize(7);
-  doc.text(title.toUpperCase(), w - m, 14, { align: "right" });
-  doc.text(`Emissão: ${today()}`, w - m, 18, { align: "right" });
+  doc.setTextColor(...BRAND.soft);
+  doc.text(title.toUpperCase(), w - m, 12, { align: "right" });
+  doc.text(`Emissão: ${today()}`, w - m, 16, { align: "right" });
 
   // Linha divisória
   doc.setDrawColor(...BRAND.ink);
@@ -123,6 +133,62 @@ function sectionTitle(doc: jsPDF, text: string, y: number): number {
   doc.setTextColor(...BRAND.ink);
   doc.text(text.toUpperCase(), m + 2, y + 4);
   return y + 6;
+}
+
+/** Desenha um anel de progresso (donut) com percentual no centro. Para o dashboard do boletim. */
+function drawProgressRing(
+  doc: jsPDF, cx: number, cy: number, radius: number,
+  percent: number, color: [number, number, number], label: string, centerText: string,
+): void {
+  const pct = Math.max(0, Math.min(100, percent));
+  const thickness = radius * 0.32;
+  // Trilha de fundo (círculo cinza claro).
+  doc.setDrawColor(232, 230, 228);
+  doc.setLineWidth(thickness);
+  doc.circle(cx, cy, radius, "S");
+  // Arco de progresso: aproximado por segmentos de linha (jsPDF não tem arco parcial nativo).
+  const steps = Math.max(1, Math.round((pct / 100) * 60));
+  doc.setDrawColor(...color);
+  doc.setLineWidth(thickness);
+  const startAngle = -Math.PI / 2; // começa no topo
+  let prevX = cx + radius * Math.cos(startAngle);
+  let prevY = cy + radius * Math.sin(startAngle);
+  for (let i = 1; i <= steps; i++) {
+    const a = startAngle + (i / 60) * 2 * Math.PI;
+    const x = cx + radius * Math.cos(a);
+    const y = cy + radius * Math.sin(a);
+    doc.line(prevX, prevY, x, y);
+    prevX = x; prevY = y;
+  }
+  // Texto central (o percentual).
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(radius * 0.62);
+  doc.setTextColor(...color);
+  doc.text(centerText, cx, cy + radius * 0.18, { align: "center" });
+  // Rótulo abaixo do anel.
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6.5);
+  doc.setTextColor(...BRAND.soft);
+  doc.text(label.toUpperCase(), cx, cy + radius + 5, { align: "center" });
+}
+
+/** Título de seção mais leve (boletim): barra de acento terracota + texto, sem faixa cinza. */
+function bulletinSectionTitle(doc: jsPDF, text: string, y: number): number {
+  const w = doc.internal.pageSize.getWidth();
+  const m = 14;
+  // Barra de acento à esquerda.
+  doc.setFillColor(194, 112, 61);
+  doc.rect(m, y - 3, 2.5, 5, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9.5);
+  doc.setTextColor(...BRAND.ink);
+  doc.text(text, m + 4.5, y + 1);
+  // Linha fina até a margem direita.
+  doc.setDrawColor(...BRAND.line);
+  doc.setLineWidth(0.15);
+  const tw = doc.getTextWidth(text);
+  doc.line(m + 4.5 + tw + 3, y - 0.5, w - m, y - 0.5);
+  return y + 5;
 }
 
 /**
@@ -1031,25 +1097,32 @@ export async function generateMeasurementBulletinPdf(data: MeasurementBulletinDa
   // Cabeçalho específico do boletim.
   const drawBulletinHeader = () => {
     doc.setFillColor(...BRAND.headBg);
-    doc.rect(0, 0, w, 26, "F");
-    doc.setTextColor(255, 255, 255);
+    doc.rect(0, 0, w, 30, "F");
+    // Logo branca à esquerda.
+    const logoW = 46;
+    const logoH = logoW / LOGO_ASPECT;
+    try {
+      doc.addImage(LOGO_WHITE, "PNG", m, 7, logoW, logoH, undefined, "FAST");
+    } catch {
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.text(COMPANY.toUpperCase(), m, 13);
+    }
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.5);
+    doc.setTextColor(190, 185, 180);
+    doc.text(COMPANY_SUB.toUpperCase(), m, 24);
+    // Bloco à direita — número, emissão, período.
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(13);
-    doc.text(COMPANY.toUpperCase(), m, 11);
+    doc.setFontSize(12);
+    doc.setTextColor(255, 255, 255);
+    doc.text(`BOLETIM DE MEDIÇÃO Nº ${num}`, w - m, 12, { align: "right" });
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.5);
     doc.setTextColor(200, 195, 190);
-    doc.text(COMPANY_SUB, m, 16);
-    // Bloco à direita
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.setTextColor(255, 255, 255);
-    doc.text(`BOLETIM DE MEDIÇÃO Nº ${num}`, w - m, 11, { align: "right" });
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
-    doc.setTextColor(200, 195, 190);
-    doc.text(`Emissão: ${fmtDateBR(emission)}`, w - m, 16, { align: "right" });
-    doc.text(`Período: ${fmtDateBR(data.periodStart)} a ${fmtDateBR(data.periodEnd)}`, w - m, 21, { align: "right" });
+    doc.text(`Emissão: ${fmtDateBR(emission)}`, w - m, 18, { align: "right" });
+    doc.text(`Período: ${fmtDateBR(data.periodStart)} a ${fmtDateBR(data.periodEnd)}`, w - m, 23, { align: "right" });
   };
 
   let pageNum = 1;
@@ -1066,12 +1139,12 @@ export async function generateMeasurementBulletinPdf(data: MeasurementBulletinDa
 
   const newPage = () => { footer(); doc.addPage(); pageNum++; drawBulletinHeader(); };
   const ensure = (needed: number, y: number): number => {
-    if (y + needed > h - 16) { newPage(); return 32; }
+    if (y + needed > h - 16) { newPage(); return 36; }
     return y;
   };
 
   drawBulletinHeader();
-  let y = 32;
+  let y = 36;
 
   // Identificação da obra/cliente.
   doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(...BRAND.ink);
@@ -1086,29 +1159,39 @@ export async function generateMeasurementBulletinPdf(data: MeasurementBulletinDa
   y += 8;
 
   // -------- RESUMO EXECUTIVO (cards de %) --------
-  y = sectionTitle(doc, "Resumo do Período", y) + 3;
+  y = bulletinSectionTitle(doc, "Resumo do Período", y) + 4;
   const cardW = (w - 2 * m - 3 * 3) / 4;
-  const cards: [string, string, [number, number, number]][] = [
-    ["Avanço Físico (Período)", `${data.physicalProgressPeriod.toFixed(1)}%`, BRAND.ink],
-    ["Avanço Físico (Acum.)", `${data.physicalProgressTotal.toFixed(1)}%`, BRAND.good],
-    ["Avanço Financ. (Período)", `${data.financialProgressPeriod.toFixed(1)}%`, BRAND.ink],
-    ["Avanço Financ. (Acum.)", `${data.financialProgressTotal.toFixed(1)}%`, BRAND.good],
+  const cardH = 18;
+  // [label, valor, cor do texto, cor do acento/fundo suave]
+  const terra: [number, number, number] = [194, 112, 61];
+  const azul: [number, number, number] = [62, 124, 139];
+  const cards: [string, string, [number, number, number], [number, number, number]][] = [
+    ["Físico no Período", `${data.physicalProgressPeriod.toFixed(1)}%`, terra, terra],
+    ["Físico Acumulado", `${data.physicalProgressTotal.toFixed(1)}%`, terra, terra],
+    ["Financeiro no Período", `${data.financialProgressPeriod.toFixed(1)}%`, azul, azul],
+    ["Financeiro Acumulado", `${data.financialProgressTotal.toFixed(1)}%`, azul, azul],
   ];
-  cards.forEach(([label, value, color], i) => {
+  cards.forEach(([label, value, color, accent], i) => {
     const x = m + i * (cardW + 3);
-    doc.setFillColor(...BRAND.zebra); doc.setDrawColor(...BRAND.line); doc.setLineWidth(0.2);
-    doc.rect(x, y, cardW, 15, "FD");
-    doc.setFont("helvetica", "bold"); doc.setFontSize(5.6); doc.setTextColor(...BRAND.soft);
-    doc.text(label.toUpperCase(), x + 2, y + 4);
-    doc.setFontSize(13); doc.setTextColor(...color);
-    doc.text(value, x + 2, y + 11);
+    // Fundo suave da cor do acento.
+    doc.setFillColor(accent[0], accent[1], accent[2]);
+    (doc as any).setGState && (doc as any).setGState(new (doc as any).GState({ opacity: 0.07 }));
+    doc.rect(x, y, cardW, cardH, "F");
+    (doc as any).setGState && (doc as any).setGState(new (doc as any).GState({ opacity: 1 }));
+    // Barra de acento no topo.
+    doc.setFillColor(accent[0], accent[1], accent[2]);
+    doc.rect(x, y, cardW, 1.4, "F");
+    // Rótulo e valor.
+    doc.setFont("helvetica", "bold"); doc.setFontSize(5.8); doc.setTextColor(...BRAND.soft);
+    doc.text(label.toUpperCase(), x + 2.5, y + 6);
+    doc.setFontSize(15); doc.setTextColor(...color);
+    doc.text(value, x + 2.5, y + 14);
   });
-  y += 15 + 4;
+  y += cardH + 5;
 
   // Linha de valores (orçamento / gasto período / gasto acumulado).
-  doc.setFillColor(...BRAND.zebra); doc.setDrawColor(...BRAND.line);
-  doc.rect(m, y, w - 2 * m, 10, "FD");
-  doc.setFont("helvetica", "bold"); doc.setFontSize(6); doc.setTextColor(...BRAND.soft);
+  doc.setFillColor(...BRAND.zebra); doc.setDrawColor(...BRAND.line); doc.setLineWidth(0.2);
+  doc.rect(m, y, w - 2 * m, 11, "FD");
   const vCol = (w - 2 * m) / 3;
   const vals: [string, string][] = [
     ["ORÇAMENTO TOTAL DA OBRA", fmtMoney(data.budgetTotal)],
@@ -1116,17 +1199,84 @@ export async function generateMeasurementBulletinPdf(data: MeasurementBulletinDa
     ["INVESTIDO ACUMULADO", fmtMoney(data.spentTotal)],
   ];
   vals.forEach(([l, v], i) => {
+    // Divisória vertical entre colunas.
+    if (i > 0) { doc.setDrawColor(...BRAND.line); doc.setLineWidth(0.15); doc.line(m + i * vCol, y + 2, m + i * vCol, y + 9); }
     doc.setFont("helvetica", "bold"); doc.setFontSize(5.6); doc.setTextColor(...BRAND.soft);
-    doc.text(l, m + i * vCol + 2, y + 3.5);
-    doc.setFontSize(9); doc.setTextColor(...BRAND.ink);
-    doc.text(v, m + i * vCol + 2, y + 8);
+    doc.text(l, m + i * vCol + 3, y + 4);
+    doc.setFontSize(9.5); doc.setTextColor(...BRAND.ink);
+    doc.text(v, m + i * vCol + 3, y + 8.5);
   });
-  y += 10 + 6;
+  y += 11 + 7;
+
+  // -------- DASHBOARD VISUAL (anéis de progresso do período) --------
+  {
+    y = ensure(52, y);
+    y = bulletinSectionTitle(doc, "Panorama da Medição", y) + 6;
+    const terra: [number, number, number] = [194, 112, 61];
+    const azul: [number, number, number] = [62, 124, 139];
+
+    // Dois anéis lado a lado: avanço físico e financeiro do período.
+    const ringR = 15;
+    const ring1X = m + 22;
+    const ring2X = w / 2 - 6;
+    const ringY = y + ringR + 2;
+    drawProgressRing(doc, ring1X, ringY, ringR, data.physicalProgressPeriod,
+      terra, "Avanço Físico", `${data.physicalProgressPeriod.toFixed(0)}%`);
+    drawProgressRing(doc, ring2X, ringY, ringR, data.financialProgressPeriod,
+      azul, "Avanço Financeiro", `${data.financialProgressPeriod.toFixed(0)}%`);
+
+    // Painel de leitura rápida à direita.
+    const panelX = w / 2 + 24;
+    const panelW = w - m - panelX;
+    let py = y + 2;
+    // Status geral: compara físico realizado vs previsto (se houver previsto).
+    const hasPlanned = data.physicalPlannedPeriod !== undefined;
+    const physDev = hasPlanned ? data.physicalProgressPeriod - (data.physicalPlannedPeriod || 0) : 0;
+    const statusText = !hasPlanned ? "Medição registrada"
+      : physDev >= 2 ? "Obra adiantada"
+      : physDev <= -2 ? "Obra atrasada"
+      : "Dentro do previsto";
+    const statusColor: [number, number, number] = !hasPlanned ? BRAND.soft
+      : physDev >= 2 ? [4, 120, 87]
+      : physDev <= -2 ? [180, 70, 47]
+      : [62, 124, 139];
+
+    // Caixa de status.
+    doc.setFillColor(statusColor[0], statusColor[1], statusColor[2]);
+    (doc as any).setGState && (doc as any).setGState(new (doc as any).GState({ opacity: 0.10 }));
+    doc.rect(panelX, py, panelW, 13, "F");
+    (doc as any).setGState && (doc as any).setGState(new (doc as any).GState({ opacity: 1 }));
+    doc.setFillColor(statusColor[0], statusColor[1], statusColor[2]);
+    doc.rect(panelX, py, 1.6, 13, "F");
+    doc.setFont("helvetica", "bold"); doc.setFontSize(9.5); doc.setTextColor(...statusColor);
+    doc.text(statusText, panelX + 4, py + 6);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(6.5); doc.setTextColor(...BRAND.soft);
+    doc.text(`Período de ${fmtDateBR(data.periodStart)} a ${fmtDateBR(data.periodEnd)}`, panelX + 4, py + 10.5);
+    py += 16;
+
+    // Mini-indicadores: acumulado físico e financeiro.
+    const miniW = (panelW - 3) / 2;
+    const minis: [string, string, [number, number, number]][] = [
+      ["FÍSICO ACUMULADO", `${data.physicalProgressTotal.toFixed(0)}%`, terra],
+      ["FINANC. ACUMULADO", `${data.financialProgressTotal.toFixed(0)}%`, azul],
+    ];
+    minis.forEach(([l, v, c], i) => {
+      const mx = panelX + i * (miniW + 3);
+      doc.setFillColor(...BRAND.zebra); doc.setDrawColor(...BRAND.line); doc.setLineWidth(0.15);
+      doc.rect(mx, py, miniW, 12, "FD");
+      doc.setFont("helvetica", "bold"); doc.setFontSize(5.4); doc.setTextColor(...BRAND.soft);
+      doc.text(l, mx + 2, py + 4);
+      doc.setFontSize(11); doc.setTextColor(...c);
+      doc.text(v, mx + 2, py + 10);
+    });
+
+    y = ringY + ringR + 9;
+  }
 
   // -------- COMPARATIVO PREVISTO (cronograma) x REALIZADO (acompanhamento) --------
   if (data.physicalPlannedPeriod !== undefined || data.financialPlannedPeriod !== undefined) {
     y = ensure(42, y);
-    y = sectionTitle(doc, "Comparativo do Período: Previsto x Realizado", y) + 4;
+    y = bulletinSectionTitle(doc, "Comparativo do Período: Previsto x Realizado", y) + 4;
 
     // Desenha uma linha comparativa (previsto vs realizado) com duas barras.
     const drawCompare = (
@@ -1195,7 +1345,7 @@ export async function generateMeasurementBulletinPdf(data: MeasurementBulletinDa
   // -------- RESUMO TEXTUAL (acumulado) --------
   if (data.summaryText && data.summaryText.trim()) {
     y = ensure(30, y);
-    y = sectionTitle(doc, "Situação Geral da Obra", y) + 3;
+    y = bulletinSectionTitle(doc, "Situação Geral da Obra", y) + 3;
     doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor(...BRAND.ink);
     const lines = doc.splitTextToSize(data.summaryText.trim(), w - 2 * m);
     doc.text(lines, m, y);
@@ -1205,30 +1355,47 @@ export async function generateMeasurementBulletinPdf(data: MeasurementBulletinDa
   // -------- AVANÇO FÍSICO DAS ETAPAS (com barras) --------
   if (data.phaseProgress.length > 0) {
     y = ensure(20, y);
-    y = sectionTitle(doc, "Avanço Físico das Etapas no Período", y) + 3;
+    y = bulletinSectionTitle(doc, "Avanço Físico das Etapas no Período", y) + 4;
+
+    // Mostra só as etapas que tiveram avanço no período (evita poluir com 0%),
+    // mas se nenhuma teve avanço, mostra todas para não ficar vazio.
+    const withProgress = data.phaseProgress.filter(ph => (ph.progressEnd - ph.progressStart) > 0.5);
+    const toShow = withProgress.length > 0 ? withProgress : data.phaseProgress;
+
     doc.setFontSize(7.5);
-    data.phaseProgress.forEach((ph) => {
+    toShow.forEach((ph) => {
       y = ensure(9, y);
       const delta = ph.progressEnd - ph.progressStart;
+      // Nome da etapa à esquerda.
       doc.setFont("helvetica", "bold"); doc.setTextColor(...BRAND.ink); doc.setFontSize(7.5);
       doc.text(ph.name, m, y);
+      // Progresso à direita: "60% a 100%" + variação destacada em terracota.
       doc.setFont("helvetica", "normal"); doc.setTextColor(...BRAND.soft); doc.setFontSize(7);
-      doc.text(`${ph.progressStart.toFixed(0)}% → ${ph.progressEnd.toFixed(0)}%  (+${delta.toFixed(0)}%)`, w - m, y, { align: "right" });
-      // Barra: base (início) + avanço do período em destaque.
-      const barY = y + 1.5, barW = w - 2 * m, barH = 2.4;
+      const rangeText = `${ph.progressStart.toFixed(0)}% a ${ph.progressEnd.toFixed(0)}%`;
+      const deltaText = delta > 0.5 ? `+${delta.toFixed(0)}%` : "sem avanço";
+      // Desenha a variação em terracota, e o intervalo em cinza logo à esquerda dela.
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(delta > 0.5 ? 194 : 168, delta > 0.5 ? 112 : 162, delta > 0.5 ? 61 : 158);
+      doc.text(deltaText, w - m, y, { align: "right" });
+      const deltaW = doc.getTextWidth(deltaText);
+      doc.setFont("helvetica", "normal"); doc.setTextColor(...BRAND.soft);
+      doc.text(rangeText, w - m - deltaW - 3, y, { align: "right" });
+
+      // Barra: fundo + parte já feita antes do período (cinza) + avanço do período (terracota).
+      const barY = y + 1.8, barW = w - 2 * m, barH = 2.6;
       doc.setFillColor(...BRAND.zebra); doc.rect(m, barY, barW, barH, "F");
       doc.setFillColor(214, 211, 209); doc.rect(m, barY, barW * (ph.progressStart / 100), barH, "F");
       doc.setFillColor(194, 112, 61); // terracota: avanço do período
       const startX = m + barW * (ph.progressStart / 100);
       doc.rect(startX, barY, barW * (Math.max(0, delta) / 100), barH, "F");
-      y += 6.5;
+      y += 7;
     });
     y += 3;
   }
 
   // -------- PLANILHA DE GASTOS DO PERÍODO --------
   y = ensure(24, y);
-  y = sectionTitle(doc, "Gastos do Período", y) + 2;
+  y = bulletinSectionTitle(doc, "Gastos do Período", y) + 2;
   const expBody = data.expenses.map((e) => [
     fmtDateBR(e.date), e.description || "—", e.category || "—", e.supplier || "—", fmtMoney(e.value),
   ]);
@@ -1252,8 +1419,8 @@ export async function generateMeasurementBulletinPdf(data: MeasurementBulletinDa
 
   // -------- RELATÓRIO FOTOGRÁFICO --------
   if (data.photos.length > 0) {
-    newPage(); y = 32;
-    y = sectionTitle(doc, "Relatório Fotográfico", y) + 4;
+    newPage(); y = 36;
+    y = bulletinSectionTitle(doc, "Relatório Fotográfico", y) + 4;
     const gap = 4;
     const cols = 2;
     const cellW = (w - 2 * m - (cols - 1) * gap) / cols;
@@ -1291,7 +1458,7 @@ export async function generateMeasurementBulletinPdf(data: MeasurementBulletinDa
 
   // -------- ASSINATURAS --------
   y = ensure(40, y);
-  y = sectionTitle(doc, "Aprovação da Medição", y) + 12;
+  y = bulletinSectionTitle(doc, "Aprovação da Medição", y) + 12;
   const sigW = (w - 2 * m - 20) / 2;
   const drawSig = (x: number, label: string, sub: string) => {
     doc.setDrawColor(...BRAND.ink); doc.setLineWidth(0.3);
