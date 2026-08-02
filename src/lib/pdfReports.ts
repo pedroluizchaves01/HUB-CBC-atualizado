@@ -992,6 +992,10 @@ export interface MeasurementBulletinData {
   physicalProgressTotal: number;   // % avanço físico acumulado
   financialProgressPeriod: number; // % avanço financeiro do período
   financialProgressTotal: number;  // % avanço financeiro acumulado
+  // Comparativo previsto (cronograma) x realizado — opcional
+  physicalPlannedPeriod?: number;
+  financialPlannedPeriod?: number;
+  costPlannedPeriod?: number;
   budgetTotal: number;             // orçamento total da obra
   spentPeriod: number;             // gasto no período
   spentTotal: number;              // gasto acumulado
@@ -1119,6 +1123,75 @@ export async function generateMeasurementBulletinPdf(data: MeasurementBulletinDa
   });
   y += 10 + 6;
 
+  // -------- COMPARATIVO PREVISTO (cronograma) x REALIZADO (acompanhamento) --------
+  if (data.physicalPlannedPeriod !== undefined || data.financialPlannedPeriod !== undefined) {
+    y = ensure(42, y);
+    y = sectionTitle(doc, "Comparativo do Período: Previsto x Realizado", y) + 4;
+
+    // Desenha uma linha comparativa (previsto vs realizado) com duas barras.
+    const drawCompare = (
+      label: string, plannedPct: number, realizedPct: number,
+      plannedLabel: string, realizedLabel: string, yPos: number,
+    ): number => {
+      const barW = w - 2 * m;
+      const barH = 4;
+      const clamp = (v: number) => Math.max(0, Math.min(100, v));
+
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(...BRAND.ink);
+      doc.text(label, m, yPos);
+
+      // Desvio (realizado - previsto), com cor conforme adianta/atrasa.
+      const dev = realizedPct - plannedPct;
+      const devColor: [number, number, number] = dev >= 0 ? [4, 120, 87] : [180, 70, 47];
+      doc.setFont("helvetica", "bold"); doc.setFontSize(7.5); doc.setTextColor(...devColor);
+      doc.text(`${dev >= 0 ? "+" : ""}${dev.toFixed(1)}%`, w - m, yPos, { align: "right" });
+
+      // Barra PREVISTO (cinza)
+      let by = yPos + 2;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(6); doc.setTextColor(...BRAND.soft);
+      doc.text("Previsto", m, by + 3);
+      doc.setFillColor(...BRAND.zebra); doc.rect(m + 18, by, barW - 18, barH, "F");
+      doc.setFillColor(150, 145, 140); doc.rect(m + 18, by, (barW - 18) * (clamp(plannedPct) / 100), barH, "F");
+      doc.setTextColor(...BRAND.ink); doc.setFontSize(6);
+      doc.text(plannedLabel, w - m, by + 3, { align: "right" });
+
+      // Barra REALIZADO (terracota)
+      by += barH + 2;
+      doc.setTextColor(...BRAND.soft); doc.setFontSize(6);
+      doc.text("Realizado", m, by + 3);
+      doc.setFillColor(...BRAND.zebra); doc.rect(m + 18, by, barW - 18, barH, "F");
+      doc.setFillColor(194, 112, 61); doc.rect(m + 18, by, (barW - 18) * (clamp(realizedPct) / 100), barH, "F");
+      doc.setTextColor(...BRAND.ink); doc.setFontSize(6);
+      doc.text(realizedLabel, w - m, by + 3, { align: "right" });
+
+      return by + barH + 6;
+    };
+
+    if (data.physicalPlannedPeriod !== undefined) {
+      y = drawCompare(
+        "Avanço Físico",
+        data.physicalPlannedPeriod, data.physicalProgressPeriod,
+        `${data.physicalPlannedPeriod.toFixed(1)}%`, `${data.physicalProgressPeriod.toFixed(1)}%`,
+        y,
+      );
+    }
+    if (data.financialPlannedPeriod !== undefined) {
+      const plannedMoney = data.costPlannedPeriod !== undefined ? `  (${fmtMoney(data.costPlannedPeriod)})` : "";
+      y = drawCompare(
+        "Avanço Financeiro",
+        data.financialPlannedPeriod, data.financialProgressPeriod,
+        `${data.financialPlannedPeriod.toFixed(1)}%${plannedMoney}`,
+        `${data.financialProgressPeriod.toFixed(1)}%  (${fmtMoney(data.spentPeriod)})`,
+        y,
+      );
+    }
+
+    // Legenda interpretativa.
+    doc.setFont("helvetica", "italic"); doc.setFontSize(6.5); doc.setTextColor(...BRAND.soft);
+    doc.text("Valores positivos indicam adiantamento em relação ao planejado; negativos, atraso.", m, y);
+    y += 6;
+  }
+
   // -------- RESUMO TEXTUAL (acumulado) --------
   if (data.summaryText && data.summaryText.trim()) {
     y = ensure(30, y);
@@ -1176,36 +1249,6 @@ export async function generateMeasurementBulletinPdf(data: MeasurementBulletinDa
     didDrawPage: () => { /* autoTable gerencia páginas próprias */ },
   });
   y = ((doc as any).lastAutoTable?.finalY || y) + 6;
-
-  // -------- PAGAMENTOS DE MÃO DE OBRA --------
-  if (data.laborPayments.length > 0) {
-    y = ensure(24, y);
-    y = sectionTitle(doc, "Pagamentos de Mão de Obra no Período", y) + 2;
-    const labBody = data.laborPayments.map((p) => {
-      const pctContract = p.contractValue > 0 ? (p.contractPaidTotal / p.contractValue) * 100 : 0;
-      return [
-        p.supplier || "—", p.description || "—", fmtDateBR(p.paymentDate),
-        fmtMoney(p.value), fmtMoney(p.contractValue), `${pctContract.toFixed(0)}%`,
-      ];
-    });
-    const labTotal = data.laborPayments.reduce((s, p) => s + (p.value || 0), 0);
-    labBody.push([
-      { content: "TOTAL PAGO NO PERÍODO", colSpan: 3, styles: { halign: "right", fontStyle: "bold", fillColor: BRAND.headBg, textColor: BRAND.headText } } as any,
-      { content: fmtMoney(labTotal), styles: { halign: "right", fontStyle: "bold", fillColor: BRAND.headBg, textColor: BRAND.headText } } as any,
-      { content: "", colSpan: 2, styles: { fillColor: BRAND.headBg } } as any,
-    ]);
-    autoTable(doc, {
-      head: [["Prestador", "Descrição", "Data", "Valor Pago", "Vlr. Contrato", "% Contrato"]],
-      body: labBody,
-      startY: y,
-      margin: { left: m, right: m },
-      styles: { fontSize: 7, cellPadding: 1.4, overflow: "linebreak", lineColor: BRAND.line, lineWidth: 0.1, textColor: BRAND.ink },
-      headStyles: { fillColor: BRAND.headBg, textColor: BRAND.headText, fontStyle: "bold", fontSize: 7, halign: "center" },
-      alternateRowStyles: { fillColor: BRAND.zebra },
-      columnStyles: { 2: { cellWidth: 20, halign: "center" }, 3: { cellWidth: 26, halign: "right" }, 4: { cellWidth: 26, halign: "right" }, 5: { cellWidth: 20, halign: "center" } },
-    });
-    y = ((doc as any).lastAutoTable?.finalY || y) + 6;
-  }
 
   // -------- RELATÓRIO FOTOGRÁFICO --------
   if (data.photos.length > 0) {

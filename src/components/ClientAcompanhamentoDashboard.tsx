@@ -22,6 +22,7 @@ interface MeasurementLite {
   summaryText: string; responsibleTechnical: string;
   physicalProgressPeriod: number; physicalProgressTotal: number;
   financialProgressPeriod: number; financialProgressTotal: number;
+  physicalPlannedPeriod?: number; financialPlannedPeriod?: number; costPlannedPeriod?: number;
   spentPeriod: number; spentTotal: number;
   photos: { id: string; url: string; caption: string }[];
   phaseProgress: { name: string; progressStart: number; progressEnd: number }[];
@@ -175,6 +176,9 @@ export default function ClientAcompanhamentoDashboard({ project, transactions, p
                     physicalProgressTotal: mm.physicalProgressTotal,
                     financialProgressPeriod: mm.financialProgressPeriod,
                     financialProgressTotal: mm.financialProgressTotal,
+                    physicalPlannedPeriod: mm.physicalPlannedPeriod,
+                    financialPlannedPeriod: mm.financialPlannedPeriod,
+                    costPlannedPeriod: mm.costPlannedPeriod,
                     budgetTotal: project.budget || 0,
                     spentPeriod: mm.spentPeriod, spentTotal: mm.spentTotal,
                     expenses: (mm.expensesSnapshot && mm.expensesSnapshot.length > 0)

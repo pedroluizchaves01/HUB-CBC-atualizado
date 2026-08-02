@@ -124,6 +124,10 @@ export interface MeasurementBulletin {
   financialProgressTotal: number;
   spentPeriod: number;
   spentTotal: number;
+  // Comparativo previsto (cronograma) x realizado (acompanhamento) no período.
+  physicalPlannedPeriod?: number;   // % avanço físico PREVISTO no período
+  financialPlannedPeriod?: number;  // % avanço financeiro PREVISTO no período (do orçamento)
+  costPlannedPeriod?: number;       // R$ previsto para o período (cronograma)
   // Fotos com legendas editáveis (base64 ou url)
   photos: { id: string; url: string; caption: string }[];
   // Snapshot dos dados usados (para o documento não mudar depois)

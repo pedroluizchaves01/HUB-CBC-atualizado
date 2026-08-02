@@ -133,6 +133,30 @@ export default function Measurements({
     const financialProgressTotal = budget > 0 ? (spentTotal / budget) * 100 : 0;
     const financialProgressPeriod = budget > 0 ? (spentPeriod / budget) * 100 : 0;
 
+    // --- PREVISTO no período (do cronograma de planejamento) ---
+    // Distribui o custo/progresso previsto de cada fase pelos dias que caem no intervalo.
+    const ps = new Date(periodStart + 'T00:00:00').getTime();
+    const pe = new Date(periodEnd + 'T23:59:59').getTime();
+    let costPlannedPeriod = 0;
+    let physPlannedWeighted = 0;
+    for (const ph of phases) {
+      const start = new Date((ph.startDate || '') + 'T00:00:00').getTime();
+      const end = new Date((ph.endDate || '') + 'T23:59:59').getTime();
+      if (isNaN(start) || isNaN(end) || start > end) continue;
+      const totalDays = Math.max(1, Math.round((end - start) / 86400000));
+      const overlapStart = Math.max(start, ps);
+      const overlapEnd = Math.min(end, pe);
+      if (overlapStart > overlapEnd) continue;
+      const overlapDays = Math.max(0, Math.round((overlapEnd - overlapStart) / 86400000));
+      const ratio = Math.min(1, overlapDays / totalDays);
+      costPlannedPeriod += (ph.costPrev || 0) * ratio;
+      // Avanço físico previsto do período = fração da fase que cai no intervalo,
+      // ponderada pelo peso da fase (custo previsto) no total da obra.
+      physPlannedWeighted += ratio * 100 * (ph.costPrev || 0);
+    }
+    const physicalPlannedPeriod = totalWeight > 0 ? physPlannedWeighted / totalWeight : 0;
+    const financialPlannedPeriod = budget > 0 ? (costPlannedPeriod / budget) * 100 : 0;
+
     // Snapshot dos gastos do período (documento autossuficiente e imutável).
     const expensesSnapshot = periodTx
       .slice()
@@ -171,6 +195,9 @@ export default function Measurements({
       financialProgressPeriod,
       financialProgressTotal,
       spentPeriod, spentTotal,
+      physicalPlannedPeriod,
+      financialPlannedPeriod,
+      costPlannedPeriod,
       photos,
       phaseProgress,
       expensesSnapshot,
@@ -232,6 +259,9 @@ export default function Measurements({
         physicalProgressTotal: m.physicalProgressTotal,
         financialProgressPeriod: m.financialProgressPeriod,
         financialProgressTotal: m.financialProgressTotal,
+        physicalPlannedPeriod: m.physicalPlannedPeriod,
+        financialPlannedPeriod: m.financialPlannedPeriod,
+        costPlannedPeriod: m.costPlannedPeriod,
         budgetTotal: project?.budget || 0,
         spentPeriod: m.spentPeriod, spentTotal: m.spentTotal,
         expenses, laborPayments: payments,
@@ -429,6 +459,27 @@ function MeasurementEditor({
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-[#FF5A35]" />
           </div>
         ))}
+      </div>
+
+      {/* Comparativo: previsto (cronograma) — editável */}
+      <div className="bg-slate-50 rounded-xl p-3">
+        <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-bold mb-2">
+          Previsto no cronograma (para o comparativo)
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {([
+            ['Físico Previsto (%)', 'physicalPlannedPeriod'],
+            ['Financ. Previsto (%)', 'financialPlannedPeriod'],
+            ['Custo Previsto (R$)', 'costPlannedPeriod'],
+          ] as [string, keyof MeasurementBulletin][]).map(([label, key]) => (
+            <div key={key}>
+              <label className="block text-[10px] font-mono uppercase tracking-wider text-slate-500 font-bold mb-1">{label}</label>
+              <input type="number" step="0.1" value={(m[key] as number) ?? 0}
+                onChange={e => set({ [key]: Number(e.target.value) } as any)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-[#FF5A35]" />
+            </div>
+          ))}
+        </div>
       </div>
 
       <div>
