@@ -14,6 +14,7 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { LOGO_BLACK, LOGO_WHITE, LOGO_ASPECT } from "./brandAssets";
+import { registerPoppins } from "./poppinsFont";
 
 // ---------------------------------------------------------------------------
 // Identidade visual
@@ -59,23 +60,25 @@ function drawHeader(doc: jsPDF, title: string, subtitle: string, projectName: st
   const w = doc.internal.pageSize.getWidth();
   const m = 12;
 
-  // Logo da empresa (substitui o nome em texto). Largura 42mm, proporção 3.76:1.
-  const logoW = 42;
-  const logoH = logoW / LOGO_ASPECT;
-  try {
-    doc.addImage(LOGO_BLACK, "JPEG", m, 7, logoW, logoH, undefined, "FAST");
-  } catch {
-    // Fallback: se a imagem falhar, mantém o nome em texto.
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(13);
-    doc.setTextColor(...BRAND.ink);
-    doc.text(COMPANY.toUpperCase(), m, 14);
-  }
+  // Nome da empresa em texto: "CHAVES / BRITES / CORREA" empilhado, alinhado à direita.
+  const words = ["CHAVES", "BRITES", "CORREA"];
+  const fonts = (doc as any).getFontList ? (doc as any).getFontList() : {};
+  const logoFont = fonts && fonts["Poppins"] ? "Poppins" : "helvetica";
+  doc.setFont(logoFont, "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(...BRAND.ink);
+  const widest = Math.max(...words.map((wd) => doc.getTextWidth(wd)));
+  const rightEdge = m + widest;
+  let ly = 9;
+  words.forEach((wd) => {
+    doc.text(wd, rightEdge, ly, { align: "right" });
+    ly += 5;
+  });
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
+  doc.setFontSize(6.5);
   doc.setTextColor(...BRAND.soft);
-  doc.text(COMPANY_SUB, m, 20);
+  doc.text(COMPANY_SUB, m, ly + 1);
 
   // Bloco direito
   doc.setFontSize(7);
@@ -400,6 +403,7 @@ export function validateScheduleData(data: ScheduleReportData): ValidationReport
 
 export function generateSchedulePdf(data: ScheduleReportData): void {
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  registerPoppins(doc);
   const w = doc.internal.pageSize.getWidth();
   const m = 12;
 
@@ -675,6 +679,7 @@ export interface ClientContractData {
 
 export function generateClientContractPdf(data: ClientContractData): void {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  registerPoppins(doc);
   const w = doc.internal.pageSize.getWidth();
   const m = 18;
   const contentW = w - 2 * m;
@@ -774,6 +779,7 @@ export function validateMaterialsData(data: MaterialsReportData): ValidationRepo
 
 export function generateMaterialsPdf(data: MaterialsReportData): void {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  registerPoppins(doc);
   const w = doc.internal.pageSize.getWidth();
   const m = 12;
 
@@ -895,6 +901,7 @@ export function validateLaborData(data: LaborReportData): ValidationReport {
 
 export function generateLaborPaymentsPdf(data: LaborReportData): void {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  registerPoppins(doc);
   const w = doc.internal.pageSize.getWidth();
   const m = 12;
 
@@ -1090,6 +1097,7 @@ export async function generateMeasurementBulletinPdf(data: MeasurementBulletinDa
   const w = doc.internal.pageSize.getWidth();
   const h = doc.internal.pageSize.getHeight();
   const m = 14;
+  const hasPoppins = registerPoppins(doc);
 
   const emission = data.emissionDate || new Date().toISOString().slice(0, 10);
   const num = (data.measurementNumber || "01").trim();
@@ -1098,21 +1106,26 @@ export async function generateMeasurementBulletinPdf(data: MeasurementBulletinDa
   const drawBulletinHeader = () => {
     doc.setFillColor(...BRAND.headBg);
     doc.rect(0, 0, w, 30, "F");
-    // Logo branca à esquerda.
-    const logoW = 46;
-    const logoH = logoW / LOGO_ASPECT;
-    try {
-      doc.addImage(LOGO_WHITE, "JPEG", m, 7, logoW, logoH, undefined, "FAST");
-    } catch {
-      doc.setTextColor(255, 255, 255);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(13);
-      doc.text(COMPANY.toUpperCase(), m, 13);
-    }
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(6.5);
+    // Nome da empresa em texto: "CHAVES / BRITES / CORREA" empilhado, Poppins bold,
+    // palavras alinhadas entre si pela DIREITA. (Substitui a logo em imagem.)
+    const words = ["CHAVES", "BRITES", "CORREA"];
+    const logoFont = hasPoppins ? "Poppins" : "helvetica";
+    doc.setFont(logoFont, "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(255, 255, 255);
+    // Largura da palavra mais larga define a borda direita do bloco.
+    const widest = Math.max(...words.map((wd) => doc.getTextWidth(wd)));
+    const rightEdge = m + widest;
+    let ly = 9;
+    words.forEach((wd) => {
+      doc.text(wd, rightEdge, ly, { align: "right" });
+      ly += 5.2;
+    });
+    // Subtítulo abaixo.
+    doc.setFont(hasPoppins ? "Poppins" : "helvetica", hasPoppins ? "bold" : "normal");
+    doc.setFontSize(6);
     doc.setTextColor(190, 185, 180);
-    doc.text(COMPANY_SUB.toUpperCase(), m, 24);
+    doc.text(COMPANY_SUB.toUpperCase(), m, ly + 1.5);
     // Bloco à direita — número, emissão, período.
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
