@@ -33,7 +33,7 @@ function drawTopHeader(
   const logoW = 44;
   const logoH = logoW / LOGO_ASPECT;
   try {
-    doc.addImage(LOGO_BLACK, 'PNG', 14, 9, logoW, logoH, undefined, 'FAST');
+    doc.addImage(LOGO_BLACK, 'JPEG', 14, 9, logoW, logoH, undefined, 'FAST');
   } catch {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);

@@ -63,7 +63,7 @@ function drawHeader(doc: jsPDF, title: string, subtitle: string, projectName: st
   const logoW = 42;
   const logoH = logoW / LOGO_ASPECT;
   try {
-    doc.addImage(LOGO_BLACK, "PNG", m, 7, logoW, logoH, undefined, "FAST");
+    doc.addImage(LOGO_BLACK, "JPEG", m, 7, logoW, logoH, undefined, "FAST");
   } catch {
     // Fallback: se a imagem falhar, mantém o nome em texto.
     doc.setFont("helvetica", "bold");
@@ -1102,7 +1102,7 @@ export async function generateMeasurementBulletinPdf(data: MeasurementBulletinDa
     const logoW = 46;
     const logoH = logoW / LOGO_ASPECT;
     try {
-      doc.addImage(LOGO_WHITE, "PNG", m, 7, logoW, logoH, undefined, "FAST");
+      doc.addImage(LOGO_WHITE, "JPEG", m, 7, logoW, logoH, undefined, "FAST");
     } catch {
       doc.setTextColor(255, 255, 255);
       doc.setFont("helvetica", "bold");
