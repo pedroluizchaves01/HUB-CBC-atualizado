@@ -19,6 +19,8 @@ export const ALLOWED_COLLECTIONS = new Set<string>([
   "labor_contracts", "labor_payments",
   // Medições (boletins de medição por período)
   "measurements",
+  // Ambiente de Projetos (arquitetura/engenharia) — independente da obra
+  "arch_projects",
   // Marketing
   "marketing_outbound", "marketing_posts", "marketing_press", "marketing_settings",
   // Cotações

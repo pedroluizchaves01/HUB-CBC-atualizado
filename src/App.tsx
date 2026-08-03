@@ -3,8 +3,21 @@ import { useStore } from './useStore';
 import Login from './components/Login';
 import AdminDashboard from './components/AdminDashboard';
 import ClientDashboard from './components/ClientDashboard';
+import EnvironmentSelect from './components/EnvironmentSelect';
+import ProjectEnvironment from './components/ProjectEnvironment';
 
 export default function App() {
+  // Ambiente escolhido após o login ('projeto' | 'obra'). Persistido na sessão
+  // para sobreviver a recarregamentos, mas limpo ao sair.
+  const [env, setEnvState] = React.useState<'projeto' | 'obra' | null>(
+    () => (sessionStorage.getItem('cbc_env') as 'projeto' | 'obra' | null) || null
+  );
+  const setEnv = (e: 'projeto' | 'obra' | null) => {
+    if (e) sessionStorage.setItem('cbc_env', e);
+    else sessionStorage.removeItem('cbc_env');
+    setEnvState(e);
+  };
+
   const {
     users,
     clients,
@@ -12,7 +25,7 @@ export default function App() {
     transactions,
     currentUser,
     login,
-    logout,
+    logout: rawLogout,
     addClient,
     editClient,
     deleteClient,
@@ -32,11 +45,47 @@ export default function App() {
     deleteContract
   } = useStore();
 
+  // Logout também limpa o ambiente escolhido.
+  const logout = () => {
+    sessionStorage.removeItem('cbc_env');
+    setEnvState(null);
+    rawLogout();
+  };
+
   // If no user is logged in, show the clean login page
   if (!currentUser) {
     const handleLoginAttempt = (username: string, pb: string, rememberMe: boolean) => login(username, pb, rememberMe);
     return <Login onLogin={handleLoginAttempt} />;
   }
+
+  // Após o login, a pessoa escolhe entre os ambientes Projeto e Obra.
+  // A escolha vive em sessionStorage para não perder ao recarregar, mas some ao sair.
+  const environment = env;
+  if (!environment) {
+    return (
+      <EnvironmentSelect
+        userName={currentUser.name}
+        onSelect={(e) => setEnv(e)}
+        onLogout={logout}
+      />
+    );
+  }
+
+  // Ambiente PROJETO — novo, independente. Recebe o papel para futura diferenciação.
+  if (environment === 'projeto') {
+    return (
+      <ProjectEnvironment
+        role={currentUser.role}
+        userName={currentUser.name}
+        currentUserId={currentUser.id}
+        clientId={currentUser.clientId}
+        onLogout={logout}
+        onSwitchEnvironment={() => setEnv(null)}
+      />
+    );
+  }
+
+  // Ambiente OBRA — tudo que já existe. (environment === 'obra')
 
   // Admin & Marketing View
   if (currentUser.role === 'admin' || currentUser.role === 'marketing') {
