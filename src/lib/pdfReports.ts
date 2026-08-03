@@ -1369,11 +1369,15 @@ export async function generateMeasurementBulletinPdf(data: MeasurementBulletinDa
       // Nome da etapa à esquerda.
       doc.setFont("helvetica", "bold"); doc.setTextColor(...BRAND.ink); doc.setFontSize(7.5);
       doc.text(ph.name, m, y);
-      // Progresso à direita: "60% a 100%" + variação destacada em terracota.
+      // Progresso à direita. Se a etapa começou o período em 0% (nova no período),
+      // mostra apenas o valor executado. Se já tinha avanço anterior, mostra "de Y% para X%".
       doc.setFont("helvetica", "normal"); doc.setTextColor(...BRAND.soft); doc.setFontSize(7);
-      const rangeText = `${ph.progressStart.toFixed(0)}% a ${ph.progressEnd.toFixed(0)}%`;
+      const hadPrevious = ph.progressStart > 0.5;
+      const rangeText = hadPrevious
+        ? `de ${ph.progressStart.toFixed(0)}% para ${ph.progressEnd.toFixed(0)}%`
+        : `executado: ${ph.progressEnd.toFixed(0)}%`;
       const deltaText = delta > 0.5 ? `+${delta.toFixed(0)}%` : "sem avanço";
-      // Desenha a variação em terracota, e o intervalo em cinza logo à esquerda dela.
+      // Desenha a variação em terracota, e o texto de contexto em cinza à esquerda dela.
       doc.setFont("helvetica", "bold");
       doc.setTextColor(delta > 0.5 ? 194 : 168, delta > 0.5 ? 112 : 162, delta > 0.5 ? 61 : 158);
       doc.text(deltaText, w - m, y, { align: "right" });

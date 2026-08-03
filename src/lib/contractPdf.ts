@@ -1,4 +1,5 @@
 import { jsPDF } from 'jspdf';
+import { LOGO_BLACK, LOGO_ASPECT } from './brandAssets';
 import { Contract, ContractFormData, ContractType, Project } from '../types';
 import { CBC_FIXED_DATA, buildContractDocument, buildSignatureBlocks, formatBRL } from './contractTemplates';
 import { uploadBase64ToFirebase } from './firebaseStorage';
@@ -28,18 +29,24 @@ function drawTopHeader(
 ) {
   const pageWidth = doc.internal.pageSize.getWidth();
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(0, 0, 0);
-  doc.text('CHAVES', 14, 15);
-  doc.text('BRITES', 14, 19.5);
-  doc.text('CORREA', 14, 24);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.setTextColor(80, 80, 80);
-  doc.text('ARQUITETURA', 38, 19.5);
-  doc.text('ENGENHARIA', 38, 24);
+  // Logo da empresa (substitui o nome em texto).
+  const logoW = 44;
+  const logoH = logoW / LOGO_ASPECT;
+  try {
+    doc.addImage(LOGO_BLACK, 'PNG', 14, 9, logoW, logoH, undefined, 'FAST');
+  } catch {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(0, 0, 0);
+    doc.text('CHAVES', 14, 15);
+    doc.text('BRITES', 14, 19.5);
+    doc.text('CORREA', 14, 24);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(80, 80, 80);
+    doc.text('ARQUITETURA', 38, 19.5);
+    doc.text('ENGENHARIA', 38, 24);
+  }
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7);
