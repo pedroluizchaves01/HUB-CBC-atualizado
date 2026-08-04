@@ -17,7 +17,7 @@ import { motion } from 'motion/react';
 import {
   Compass, FolderOpen, Plus, ArrowLeftRight, LogOut, Ruler, Lock,
   CheckCircle2, Clock, AlertTriangle, X, Pencil, Trash2, Upload,
-  Download, FileText, ChevronRight, MessageSquare, ThumbsUp, Send, Eye,
+  Download, FileText, ChevronRight, MessageSquare, ThumbsUp, Send, Eye, Loader2,
 } from 'lucide-react';
 import { subscribeCollection, saveDoc, removeDoc } from '../lib/firebaseDb';
 
@@ -82,22 +82,23 @@ interface ArchProject {
   notes?: string;
 }
 
-// Paleta "prancheta de arquiteto": tinta azul-petróleo, papel técnico, e
-// estados com contraste auditado (AA). Cada cor tem uma versão de texto (mais
-// escura, legível sobre claro) e uma de acento (para preenchimentos/barras).
-const AZUL = '#3E7C8B';        // tinta principal (blueprint)
-const AZUL_ESCURO = '#2A5560'; // tinta escura, para texto/gradientes
+// Paleta MONOCROMÁTICA: preto absoluto (#000) e branco absoluto (#fff).
+// A hierarquia vem do PESO da Poppins (light 300 ↔ bold 700/900), não da cor.
+// Estados diferenciados por preenchimento e peso, sem cor.
+const PRETO = '#000000';
+const BRANCO = '#ffffff';
 const uid = (p = 'arch') => `${p}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+// Cada estado: fill (fundo do marcador), stroke (borda), fg (cor do conteúdo do marcador),
+// filled (se o marcador é preto sólido), weight (peso do rótulo).
 const STATE_META: Record<PhaseState, {
-  label: string; accent: string; text: string; bg: string; Icon: React.ComponentType<any>;
+  label: string; filled: boolean; muted: boolean; Icon: React.ComponentType<any>;
 }> = {
-  // accent: preenchimento/ícone · text: cor legível p/ rótulo (AA sobre branco) · bg: fundo suave
-  bloqueada:            { label: 'Bloqueada',                 accent: '#a8a29e', text: '#78716c', bg: '#f5f5f4', Icon: Lock },
-  em_elaboracao:        { label: 'Em elaboração',             accent: AZUL,      text: '#2A5560', bg: '#eaf1f3', Icon: Clock },
-  aguardando_aprovacao: { label: 'Aguardando sua aprovação',  accent: '#B08A3E', text: '#8a6a24', bg: '#faf5e9', Icon: AlertTriangle },
-  ajustes:              { label: 'Ajustes solicitados',       accent: '#C2703D', text: '#9c5528', bg: '#fbf1ea', Icon: MessageSquare },
-  aprovada:             { label: 'Aprovada',                  accent: '#059669', text: '#047857', bg: '#ecfdf5', Icon: CheckCircle2 },
+  bloqueada:            { label: 'Bloqueada',                filled: false, muted: true,  Icon: Lock },
+  em_elaboracao:        { label: 'Em elaboração',            filled: false, muted: false, Icon: Clock },
+  aguardando_aprovacao: { label: 'Aguardando aprovação',    filled: false, muted: false, Icon: AlertTriangle },
+  ajustes:              { label: 'Ajustes solicitados',     filled: false, muted: false, Icon: MessageSquare },
+  aprovada:             { label: 'Aprovada',                 filled: true,  muted: false, Icon: CheckCircle2 },
 };
 
 function readFileCompressed(file: File): Promise<ArchFile> {
@@ -134,6 +135,7 @@ export default function ProjectEnvironment({
   const [allProjects, setAllProjects] = useState<ArchProject[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [editing, setEditing] = useState<ArchProject | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<ArchProject | null>(null);
 
   const isAdmin = role === 'admin' || role === 'marketing';
 
@@ -164,39 +166,39 @@ export default function ProjectEnvironment({
   const persist = (p: ArchProject) => saveDoc('arch_projects', p.id, p);
 
   return (
-    <div className="min-h-screen text-stone-900 relative" style={{
-      background: 'linear-gradient(180deg, #f4f7f8 0%, #fafaf9 40%, #fafaf9 100%)',
-    }}>
-      {/* Textura decorativa sutil no topo (linhas de projeto/planta) */}
-      <div className="absolute top-0 left-0 right-0 h-64 overflow-hidden pointer-events-none opacity-[0.04]" aria-hidden>
+    <div className="min-h-screen bg-white text-black relative">
+      {/* Grade de planta sutil no topo (preta) */}
+      <div className="absolute top-0 left-0 right-0 h-64 overflow-hidden pointer-events-none opacity-[0.035]" aria-hidden>
         <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
-              <path d="M 32 0 L 0 0 0 32" fill="none" stroke={AZUL} strokeWidth="1" />
+              <path d="M 32 0 L 0 0 0 32" fill="none" stroke="#000" strokeWidth="1" />
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill="url(#grid)" />
         </svg>
       </div>
 
-      <header className="bg-white/70 backdrop-blur-md border-b border-stone-200/70 sticky top-0 z-20">
-        <div className="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between">
+      <header className="bg-white/80 backdrop-blur-md border-b border-black sticky top-0 z-20">
+        <div className="max-w-6xl mx-auto px-5 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm" style={{ background: `linear-gradient(135deg, ${AZUL}, #2a5560)` }}>
-              <Compass size={19} className="text-white" />
+            <span className="w-10 h-10 flex items-center justify-center bg-black">
+              <Compass size={19} className="text-white" strokeWidth={1.5} />
             </span>
-            <div className="leading-tight">
-              <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-stone-400">Chaves Brites Correa</p>
-              <h1 className="text-lg font-bold tracking-tight" style={{ fontFamily: 'var(--font-serif)' }}>Estúdio de Projetos</h1>
+            <div className="leading-none">
+              <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-black/50 mb-1">Chaves Brites Correa</p>
+              <h1 className="text-lg tracking-tight" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>
+                Estúdio<span style={{ fontWeight: 300 }}> de Projetos</span>
+              </h1>
             </div>
           </div>
           <div className="flex items-center gap-1 sm:gap-2">
             <button onClick={onSwitchEnvironment}
-              className="flex items-center gap-1.5 text-xs font-mono uppercase tracking-wider text-stone-600 hover:text-stone-900 px-2.5 sm:px-3 py-1.5 rounded-lg hover:bg-stone-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3E7C8B]">
+              className="flex items-center gap-1.5 text-xs font-mono uppercase tracking-wider text-black hover:bg-black hover:text-white px-2.5 sm:px-3 py-1.5 border border-black transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-1">
               <ArrowLeftRight size={13} /> <span className="hidden sm:inline">Ir para Obra</span>
             </button>
             <button onClick={onLogout}
-              className="flex items-center gap-1.5 text-xs font-mono uppercase tracking-wider text-stone-500 hover:text-stone-800 px-2.5 py-1.5 rounded-lg hover:bg-stone-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3E7C8B]">
+              className="flex items-center gap-1.5 text-xs font-mono uppercase tracking-wider text-black/60 hover:text-black px-2.5 py-1.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-black">
               <LogOut size={13} /> <span className="hidden sm:inline">Sair</span>
             </button>
           </div>
@@ -217,62 +219,70 @@ export default function ProjectEnvironment({
           />
         ) : (
           <>
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex items-end justify-between mb-8 gap-4">
               <div>
-                <h2 className="text-2xl font-bold" style={{ fontFamily: 'var(--font-serif)' }}>
-                  {isAdmin ? 'Projetos de Arquitetura e Engenharia' : 'Seus Projetos'}
+                <h2 className="text-3xl sm:text-4xl tracking-tight leading-[1.05]" style={{ fontFamily: 'var(--font-serif)' }}>
+                  <span style={{ fontWeight: 300 }}>{isAdmin ? 'Projetos de ' : 'Seus '}</span>
+                  <span style={{ fontWeight: 700 }}>{isAdmin ? 'Arquitetura' : 'Projetos'}</span>
                 </h2>
-                <p className="text-sm text-stone-500 mt-0.5">Acompanhe cada etapa, veja os arquivos e aprove para avançar.</p>
+                <p className="text-sm text-black/60 mt-2" style={{ fontWeight: 300 }}>Acompanhe cada etapa, veja os arquivos e aprove para avançar.</p>
               </div>
               {isAdmin && (
                 <button onClick={() => setEditing(newProject())}
-                  className="flex items-center gap-2 text-white px-4 py-2 rounded-lg text-sm font-bold" style={{ background: AZUL }}>
-                  <Plus size={16} /> Novo projeto
+                  className="flex items-center gap-2 bg-black text-white px-5 py-2.5 text-sm transition-transform hover:scale-[1.02] active:scale-100 flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2"
+                  style={{ fontWeight: 600 }}>
+                  <Plus size={16} strokeWidth={2.5} /> <span className="hidden sm:inline">Novo projeto</span>
                 </button>
               )}
             </div>
 
             {projects.length === 0 ? (
-              <div className="bg-white border border-stone-200 rounded-2xl py-16 text-center">
-                <FolderOpen size={32} className="text-stone-300 mx-auto mb-3" />
-                <p className="text-stone-500 mb-1">Nenhum projeto por aqui ainda.</p>
-                <p className="text-sm text-stone-500">
+              <div className="border border-black py-20 text-center">
+                <FolderOpen size={32} className="text-black mx-auto mb-4" strokeWidth={1} />
+                <p className="text-black mb-1" style={{ fontWeight: 700 }}>Nenhum projeto ainda.</p>
+                <p className="text-sm text-black/60" style={{ fontWeight: 300 }}>
                   {isAdmin ? 'Crie o primeiro projeto para começar.' : 'Assim que um projeto seu for criado, ele aparece aqui.'}
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-black border border-black">
                 {projects.map((p, i) => {
                   const pct = progressOf(p);
                   const waiting = p.phases.some(ph => ph.state === 'aguardando_aprovacao');
                   return (
-                    <motion.button key={p.id}
-                      initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-                      onClick={() => setSelected(p.id)}
-                      className="bg-white border border-stone-200 rounded-2xl overflow-hidden text-left hover:shadow-lg hover:-translate-y-0.5 transition-all relative group">
-                      {/* Faixa superior com gradiente — assinatura visual do projeto */}
-                      <div className="h-16 relative overflow-hidden" style={{ background: `linear-gradient(135deg, ${AZUL}, #2a5560)` }}>
-                        <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 80% 20%, white 1px, transparent 1px)', backgroundSize: '16px 16px' }} />
-                        <span className="absolute bottom-2 left-4 w-9 h-9 rounded-xl bg-white/95 flex items-center justify-center shadow-sm translate-y-1/2 z-10">
-                          <Ruler size={17} style={{ color: AZUL }} />
-                        </span>
-                        {waiting && !isAdmin && (
-                          <span className="absolute top-2 right-2 text-[9px] font-mono uppercase tracking-wider bg-white/90 text-[#B08A3E] px-2 py-1 rounded-full animate-pulse">
-                            Aprovação pendente
-                          </span>
-                        )}
-                      </div>
-                      <div className="p-5 pt-7">
-                        <h3 className="font-bold text-stone-900 mb-0.5" style={{ fontFamily: 'var(--font-serif)' }}>{p.name || 'Sem nome'}</h3>
-                        <p className="text-xs text-stone-500 mb-3">{p.clientName} · {p.type}</p>
-                        <div className="flex items-center justify-between text-[11px] text-stone-500 mb-1.5">
-                          <span>Progresso</span><span className="font-bold" style={{ color: AZUL }}>{pct}%</span>
+                    <div key={p.id} className="bg-white relative group">
+                      <motion.button
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.04 }}
+                        onClick={() => setSelected(p.id)}
+                        className="w-full text-left p-6 hover:bg-black hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black block">
+                        <div className="flex items-start justify-between mb-8">
+                          <Ruler size={20} strokeWidth={1.5} className="group-hover:text-white" />
+                          {waiting && !isAdmin && (
+                            <span className="text-[9px] font-mono uppercase tracking-wider border border-current px-2 py-0.5">
+                              Pendente
+                            </span>
+                          )}
                         </div>
-                        <div className="h-1.5 bg-stone-100 rounded-full overflow-hidden">
-                          <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${AZUL}, #2a5560)` }} />
+                        <h3 className="text-xl leading-tight mb-1" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>{p.name || 'Sem nome'}</h3>
+                        <p className="text-xs mb-6 opacity-60" style={{ fontWeight: 300 }}>{p.clientName} · {p.type}</p>
+                        <div className="flex items-baseline justify-between mb-2">
+                          <span className="text-[10px] font-mono uppercase tracking-wider opacity-60">Progresso</span>
+                          <span className="text-lg font-mono" style={{ fontWeight: 700 }}>{pct}%</span>
                         </div>
-                      </div>
-                    </motion.button>
+                        <div className="h-px bg-current opacity-20 relative">
+                          <div className="absolute left-0 top-0 h-px bg-current opacity-100" style={{ width: `${pct}%` }} />
+                        </div>
+                      </motion.button>
+                      {/* Excluir — só admin, com confirmação */}
+                      {isAdmin && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setConfirmDelete(p); }}
+                          className="absolute top-4 right-4 p-1.5 text-black/30 hover:text-white hover:bg-black opacity-0 group-hover:opacity-100 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:opacity-100"
+                          title="Excluir projeto" aria-label={`Excluir ${p.name}`}>
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -289,7 +299,23 @@ export default function ProjectEnvironment({
           onChange={setEditing}
           onSave={async () => { await persist(editing); setEditing(null); }}
           onCancel={() => setEditing(null)}
-          onDelete={editing.name ? async () => { await removeDoc('arch_projects', editing.id); if (selected === editing.id) setSelected(null); setEditing(null); } : undefined}
+          onDelete={editing.name ? () => { setConfirmDelete(editing); } : undefined}
+        />
+      )}
+
+      {/* Confirmação de exclusão */}
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Excluir projeto"
+          message={<>Tem certeza que deseja excluir <strong>{confirmDelete.name}</strong>? Esta ação é permanente e apaga todos os arquivos e o histórico das etapas.</>}
+          confirmLabel="Excluir projeto"
+          onConfirm={async () => {
+            await removeDoc('arch_projects', confirmDelete.id);
+            if (selected === confirmDelete.id) setSelected(null);
+            if (editing?.id === confirmDelete.id) setEditing(null);
+            setConfirmDelete(null);
+          }}
+          onCancel={() => setConfirmDelete(null)}
         />
       )}
     </div>
@@ -349,13 +375,13 @@ function ProjectDetail({
 
   return (
     <div>
-      <button onClick={onBack} className="text-sm text-stone-600 hover:text-stone-900 mb-4 flex items-center gap-1.5 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3E7C8B] rounded px-1">← Voltar aos projetos</button>
+      <button onClick={onBack} className="text-sm text-black/60 hover:text-black mb-5 flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-black px-1" style={{ fontWeight: 500 }}>← Voltar aos projetos</button>
 
-      {/* Carimbo de projeto (title block) — assinatura de prancheta */}
-      <div className="rounded-2xl mb-5 overflow-hidden border border-stone-200 shadow-sm">
-        <div className="relative p-6 text-white" style={{ background: `linear-gradient(135deg, ${AZUL_ESCURO}, ${AZUL})` }}>
-          {/* Grade de planta sutil no fundo */}
-          <div className="absolute inset-0 opacity-[0.07] pointer-events-none" aria-hidden>
+      {/* Carimbo de projeto (title block) — preto sólido, assinatura de prancheta */}
+      <div className="mb-6 border-2 border-black">
+        <div className="relative p-6 sm:p-8 text-white bg-black">
+          {/* Grade branca sutil no fundo */}
+          <div className="absolute inset-0 opacity-[0.08] pointer-events-none" aria-hidden>
             <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
               <defs><pattern id="tb-grid" width="24" height="24" patternUnits="userSpaceOnUse">
                 <path d="M 24 0 L 0 0 0 24" fill="none" stroke="white" strokeWidth="1" /></pattern></defs>
@@ -364,17 +390,19 @@ function ProjectDetail({
           </div>
           <div className="relative flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 mb-1">Projeto</p>
-              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight leading-tight" style={{ fontFamily: 'var(--font-serif)' }}>{project.name}</h2>
+              <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-white/50 mb-2">Projeto</p>
+              <h2 className="text-3xl sm:text-4xl tracking-tight leading-[1.05]" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>{project.name}</h2>
             </div>
             {isAdmin && (
-              <button onClick={onEdit} className="flex items-center gap-1.5 text-xs font-mono uppercase tracking-wider text-white/80 hover:text-white bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50">
-                <Pencil size={13} /> <span className="hidden sm:inline">Editar</span>
-              </button>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <button onClick={onEdit} className="flex items-center gap-1.5 text-xs font-mono uppercase tracking-wider text-white hover:bg-white hover:text-black px-3 py-1.5 border border-white/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+                  <Pencil size={13} /> <span className="hidden sm:inline">Editar</span>
+                </button>
+              </div>
             )}
           </div>
-          {/* Ficha técnica: como as células de um carimbo */}
-          <div className="relative grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3 mt-5 pt-4 border-t border-white/15">
+          {/* Ficha técnica: células de carimbo */}
+          <div className="relative grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-4 mt-6 pt-5 border-t border-white/20">
             {[
               ['Cliente', project.clientName || '—'],
               ['Tipo', project.type],
@@ -382,20 +410,20 @@ function ProjectDetail({
               ['Responsável', project.responsible || '—'],
             ].map(([label, val]) => (
               <div key={label} className="min-w-0">
-                <p className="text-[9px] font-mono uppercase tracking-[0.15em] text-white/50">{label}</p>
-                <p className="text-sm font-semibold truncate" title={val}>{val}</p>
+                <p className="text-[9px] font-mono uppercase tracking-[0.18em] text-white/40 mb-1">{label}</p>
+                <p className="text-sm truncate" style={{ fontWeight: 600 }} title={val}>{val}</p>
               </div>
             ))}
           </div>
         </div>
-        {/* Barra de progresso integrada, na base do carimbo */}
-        <div className="bg-white px-6 py-4">
-          <div className="flex items-center justify-between text-xs mb-1.5">
-            <span className="text-stone-600 font-medium">Progresso do projeto</span>
-            <span className="font-bold font-mono" style={{ color: AZUL_ESCURO }}>{progress}%</span>
+        {/* Progresso integrado, na base */}
+        <div className="bg-white px-6 sm:px-8 py-4 border-t-2 border-black">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-mono uppercase tracking-[0.15em] text-black/60">Progresso do projeto</span>
+            <span className="text-lg font-mono" style={{ fontWeight: 700 }}>{progress}%</span>
           </div>
-          <div className="h-2.5 bg-stone-100 rounded-full overflow-hidden">
-            <motion.div className="h-full rounded-full" style={{ background: `linear-gradient(90deg, ${AZUL}, ${AZUL_ESCURO})` }}
+          <div className="h-1 bg-black/10 relative">
+            <motion.div className="absolute left-0 top-0 h-1 bg-black"
               initial={{ width: 0 }} animate={{ width: `${progress}%` }} transition={{ duration: 0.8, ease: 'easeOut' }} />
           </div>
         </div>
@@ -442,7 +470,7 @@ function PhaseCard({
   const [motivo, setMotivo] = useState('');
   const [comment, setComment] = useState('');
 
-  const connectorColor = phase.state === 'aprovada' ? '#059669' : '#e7e5e4';
+  const connectorColor = phase.state === 'aprovada' ? '#000' : '#d6d3d1';
 
   return (
     <div className="relative">
@@ -450,37 +478,42 @@ function PhaseCard({
         <div className="absolute left-[32px] top-[52px] bottom-[-12px] w-0.5 z-0" style={{ background: connectorColor }} />
       )}
 
-      <div className={`bg-white border rounded-2xl overflow-hidden transition-all ${
-        phase.state === 'aguardando_aprovacao' ? 'border-[#B08A3E]/50 shadow-[0_0_0_3px_rgba(176,138,62,0.08)]' : 'border-stone-200'
+      <div className={`bg-white border overflow-hidden transition-all ${
+        phase.state === 'aguardando_aprovacao' ? 'border-black border-2' : phase.state === 'bloqueada' ? 'border-stone-300' : 'border-black'
       }`}>
         <button onClick={onToggle} disabled={locked}
-          className={`w-full flex items-center gap-3 p-4 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3E7C8B] focus-visible:ring-offset-2 rounded-2xl ${locked ? 'cursor-default' : 'cursor-pointer hover:bg-stone-50/70'}`}>
-          {/* Marcador da etapa: número como "cota" de planta, dentro do estado */}
-          <span className="relative w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 z-10 font-mono text-xs font-bold"
-            style={{ background: meta.bg, color: meta.text, border: `1.5px solid ${meta.accent}` }}>
-            {phase.state === 'aprovada'
-              ? <Icon size={16} style={{ color: meta.accent }} />
+          className={`w-full flex items-center gap-3 p-4 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black ${locked ? 'cursor-default' : 'cursor-pointer hover:bg-stone-50'}`}>
+          {/* Marcador: aprovada = preto sólido; ativa = contorno preto grosso; bloqueada = cinza fino */}
+          <span className="relative w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 z-10 font-mono text-xs bg-white"
+            style={{
+              background: meta.filled ? '#000' : '#fff',
+              color: meta.filled ? '#fff' : (meta.muted ? '#a8a29e' : '#000'),
+              border: meta.muted ? '1px solid #d6d3d1' : (meta.filled ? '2px solid #000' : '2px solid #000'),
+              fontWeight: 700,
+            }}>
+            {meta.filled
+              ? <Icon size={16} className="text-white" />
               : String(index + 1).padStart(2, '0')}
           </span>
           <div className="flex-1 min-w-0">
-            <p className={`text-sm font-bold ${locked ? 'text-stone-400' : 'text-stone-900'}`}>{phase.name}</p>
-            <p className="text-[10px] font-mono uppercase tracking-[0.12em] mt-0.5 flex items-center gap-1" style={{ color: meta.text }}>
-              <Icon size={11} style={{ color: meta.accent }} /> {meta.label}
+            <p className="text-sm" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700, color: meta.muted ? '#a8a29e' : '#000' }}>{phase.name}</p>
+            <p className="text-[10px] font-mono uppercase tracking-[0.12em] mt-0.5 flex items-center gap-1" style={{ color: meta.muted ? '#a8a29e' : '#000', fontWeight: 500 }}>
+              <Icon size={11} /> {meta.label}
             </p>
           </div>
           {phase.files.length > 0 && (
-            <span className="text-[11px] text-stone-500 flex items-center gap-1 flex-shrink-0"><FileText size={12} /> {phase.files.length}</span>
+            <span className="text-[11px] text-black/60 flex items-center gap-1 flex-shrink-0 font-mono"><FileText size={12} /> {phase.files.length}</span>
           )}
-          {!locked && <ChevronRight size={16} className={`text-stone-400 transition-transform flex-shrink-0 ${isOpen ? 'rotate-90' : ''}`} />}
+          {!locked && <ChevronRight size={16} className={`text-black transition-transform flex-shrink-0 ${isOpen ? 'rotate-90' : ''}`} />}
         </button>
 
         {isOpen && !locked && (
-          <div className="px-4 pb-4 border-t border-stone-100 pt-4 space-y-4">
+          <div className="px-4 pb-4 border-t border-black pt-4 space-y-4">
             <div>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-stone-500 font-bold">Arquivos desta etapa</p>
+                <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-black font-bold">Arquivos desta etapa</p>
                 {isAdmin && (
-                  <label className="flex items-center gap-1.5 text-xs font-bold cursor-pointer px-2.5 py-1.5 rounded-lg hover:bg-[#3E7C8B]/8 transition-colors" style={{ color: AZUL }}>
+                  <label className="flex items-center gap-1.5 text-xs cursor-pointer px-2.5 py-1.5 border border-black hover:bg-black hover:text-white transition-colors" style={{ fontWeight: 600 }}>
                     <Upload size={13} /> Enviar arquivo
                     <input type="file" multiple accept="image/*,application/pdf" className="hidden"
                       onChange={e => e.target.files && onAddFiles(e.target.files)} />
@@ -488,7 +521,7 @@ function PhaseCard({
                 )}
               </div>
               {phase.files.length === 0 ? (
-                <p className="text-xs text-stone-500 py-4 text-center bg-stone-50 rounded-lg border border-dashed border-stone-200">
+                <p className="text-xs text-black/50 py-4 text-center border border-dashed border-black/30" style={{ fontWeight: 300 }}>
                   {isAdmin ? 'Nenhum arquivo ainda. Envie plantas, PDFs ou imagens.' : 'Os arquivos desta etapa aparecerão aqui.'}
                 </p>
               ) : (
@@ -501,17 +534,17 @@ function PhaseCard({
             </div>
 
             {!isAdmin && phase.state === 'aguardando_aprovacao' && (
-              <div className="bg-[#faf5e9] border border-[#B08A3E]/30 rounded-xl p-4">
-                <p className="text-sm font-bold text-stone-900 mb-1">Esta etapa aguarda sua aprovação</p>
-                <p className="text-xs text-stone-600 mb-3">Revise os arquivos acima. Ao aprovar, a próxima etapa é liberada.</p>
+              <div className="border-2 border-black p-4">
+                <p className="text-sm mb-1" style={{ fontWeight: 700 }}>Esta etapa aguarda sua aprovação</p>
+                <p className="text-xs text-black/60 mb-3" style={{ fontWeight: 300 }}>Revise os arquivos acima. Ao aprovar, a próxima etapa é liberada.</p>
                 {!askChanges ? (
                   <div className="flex flex-col sm:flex-row gap-2">
                     <button onClick={onApprove}
-                      className="flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white px-4 py-2.5 rounded-lg text-sm font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2">
+                      className="flex items-center justify-center gap-1.5 bg-black text-white px-4 py-2.5 text-sm hover:bg-white hover:text-black border-2 border-black transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2" style={{ fontWeight: 700 }}>
                       <ThumbsUp size={15} /> Aprovar etapa
                     </button>
                     <button onClick={() => setAskChanges(true)}
-                      className="flex items-center justify-center gap-1.5 bg-white border border-stone-400 hover:border-stone-500 hover:bg-stone-50 text-stone-800 px-4 py-2.5 rounded-lg text-sm font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-400 focus-visible:ring-offset-2">
+                      className="flex items-center justify-center gap-1.5 bg-white border-2 border-black text-black px-4 py-2.5 text-sm hover:bg-black hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2" style={{ fontWeight: 600 }}>
                       <MessageSquare size={15} /> Solicitar ajustes
                     </button>
                   </div>
@@ -519,14 +552,14 @@ function PhaseCard({
                   <div>
                     <textarea value={motivo} onChange={e => setMotivo(e.target.value)} rows={2}
                       placeholder="Descreva o que precisa ser ajustado..."
-                      className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#C2703D]/40 focus:border-[#C2703D] mb-2" />
+                      className="w-full border-2 border-black px-3 py-2 text-sm text-black placeholder:text-black/40 focus:outline-none focus:ring-2 focus:ring-black mb-2" style={{ fontWeight: 300 }} />
                     <div className="flex flex-col sm:flex-row gap-2">
                       <button onClick={() => { if (motivo.trim()) { onRequestChanges(motivo.trim()); setMotivo(''); setAskChanges(false); } }}
                         disabled={!motivo.trim()}
-                        className="flex items-center justify-center gap-1.5 bg-[#C2703D] hover:bg-[#a85f32] text-white px-4 py-2.5 rounded-lg text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                        className="flex items-center justify-center gap-1.5 bg-black text-white px-4 py-2.5 text-sm disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white hover:text-black border-2 border-black transition-colors" style={{ fontWeight: 700 }}>
                         <Send size={14} /> Enviar solicitação
                       </button>
-                      <button onClick={() => { setAskChanges(false); setMotivo(''); }} className="text-sm font-semibold text-stone-600 hover:text-stone-900 px-3 py-2.5">Cancelar</button>
+                      <button onClick={() => { setAskChanges(false); setMotivo(''); }} className="text-sm text-black/60 hover:text-black px-3 py-2.5" style={{ fontWeight: 600 }}>Cancelar</button>
                     </div>
                   </div>
                 )}
@@ -536,43 +569,43 @@ function PhaseCard({
             {isAdmin && (phase.state === 'em_elaboracao' || phase.state === 'ajustes') && (
               <div>
                 <button onClick={onSendForApproval} disabled={phase.files.length === 0}
-                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 text-white px-4 py-2.5 rounded-lg text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
-                  style={{ background: AZUL }}>
+                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 bg-black text-white px-4 py-2.5 text-sm disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white hover:text-black border-2 border-black transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2"
+                  style={{ fontWeight: 700 }}>
                   <Send size={14} /> Enviar para aprovação do cliente
                 </button>
                 {phase.files.length === 0 && (
-                  <p className="text-xs text-stone-500 mt-1.5">Envie ao menos um arquivo antes de mandar para aprovação.</p>
+                  <p className="text-xs text-black/50 mt-1.5" style={{ fontWeight: 300 }}>Envie ao menos um arquivo antes de mandar para aprovação.</p>
                 )}
                 {phase.state === 'ajustes' && phase.files.length > 0 && (
-                  <p className="text-xs mt-2 flex items-center gap-1" style={{ color: '#9c5528' }}><AlertTriangle size={12} /> O cliente pediu ajustes. Corrija, atualize os arquivos e reenvie.</p>
+                  <p className="text-xs mt-2 flex items-center gap-1 text-black" style={{ fontWeight: 500 }}><AlertTriangle size={12} /> O cliente pediu ajustes. Corrija, atualize os arquivos e reenvie.</p>
                 )}
               </div>
             )}
 
             {phase.state === 'aprovada' && phase.approvedAt && (
-              <div className="bg-[#ecfdf5] border border-emerald-200 rounded-xl p-3 flex items-center gap-2">
-                <CheckCircle2 size={16} className="text-emerald-600 flex-shrink-0" />
-                <p className="text-xs text-emerald-800">
-                  Aprovada por <b>{phase.approvedBy}</b> em {new Date(phase.approvedAt).toLocaleString('pt-BR')}.
+              <div className="bg-black text-white p-3 flex items-center gap-2">
+                <CheckCircle2 size={16} className="text-white flex-shrink-0" />
+                <p className="text-xs" style={{ fontWeight: 300 }}>
+                  Aprovada por <b style={{ fontWeight: 700 }}>{phase.approvedBy}</b> em {new Date(phase.approvedAt).toLocaleString('pt-BR')}.
                 </p>
               </div>
             )}
 
             {phase.events.length > 0 && (
               <div>
-                <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-stone-500 font-bold mb-2">Histórico da etapa</p>
+                <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-black font-bold mb-2">Histórico da etapa</p>
                 <div className="space-y-2.5">
                   {phase.events.slice().reverse().map(ev => (
                     <div key={ev.id} className="flex gap-2.5 text-xs">
-                      <span className="flex-shrink-0 mt-0.5">
-                        {ev.kind === 'aprovacao' ? <CheckCircle2 size={14} className="text-emerald-600" />
-                          : ev.kind === 'ajuste' ? <MessageSquare size={14} style={{ color: '#9c5528' }} />
-                          : ev.kind === 'envio' ? <Send size={14} style={{ color: AZUL }} />
-                          : <MessageSquare size={14} className="text-stone-500" />}
+                      <span className="flex-shrink-0 mt-0.5 text-black">
+                        {ev.kind === 'aprovacao' ? <CheckCircle2 size={14} />
+                          : ev.kind === 'ajuste' ? <MessageSquare size={14} />
+                          : ev.kind === 'envio' ? <Send size={14} />
+                          : <MessageSquare size={14} />}
                       </span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-stone-700">{ev.text}</p>
-                        <p className="text-[10px] text-stone-500 mt-0.5">{ev.author} · {new Date(ev.at).toLocaleString('pt-BR')}</p>
+                        <p className="text-black" style={{ fontWeight: 400 }}>{ev.text}</p>
+                        <p className="text-[10px] text-black/50 mt-0.5 font-mono">{ev.author} · {new Date(ev.at).toLocaleString('pt-BR')}</p>
                       </div>
                     </div>
                   ))}
@@ -582,7 +615,7 @@ function PhaseCard({
 
             <div className="flex gap-2">
               <input value={comment} onChange={e => setComment(e.target.value)}
-                placeholder="Deixe um comentário..." className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#3E7C8B]/30 focus:border-[#3E7C8B]" />
+                placeholder="Deixe um comentário..." className="flex-1 border-2 border-black px-3 py-2 text-sm text-black placeholder:text-black/40 focus:outline-none focus:ring-2 focus:ring-black" style={{ fontWeight: 300 }} />
               <button onClick={() => { if (comment.trim()) { onAddComment(comment.trim()); setComment(''); } }}
                 disabled={!comment.trim()} className="text-stone-500 hover:text-stone-900 disabled:opacity-30 px-2"><Send size={16} /></button>
             </div>
@@ -605,27 +638,27 @@ function FileCard({ file, isAdmin, onRemove, onView }: {
     a.href = file.base64; a.download = file.name; a.click();
   };
   return (
-    <div className="border border-stone-200 rounded-xl overflow-hidden relative group bg-white">
+    <div className="border border-black overflow-hidden relative group bg-white">
       {/* Prévia — clicar abre o visualizador em tela cheia */}
-      <button onClick={onView} className="w-full h-28 bg-stone-100 flex items-center justify-center relative overflow-hidden">
+      <button onClick={onView} className="w-full h-28 bg-stone-100 flex items-center justify-center relative overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black">
         {isImg
-          ? <img src={file.base64} alt={file.name} className="w-full h-full object-cover" />
-          : <div className="flex flex-col items-center gap-1 text-stone-400">
-              <FileText size={30} style={{ color: isPdf ? '#C2703D' : undefined }} />
+          ? <img src={file.base64} alt={file.name} className="w-full h-full object-cover grayscale" />
+          : <div className="flex flex-col items-center gap-1 text-black">
+              <FileText size={30} strokeWidth={1.25} />
               <span className="text-[9px] font-mono uppercase tracking-wider">{isPdf ? 'PDF' : 'Arquivo'}</span>
             </div>}
         {/* Overlay "Visualizar" no hover */}
-        <span className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-          <span className="flex items-center gap-1.5 text-white text-xs font-bold bg-black/50 px-3 py-1.5 rounded-full">
+        <span className="absolute inset-0 bg-black/0 group-hover:bg-black/70 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+          <span className="flex items-center gap-1.5 text-white text-xs bg-black px-3 py-1.5 border border-white" style={{ fontWeight: 700 }}>
             <Eye size={13} /> Visualizar
           </span>
         </span>
       </button>
-      <div className="p-2 flex items-center gap-1">
-        <span className="flex-1 min-w-0 text-[11px] text-stone-600 truncate" title={file.name}>{file.name}</span>
+      <div className="p-2 flex items-center gap-1 border-t border-black">
+        <span className="flex-1 min-w-0 text-[11px] text-black truncate" title={file.name} style={{ fontWeight: 300 }}>{file.name}</span>
         {/* Baixar é ação secundária */}
-        <button onClick={download} className="text-stone-400 hover:text-[#3E7C8B] p-0.5" title="Baixar (opção secundária)"><Download size={13} /></button>
-        {isAdmin && <button onClick={onRemove} className="text-stone-400 hover:text-red-500 p-0.5" title="Remover"><Trash2 size={13} /></button>}
+        <button onClick={download} className="text-black/50 hover:text-black p-0.5" title="Baixar (opção secundária)"><Download size={13} /></button>
+        {isAdmin && <button onClick={onRemove} className="text-black/50 hover:text-black p-0.5" title="Remover"><Trash2 size={13} /></button>}
       </div>
     </div>
   );
@@ -707,7 +740,7 @@ function ProjectEditor({
           <div>
             <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Nome do projeto</label>
             <input value={p.name} onChange={e => set({ name: e.target.value })} placeholder="Ex.: Residência Paulo e Juliana"
-              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#3E7C8B]" />
+              className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
           </div>
 
           {/* Cliente: puxa dos clientes já cadastrados */}
@@ -720,7 +753,7 @@ function ProjectEditor({
                   const c = clients.find(x => x.id === e.target.value);
                   set({ clientId: e.target.value, clientName: c?.name || '', obraId: '' });
                 }}
-                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#3E7C8B]"
+                className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
               >
                 <option value="">Selecione um cliente cadastrado…</option>
                 {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -728,7 +761,7 @@ function ProjectEditor({
             ) : (
               <input value={p.clientName} onChange={e => set({ clientName: e.target.value })}
                 placeholder="Nome do cliente"
-                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#3E7C8B]" />
+                className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
             )}
           </div>
 
@@ -741,7 +774,7 @@ function ProjectEditor({
               value={p.obraId || ''}
               onChange={e => set({ obraId: e.target.value })}
               disabled={obrasDisponiveis.length === 0}
-              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#3E7C8B] disabled:bg-stone-50 disabled:text-stone-400"
+              className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black disabled:bg-stone-100 disabled:text-black/40"
             >
               <option value="">
                 {obrasDisponiveis.length === 0
@@ -757,31 +790,82 @@ function ProjectEditor({
             <div>
               <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Tipo</label>
               <select value={p.type} onChange={e => set({ type: e.target.value })}
-                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#3E7C8B]">
+                className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black">
                 {['Residencial', 'Comercial', 'Reforma', 'Corporativo', 'Institucional', 'Outro'].map(t => <option key={t}>{t}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Área (m²)</label>
               <input value={p.area} onChange={e => set({ area: e.target.value })}
-                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#3E7C8B]" />
+                className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
             </div>
             <div>
               <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Responsável</label>
               <input value={p.responsible} onChange={e => set({ responsible: e.target.value })}
-                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#3E7C8B]" />
+                className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
             </div>
           </div>
           <div>
             <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Observações</label>
             <textarea value={p.notes} onChange={e => set({ notes: e.target.value })} rows={2}
-              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#3E7C8B]" />
+              className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
           </div>
         </div>
-        <div className="flex items-center gap-2 mt-5 pt-4 border-t border-stone-150">
+        <div className="flex items-center gap-2 mt-5 pt-4 border-t-2 border-black">
           <button onClick={onSave} disabled={!p.name.trim()}
-            className="flex-1 text-white px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-40" style={{ background: AZUL }}>Salvar projeto</button>
-          {onDelete && <button onClick={onDelete} className="text-red-500 hover:bg-red-50 p-2 rounded-lg"><Trash2 size={16} /></button>}
+            className="flex-1 bg-black text-white px-4 py-2.5 text-sm disabled:opacity-30 hover:bg-white hover:text-black border-2 border-black transition-colors" style={{ fontWeight: 700 }}>Salvar projeto</button>
+          {onDelete && <button onClick={onDelete} className="text-black hover:bg-black hover:text-white p-2.5 border-2 border-black transition-colors" title="Excluir projeto"><Trash2 size={16} /></button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Diálogo de confirmação (preto/branco) — usado para exclusões
+// ---------------------------------------------------------------------------
+function ConfirmDialog({
+  title, message, confirmLabel, onConfirm, onCancel,
+}: {
+  title: string;
+  message: React.ReactNode;
+  confirmLabel: string;
+  onConfirm: () => void | Promise<void>;
+  onCancel: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onCancel]);
+
+  return (
+    <div className="fixed inset-0 z-[300] bg-black/70 flex items-center justify-center p-4" onClick={onCancel}>
+      <div className="bg-white border-2 border-black w-full max-w-md" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-2.5 px-5 py-4 border-b-2 border-black">
+          <AlertTriangle size={18} strokeWidth={2} />
+          <h3 className="text-lg" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>{title}</h3>
+        </div>
+        <div className="px-5 py-5">
+          <p className="text-sm text-black leading-relaxed" style={{ fontWeight: 300 }}>{message}</p>
+        </div>
+        <div className="flex gap-px bg-black border-t-2 border-black">
+          <button
+            onClick={onCancel}
+            disabled={busy}
+            className="flex-1 bg-white text-black py-3 text-sm hover:bg-black hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black"
+            style={{ fontWeight: 600 }}>
+            Cancelar
+          </button>
+          <button
+            onClick={async () => { setBusy(true); await onConfirm(); }}
+            disabled={busy}
+            className="flex-1 bg-black text-white py-3 text-sm hover:bg-white hover:text-black transition-colors flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white disabled:opacity-60"
+            style={{ fontWeight: 700 }}>
+            {busy ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+            {confirmLabel}
+          </button>
         </div>
       </div>
     </div>
