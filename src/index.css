@@ -653,3 +653,74 @@ div#root:nth-of-type(1) > div#login_container:nth-of-type(1) > div#root:nth-of-t
 
 
 
+
+/* ============================================================
+   AMBIENTE DE PROJETOS — tema escuro sobre foto de fundo
+   Sobrepõe a regra global de texto (#94A3B8) forçando branco,
+   e converte os painéis claros em "vidro escuro" para legibilidade.
+   ============================================================ */
+
+/* Texto branco por padrão dentro do ambiente (escapa do cinza global) */
+.projeto-dark p,
+.projeto-dark span,
+.projeto-dark h1,
+.projeto-dark h2,
+.projeto-dark h3,
+.projeto-dark label,
+.projeto-dark button,
+.projeto-dark td,
+.projeto-dark th,
+.projeto-dark div {
+  color: #FFFFFF !important;
+}
+
+/* Painéis/cartões que eram brancos viram vidro escuro translúcido */
+.projeto-dark .bg-white {
+  background-color: rgba(20, 20, 20, 0.55) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Fundos claros auxiliares (stone-50/100) também escurecem */
+.projeto-dark .bg-stone-50,
+.projeto-dark .bg-stone-100 {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Bordas pretas viram brancas translúcidas */
+.projeto-dark .border-black {
+  border-color: rgba(255, 255, 255, 0.35) !important;
+}
+.projeto-dark .border-stone-300,
+.projeto-dark .border-stone-200 {
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Botões/estados PRETOS sólidos (bg-black) permanecem pretos, texto branco.
+   Mas o hover que invertia para branco precisa continuar legível: */
+.projeto-dark .bg-black {
+  background-color: #000000 !important;
+}
+.projeto-dark .hover\:bg-black:hover {
+  background-color: rgba(255, 255, 255, 0.15) !important;
+}
+.projeto-dark .hover\:text-black:hover {
+  color: #FFFFFF !important;
+}
+
+/* Inputs/textarea: fundo escuro, texto branco, placeholder legível */
+.projeto-dark input,
+.projeto-dark textarea,
+.projeto-dark select {
+  background-color: rgba(0, 0, 0, 0.4) !important;
+  color: #FFFFFF !important;
+}
+.projeto-dark input::placeholder,
+.projeto-dark textarea::placeholder {
+  color: rgba(255, 255, 255, 0.45) !important;
+}
+
+/* Imagens de arquivo: remove o grayscale forçado, deixa a foto aparecer */
+.projeto-dark img {
+  filter: none !important;
+}

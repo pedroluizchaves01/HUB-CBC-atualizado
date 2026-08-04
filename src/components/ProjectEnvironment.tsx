@@ -20,6 +20,7 @@ import {
   Download, FileText, ChevronRight, MessageSquare, ThumbsUp, Send, Eye, Loader2,
 } from 'lucide-react';
 import { subscribeCollection, saveDoc, removeDoc } from '../lib/firebaseDb';
+import { PROJECT_BG } from '../lib/projectBackground';
 
 interface Props {
   role: string;
@@ -166,20 +167,18 @@ export default function ProjectEnvironment({
   const persist = (p: ArchProject) => saveDoc('arch_projects', p.id, p);
 
   return (
-    <div className="min-h-screen bg-white text-black relative">
-      {/* Grade de planta sutil no topo (preta) */}
-      <div className="absolute top-0 left-0 right-0 h-64 overflow-hidden pointer-events-none opacity-[0.035]" aria-hidden>
-        <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
-              <path d="M 32 0 L 0 0 0 32" fill="none" stroke="#000" strokeWidth="1" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grid)" />
-        </svg>
+    <div className="projeto-dark min-h-screen text-white relative">
+      {/* Fundo: foto de arquitetura, estática, cobrindo tudo, desfocada + véu escuro */}
+      <div className="fixed inset-0 z-0 pointer-events-none" aria-hidden>
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: `url(${PROJECT_BG})`, filter: 'blur(8px) brightness(0.55)', transform: 'scale(1.06)' }}
+        />
+        {/* Véu escuro para garantir contraste do texto branco */}
+        <div className="absolute inset-0 bg-black/55" />
       </div>
 
-      <header className="bg-white/80 backdrop-blur-md border-b border-black sticky top-0 z-20">
+      <header className="bg-black/40 backdrop-blur-xl border-b border-white/15 sticky top-0 z-20">
         <div className="max-w-6xl mx-auto px-5 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="w-10 h-10 flex items-center justify-center bg-black">
@@ -205,7 +204,7 @@ export default function ProjectEnvironment({
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-5 py-8 relative">
+      <main className="max-w-6xl mx-auto px-5 py-8 relative z-10">
         {selectedProject ? (
           <ProjectDetail
             project={selectedProject}
@@ -841,30 +840,30 @@ function ConfirmDialog({
   }, [onCancel]);
 
   return (
-    <div className="fixed inset-0 z-[300] bg-black/70 flex items-center justify-center p-4" onClick={onCancel}>
-      <div className="bg-white border-2 border-black w-full max-w-md" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center gap-2.5 px-5 py-4 border-b-2 border-black">
+    <div className="fixed inset-0 z-[300] bg-black/80 flex items-center justify-center p-4" onClick={onCancel}>
+      <div className="border-2 border-white w-full max-w-md" style={{ background: '#0a0a0a' }} onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-2.5 px-5 py-4 border-b-2 border-white">
           <AlertTriangle size={18} strokeWidth={2} />
           <h3 className="text-lg" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>{title}</h3>
         </div>
         <div className="px-5 py-5">
-          <p className="text-sm text-black leading-relaxed" style={{ fontWeight: 300 }}>{message}</p>
+          <p className="text-sm leading-relaxed" style={{ fontWeight: 300, color: 'rgba(255,255,255,0.85)' }}>{message}</p>
         </div>
-        <div className="flex gap-px bg-black border-t-2 border-black">
+        <div className="flex gap-px border-t-2 border-white" style={{ background: 'rgba(255,255,255,0.3)' }}>
           <button
             onClick={onCancel}
             disabled={busy}
-            className="flex-1 bg-white text-black py-3 text-sm hover:bg-black hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black"
-            style={{ fontWeight: 600 }}>
+            className="flex-1 py-3 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
+            style={{ fontWeight: 600, background: '#0a0a0a' }}>
             Cancelar
           </button>
           <button
             onClick={async () => { setBusy(true); await onConfirm(); }}
             disabled={busy}
-            className="flex-1 bg-black text-white py-3 text-sm hover:bg-white hover:text-black transition-colors flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white disabled:opacity-60"
-            style={{ fontWeight: 700 }}>
-            {busy ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
-            {confirmLabel}
+            className="flex-1 py-3 text-sm transition-colors flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white disabled:opacity-60"
+            style={{ fontWeight: 700, background: '#ffffff', color: '#000000' }}>
+            {busy ? <Loader2 size={15} className="animate-spin" style={{ color: '#000' }} /> : <Trash2 size={15} style={{ color: '#000' }} />}
+            <span style={{ color: '#000000' }}>{confirmLabel}</span>
           </button>
         </div>
       </div>
