@@ -17,7 +17,7 @@ import { motion } from 'motion/react';
 import {
   Compass, FolderOpen, Plus, ArrowLeftRight, LogOut, Ruler, Lock,
   CheckCircle2, Clock, AlertTriangle, X, Pencil, Trash2, Upload,
-  Download, FileText, ChevronRight, MessageSquare, ThumbsUp, Send,
+  Download, FileText, ChevronRight, MessageSquare, ThumbsUp, Send, Eye,
 } from 'lucide-react';
 import { subscribeCollection, saveDoc, removeDoc } from '../lib/firebaseDb';
 
@@ -26,8 +26,11 @@ interface Props {
   userName?: string;
   currentUserId?: string;
   clientId?: string;
+  clients?: { id: string; name: string }[];
+  obras?: { id: string; name: string; clientId: string; type?: string }[];
   onLogout: () => void;
-  onSwitchEnvironment: () => void;
+  onSwitchEnvironment: () => void;   // vai direto para Obra
+  onGoToSelect?: () => void;         // vai para a tela de seleção
 }
 
 const PHASE_TEMPLATE = [
@@ -69,6 +72,7 @@ interface ArchProject {
   name: string;
   clientName: string;
   clientId?: string;
+  obraId?: string;         // vínculo opcional com uma obra/centro de custo
   type: string;
   area?: string;
   responsible?: string;
@@ -118,7 +122,7 @@ function readFileCompressed(file: File): Promise<ArchFile> {
 }
 
 export default function ProjectEnvironment({
-  role, userName, clientId, onLogout, onSwitchEnvironment,
+  role, userName, clientId, clients = [], obras = [], onLogout, onSwitchEnvironment, onGoToSelect,
 }: Props) {
   const [allProjects, setAllProjects] = useState<ArchProject[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -153,22 +157,36 @@ export default function ProjectEnvironment({
   const persist = (p: ArchProject) => saveDoc('arch_projects', p.id, p);
 
   return (
-    <div className="min-h-screen bg-stone-50 text-stone-900">
-      <header className="bg-white border-b border-stone-200 sticky top-0 z-20">
+    <div className="min-h-screen text-stone-900 relative" style={{
+      background: 'linear-gradient(180deg, #f4f7f8 0%, #fafaf9 40%, #fafaf9 100%)',
+    }}>
+      {/* Textura decorativa sutil no topo (linhas de projeto/planta) */}
+      <div className="absolute top-0 left-0 right-0 h-64 overflow-hidden pointer-events-none opacity-[0.04]" aria-hidden>
+        <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+              <path d="M 32 0 L 0 0 0 32" fill="none" stroke={AZUL} strokeWidth="1" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#grid)" />
+        </svg>
+      </div>
+
+      <header className="bg-white/70 backdrop-blur-md border-b border-stone-200/70 sticky top-0 z-20">
         <div className="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${AZUL}18` }}>
-              <Compass size={18} style={{ color: AZUL }} />
+            <span className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm" style={{ background: `linear-gradient(135deg, ${AZUL}, #2a5560)` }}>
+              <Compass size={19} className="text-white" />
             </span>
             <div className="leading-tight">
               <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-stone-400">Chaves Brites Correa</p>
-              <h1 className="text-base font-bold" style={{ fontFamily: 'var(--font-serif)' }}>Projetos</h1>
+              <h1 className="text-lg font-bold tracking-tight" style={{ fontFamily: 'var(--font-serif)' }}>Estúdio de Projetos</h1>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={onSwitchEnvironment}
               className="flex items-center gap-1.5 text-xs font-mono uppercase tracking-wider text-stone-500 hover:text-stone-900 px-3 py-1.5 rounded-lg hover:bg-stone-100 transition-colors">
-              <ArrowLeftRight size={13} /> Trocar ambiente
+              <ArrowLeftRight size={13} /> Ir para Obra
             </button>
             <button onClick={onLogout}
               className="flex items-center gap-1.5 text-xs font-mono uppercase tracking-wider text-stone-400 hover:text-stone-700 transition-colors">
@@ -178,7 +196,7 @@ export default function ProjectEnvironment({
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-5 py-8">
+      <main className="max-w-6xl mx-auto px-5 py-8 relative">
         {selectedProject ? (
           <ProjectDetail
             project={selectedProject}
@@ -224,24 +242,28 @@ export default function ProjectEnvironment({
                     <motion.button key={p.id}
                       initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
                       onClick={() => setSelected(p.id)}
-                      className="bg-white border border-stone-200 rounded-2xl p-5 text-left hover:border-stone-300 hover:shadow-sm transition-all relative">
-                      {waiting && !isAdmin && (
-                        <span className="absolute top-3 right-3 text-[9px] font-mono uppercase tracking-wider bg-[#B08A3E]/15 text-[#B08A3E] px-2 py-1 rounded-full animate-pulse">
-                          Aprovação pendente
+                      className="bg-white border border-stone-200 rounded-2xl overflow-hidden text-left hover:shadow-lg hover:-translate-y-0.5 transition-all relative group">
+                      {/* Faixa superior com gradiente — assinatura visual do projeto */}
+                      <div className="h-16 relative overflow-hidden" style={{ background: `linear-gradient(135deg, ${AZUL}, #2a5560)` }}>
+                        <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 80% 20%, white 1px, transparent 1px)', backgroundSize: '16px 16px' }} />
+                        <span className="absolute bottom-2 left-4 w-9 h-9 rounded-xl bg-white/95 flex items-center justify-center shadow-sm translate-y-1/2 z-10">
+                          <Ruler size={17} style={{ color: AZUL }} />
                         </span>
-                      )}
-                      <div className="flex items-start justify-between mb-3">
-                        <span className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${AZUL}14` }}>
-                          <Ruler size={18} style={{ color: AZUL }} />
-                        </span>
+                        {waiting && !isAdmin && (
+                          <span className="absolute top-2 right-2 text-[9px] font-mono uppercase tracking-wider bg-white/90 text-[#B08A3E] px-2 py-1 rounded-full animate-pulse">
+                            Aprovação pendente
+                          </span>
+                        )}
                       </div>
-                      <h3 className="font-bold text-stone-900 mb-0.5">{p.name || 'Sem nome'}</h3>
-                      <p className="text-xs text-stone-500 mb-3">{p.clientName} · {p.type}</p>
-                      <div className="flex items-center justify-between text-[11px] text-stone-400 mb-1.5">
-                        <span>Progresso</span><span className="font-bold" style={{ color: AZUL }}>{pct}%</span>
-                      </div>
-                      <div className="h-1.5 bg-stone-100 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: AZUL }} />
+                      <div className="p-5 pt-7">
+                        <h3 className="font-bold text-stone-900 mb-0.5" style={{ fontFamily: 'var(--font-serif)' }}>{p.name || 'Sem nome'}</h3>
+                        <p className="text-xs text-stone-500 mb-3">{p.clientName} · {p.type}</p>
+                        <div className="flex items-center justify-between text-[11px] text-stone-400 mb-1.5">
+                          <span>Progresso</span><span className="font-bold" style={{ color: AZUL }}>{pct}%</span>
+                        </div>
+                        <div className="h-1.5 bg-stone-100 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${AZUL}, #2a5560)` }} />
+                        </div>
                       </div>
                     </motion.button>
                   );
@@ -255,6 +277,8 @@ export default function ProjectEnvironment({
       {editing && (
         <ProjectEditor
           project={editing}
+          clients={clients}
+          obras={obras}
           onChange={setEditing}
           onSave={async () => { await persist(editing); setEditing(null); }}
           onCancel={() => setEditing(null)}
@@ -384,6 +408,7 @@ function PhaseCard({
   const Icon = meta.Icon;
   const locked = phase.state === 'bloqueada';
   const [askChanges, setAskChanges] = useState(false);
+  const [viewing, setViewing] = useState<ArchFile | null>(null);
   const [motivo, setMotivo] = useState('');
   const [comment, setComment] = useState('');
 
@@ -433,7 +458,7 @@ function PhaseCard({
               ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                   {phase.files.map(f => (
-                    <FileCard key={f.id} file={f} isAdmin={isAdmin} onRemove={() => onRemoveFile(f.id)} />
+                    <FileCard key={f.id} file={f} isAdmin={isAdmin} onRemove={() => onRemoveFile(f.id)} onView={() => setViewing(f)} />
                   ))}
                 </div>
               )}
@@ -524,40 +549,113 @@ function PhaseCard({
           </div>
         )}
       </div>
+
+      {viewing && <FileViewer file={viewing} onClose={() => setViewing(null)} />}
     </div>
   );
 }
 
-function FileCard({ file, isAdmin, onRemove }: { file: ArchFile; isAdmin: boolean; onRemove: () => void }) {
+function FileCard({ file, isAdmin, onRemove, onView }: {
+  file: ArchFile; isAdmin: boolean; onRemove: () => void; onView: () => void;
+}) {
   const isImg = file.type.startsWith('image/');
+  const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
   const download = () => {
     const a = document.createElement('a');
     a.href = file.base64; a.download = file.name; a.click();
   };
   return (
-    <div className="border border-stone-200 rounded-lg overflow-hidden relative">
-      <div className="h-24 bg-stone-100 flex items-center justify-center cursor-pointer" onClick={download}>
+    <div className="border border-stone-200 rounded-xl overflow-hidden relative group bg-white">
+      {/* Prévia — clicar abre o visualizador em tela cheia */}
+      <button onClick={onView} className="w-full h-28 bg-stone-100 flex items-center justify-center relative overflow-hidden">
         {isImg
           ? <img src={file.base64} alt={file.name} className="w-full h-full object-cover" />
-          : <FileText size={28} className="text-stone-400" />}
-      </div>
+          : <div className="flex flex-col items-center gap-1 text-stone-400">
+              <FileText size={30} style={{ color: isPdf ? '#C2703D' : undefined }} />
+              <span className="text-[9px] font-mono uppercase tracking-wider">{isPdf ? 'PDF' : 'Arquivo'}</span>
+            </div>}
+        {/* Overlay "Visualizar" no hover */}
+        <span className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+          <span className="flex items-center gap-1.5 text-white text-xs font-bold bg-black/50 px-3 py-1.5 rounded-full">
+            <Eye size={13} /> Visualizar
+          </span>
+        </span>
+      </button>
       <div className="p-2 flex items-center gap-1">
         <span className="flex-1 min-w-0 text-[11px] text-stone-600 truncate" title={file.name}>{file.name}</span>
-        <button onClick={download} className="text-stone-400 hover:text-[#3E7C8B]" title="Baixar"><Download size={13} /></button>
-        {isAdmin && <button onClick={onRemove} className="text-stone-400 hover:text-red-500" title="Remover"><Trash2 size={13} /></button>}
+        {/* Baixar é ação secundária */}
+        <button onClick={download} className="text-stone-400 hover:text-[#3E7C8B] p-0.5" title="Baixar (opção secundária)"><Download size={13} /></button>
+        {isAdmin && <button onClick={onRemove} className="text-stone-400 hover:text-red-500 p-0.5" title="Remover"><Trash2 size={13} /></button>}
+      </div>
+    </div>
+  );
+}
+
+// Visualizador de arquivo em tela cheia (popup). PDFs e imagens 100% online.
+function FileViewer({ file, onClose }: { file: ArchFile; onClose: () => void }) {
+  const isImg = file.type.startsWith('image/');
+  const download = () => {
+    const a = document.createElement('a');
+    a.href = file.base64; a.download = file.name; a.click();
+  };
+  // Fecha com ESC.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-[200] bg-stone-900/95 flex flex-col" onClick={onClose}>
+      {/* Barra superior */}
+      <div className="flex items-center justify-between px-5 py-3 flex-shrink-0" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-2 min-w-0">
+          <FileText size={16} className="text-stone-400 flex-shrink-0" />
+          <span className="text-sm text-white truncate">{file.name}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={download}
+            className="flex items-center gap-1.5 text-xs font-semibold text-stone-300 hover:text-white border border-stone-600 hover:border-stone-400 px-3 py-1.5 rounded-lg transition-colors">
+            <Download size={13} /> Baixar
+          </button>
+          <button onClick={onClose} className="text-stone-300 hover:text-white p-1.5 rounded-lg hover:bg-white/10" title="Fechar (ESC)">
+            <X size={20} />
+          </button>
+        </div>
+      </div>
+      {/* Conteúdo */}
+      <div className="flex-1 min-h-0 px-4 pb-4" onClick={e => e.stopPropagation()}>
+        {isImg ? (
+          <div className="w-full h-full flex items-center justify-center">
+            <img src={file.base64} alt={file.name} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" />
+          </div>
+        ) : (
+          <iframe
+            src={file.base64}
+            title={file.name}
+            className="w-full h-full rounded-lg bg-white shadow-2xl border-none"
+          />
+        )}
       </div>
     </div>
   );
 }
 
 function ProjectEditor({
-  project, onChange, onSave, onCancel, onDelete,
+  project, clients, obras, onChange, onSave, onCancel, onDelete,
 }: {
-  project: ArchProject; onChange: (p: ArchProject) => void;
+  project: ArchProject;
+  clients: { id: string; name: string }[];
+  obras: { id: string; name: string; clientId: string; type?: string }[];
+  onChange: (p: ArchProject) => void;
   onSave: () => void; onCancel: () => void; onDelete?: () => void;
 }) {
   const p = project;
   const set = (patch: Partial<ArchProject>) => onChange({ ...p, ...patch });
+
+  // Obras filtradas pelo cliente escolhido (se houver), para o vínculo fazer sentido.
+  const obrasDisponiveis = p.clientId ? obras.filter(o => o.clientId === p.clientId) : obras;
+
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={onCancel}>
       <div className="bg-white rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -571,18 +669,50 @@ function ProjectEditor({
             <input value={p.name} onChange={e => set({ name: e.target.value })} placeholder="Ex.: Residência Paulo e Juliana"
               className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#3E7C8B]" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Cliente (nome)</label>
+
+          {/* Cliente: puxa dos clientes já cadastrados */}
+          <div>
+            <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Cliente</label>
+            {clients.length > 0 ? (
+              <select
+                value={p.clientId || ''}
+                onChange={e => {
+                  const c = clients.find(x => x.id === e.target.value);
+                  set({ clientId: e.target.value, clientName: c?.name || '', obraId: '' });
+                }}
+                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#3E7C8B]"
+              >
+                <option value="">Selecione um cliente cadastrado…</option>
+                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            ) : (
               <input value={p.clientName} onChange={e => set({ clientName: e.target.value })}
+                placeholder="Nome do cliente"
                 className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#3E7C8B]" />
-            </div>
-            <div>
-              <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">ID do cliente (login)</label>
-              <input value={p.clientId} onChange={e => set({ clientId: e.target.value })} placeholder="para o cliente ver o projeto"
-                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#3E7C8B]" />
-            </div>
+            )}
           </div>
+
+          {/* Obra / centro de custo: puxa das obras cadastradas (opcional) */}
+          <div>
+            <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">
+              Obra vinculada <span className="text-stone-400 normal-case font-normal">(opcional)</span>
+            </label>
+            <select
+              value={p.obraId || ''}
+              onChange={e => set({ obraId: e.target.value })}
+              disabled={obrasDisponiveis.length === 0}
+              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#3E7C8B] disabled:bg-stone-50 disabled:text-stone-400"
+            >
+              <option value="">
+                {obrasDisponiveis.length === 0
+                  ? (p.clientId ? 'Este cliente não tem obras cadastradas' : 'Selecione o cliente primeiro')
+                  : 'Nenhuma (projeto independente)'}
+              </option>
+              {obrasDisponiveis.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select>
+            <p className="text-[10px] text-stone-400 mt-1">Liga este projeto a um centro de custo/obra existente, para referência futura.</p>
+          </div>
+
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Tipo</label>

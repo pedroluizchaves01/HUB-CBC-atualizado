@@ -5,6 +5,7 @@ import AdminDashboard from './components/AdminDashboard';
 import ClientDashboard from './components/ClientDashboard';
 import EnvironmentSelect from './components/EnvironmentSelect';
 import ProjectEnvironment from './components/ProjectEnvironment';
+import EnvironmentSwitcher from './components/EnvironmentSwitcher';
 
 export default function App() {
   // Ambiente escolhido após o login ('projeto' | 'obra'). Persistido na sessão
@@ -79,8 +80,11 @@ export default function App() {
         userName={currentUser.name}
         currentUserId={currentUser.id}
         clientId={currentUser.clientId}
+        clients={clients}
+        obras={projects}
         onLogout={logout}
-        onSwitchEnvironment={() => setEnv(null)}
+        onSwitchEnvironment={() => setEnv('obra')}
+        onGoToSelect={() => setEnv(null)}
       />
     );
   }
@@ -90,6 +94,7 @@ export default function App() {
   // Admin & Marketing View
   if (currentUser.role === 'admin' || currentUser.role === 'marketing') {
     return (
+      <>
       <AdminDashboard
         role={currentUser.role}
         currentUserId={currentUser.id}
@@ -116,6 +121,13 @@ export default function App() {
         onEditContract={editContract}
         onDeleteContract={deleteContract}
       />
+      <EnvironmentSwitcher
+        current="obra"
+        onGoProjeto={() => setEnv('projeto')}
+        onGoObra={() => setEnv('obra')}
+        onGoSelect={() => setEnv(null)}
+      />
+      </>
     );
   }
 
@@ -144,6 +156,7 @@ export default function App() {
     }
 
     return (
+      <>
       <ClientDashboard
         client={linkedClient}
         projects={projects}
@@ -152,6 +165,13 @@ export default function App() {
         onLogout={logout}
         onAddTransaction={addTransaction}
       />
+      <EnvironmentSwitcher
+        current="obra"
+        onGoProjeto={() => setEnv('projeto')}
+        onGoObra={() => setEnv('obra')}
+        onGoSelect={() => setEnv(null)}
+      />
+      </>
     );
   }
 
