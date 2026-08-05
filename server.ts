@@ -3,7 +3,7 @@ import path from "path";
 import dotenv from "dotenv";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { GoogleGenAI, Type } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 import * as XLSX from "xlsx";
@@ -17,6 +17,7 @@ import { parseReceiptText } from "./src/lib/receiptParser";
 import { authenticate, createSessionToken, EXTENDED_SESSION_TTL_MS, verifySessionToken as verifySessionTokenForRateLimit } from "./src/lib/server/authService";
 import { requireAuth, requireRole } from "./src/lib/server/authMiddleware";
 import * as dataService from "./src/lib/server/dataService";
+import { writeAuditLog } from "./src/lib/server/auditService";
 import * as telegram from "./src/lib/server/telegramServer";
 import { isDbConfigured, ensureSchema } from "./src/lib/server/db";
 import { startDemandAutomationScheduler } from "./src/lib/server/demandAutomation";
@@ -41,12 +42,30 @@ app.set("trust proxy", 1);
 
 // Cabeçalhos de segurança. CSP desabilitada aqui (o app tem estilos/inline próprios);
 // se quiser CSP estrita, configure diretiva a diretiva.
-app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"], // estilos inline do app; refinar futuramente
+      imgSrc: ["'self'", "data:", "blob:"],
+      connectSrc: ["'self'", "https://api.anthropic.com", "https://generativelanguage.googleapis.com"],
+      fontSrc: ["'self'", "data:"],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
 app.use(cookieParser());
 
 // Increase limit to handle PDF/Excel base64 uploads
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ limit: "50mb", extended: true }));
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ limit: "1mb", extended: true }));
+// Middleware dedicado para rotas que recebem base64 de arquivos (PDF/foto/planilha).
+const largeJson = express.json({ limit: "25mb" });
+// Parser para uploads de arquivos ao Telegram: um PDF de 50MB vira ~67MB em base64.
+const fileUploadJson = express.json({ limit: "70mb" });
 
 // Rate limits: um geral para toda a API e um mais rígido para login (anti brute-force).
 // IMPORTANTE: a chave do limite é o USUÁRIO da sessão (quando autenticado), não o IP.
@@ -61,7 +80,8 @@ const rateLimitKey = (req: any): string => {
     const u = token ? verifySessionTokenForRateLimit(token) : null;
     if (u?.id) return `user:${u.id}`;
   } catch { /* cai para IP */ }
-  return `ip:${req.ip}`;
+  // Normaliza IPv6 para /64 — evita bypass do limitador por rotação de sufixo do endereço.
+  return `ip:${ipKeyGenerator(req.ip)}`;
 };
 const apiLimiter = rateLimit({ windowMs: 60_000, max: 600, standardHeaders: true, legacyHeaders: false,
   keyGenerator: rateLimitKey,
@@ -83,7 +103,7 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     const ttlMs = rememberMe ? EXTENDED_SESSION_TTL_MS : undefined;
     const token = ttlMs ? createSessionToken(user, ttlMs) : createSessionToken(user);
     res.cookie("cbc_session", token, {
-      httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production",
+      httpOnly: true, sameSite: "strict", secure: process.env.NODE_ENV === "production",
       maxAge: ttlMs || 12 * 60 * 60 * 1000,
     });
     return res.json({ success: true, user, token });
@@ -173,10 +193,17 @@ app.get("/api/data/:collection", requireAuth, async (req, res) => {
 app.put("/api/data/:collection/:id", requireAuth, async (req, res) => {
   try {
     const u = req.sessionUser!;
-    dataService.assertCanWrite(req.params.collection, { role: u.role, clientId: u.clientId });
-    const existing = await dataService.getDocById(req.params.collection, req.params.id).catch(() => null);
     const payload = req.body?.data ?? req.body;
+    await dataService.assertCanWriteDoc(
+      req.params.collection, req.params.id,
+      { role: u.role, clientId: u.clientId }, payload,
+    );
+    const existing = await dataService.getDocById(req.params.collection, req.params.id).catch(() => null);
     await dataService.setDocById(req.params.collection, req.params.id, payload);
+    void writeAuditLog({
+      actorId: u.id, actorRole: u.role, action: existing ? "update" : "create",
+      collection: req.params.collection, docId: req.params.id, ip: req.ip,
+    });
     void notifyChange(
       { id: u.id, name: u.name, role: u.role },
       req.params.collection,
@@ -186,7 +213,7 @@ app.put("/api/data/:collection/:id", requireAuth, async (req, res) => {
     );
     return res.json({ success: true });
   } catch (e: any) {
-    const status = /permissão/i.test(e.message || "") ? 403 : 400;
+    const status = /permissão|inválido/i.test(e.message || "") ? 403 : 400;
     return res.status(status).json({ error: e.message || "Erro ao salvar documento." });
   }
 });
@@ -194,9 +221,16 @@ app.put("/api/data/:collection/:id", requireAuth, async (req, res) => {
 app.delete("/api/data/:collection/:id", requireAuth, async (req, res) => {
   try {
     const u = req.sessionUser!;
-    dataService.assertCanWrite(req.params.collection, { role: u.role, clientId: u.clientId });
+    await dataService.assertCanWriteDoc(
+      req.params.collection, req.params.id,
+      { role: u.role, clientId: u.clientId },
+    );
     const existing = await dataService.getDocById(req.params.collection, req.params.id).catch(() => null);
     await dataService.deleteDocById(req.params.collection, req.params.id);
+    void writeAuditLog({
+      actorId: u.id, actorRole: u.role, action: "delete",
+      collection: req.params.collection, docId: req.params.id, ip: req.ip,
+    });
     void notifyChange(
       { id: u.id, name: u.name, role: u.role },
       req.params.collection,
@@ -206,7 +240,7 @@ app.delete("/api/data/:collection/:id", requireAuth, async (req, res) => {
     );
     return res.json({ success: true });
   } catch (e: any) {
-    const status = /permissão/i.test(e.message || "") ? 403 : 400;
+    const status = /permissão|inválido/i.test(e.message || "") ? 403 : 400;
     return res.status(status).json({ error: e.message || "Erro ao excluir documento." });
   }
 });
@@ -243,9 +277,16 @@ const ai = new GoogleGenAI({
 function getSpreadsheetDataAsText(fileBase64: string): string {
   try {
     const buffer = Buffer.from(fileBase64, "base64");
+    // Mitigação de ReDoS/DoS no SheetJS: rejeita planilhas acima de 8 MB, que estão
+    // muito além do uso legítimo (listas de materiais/pagamentos) e são o vetor típico
+    // de negação de serviço por expressão regular. Ver RELATORIO-SEGURANCA (A1).
+    if (buffer.length > 8 * 1024 * 1024) {
+      throw new Error("Planilha muito grande (limite de 8 MB). Reduza o arquivo e tente novamente.");
+    }
     const workbook = XLSX.read(buffer, { type: "buffer" });
     let result = "";
-    for (const sheetName of workbook.SheetNames) {
+    // Limita a 20 abas para conter processamento desproporcional.
+    for (const sheetName of workbook.SheetNames.slice(0, 20)) {
       const worksheet = workbook.Sheets[sheetName];
       const csv = XLSX.utils.sheet_to_csv(worksheet);
       result += `### ABA PLANILHA: ${sheetName} ###\n${csv}\n\n`;
@@ -335,7 +376,7 @@ async function callGeminiForJson(params: {
 }
 
 // AI Document parsing endpoint for the physical-financial schedule
-app.post("/api/planning/parse-document", requireAuth, aiLimiter, async (req, res) => {
+app.post("/api/planning/parse-document", requireAuth, largeJson, aiLimiter, async (req, res) => {
   try {
     const { fileBase64, mimeType, fileName, accessToken } = req.body;
 
@@ -431,7 +472,7 @@ REGRAS DE DISTRIBUIÇÃO E AJUSTE:
 // Extrai, por linha: nome do prestador, número da parcela, data e valor.
 // Serve tanto ao "um prestador com várias parcelas" quanto a "vários prestadores
 // misturados" — a IA só extrai linha a linha; o agrupamento é feito no front.
-app.post("/api/planning/parse-labor-payments", requireAuth, aiLimiter, async (req, res) => {
+app.post("/api/planning/parse-labor-payments", requireAuth, largeJson, aiLimiter, async (req, res) => {
   try {
     const { fileBase64, mimeType, fileName, accessToken } = req.body;
 
@@ -551,7 +592,7 @@ Retorne obrigatoriamente no formato do esquema JSON definido.
 });
 
 // AI Document parsing endpoint for materials lists
-app.post("/api/planning/parse-materials", requireAuth, aiLimiter, async (req, res) => {
+app.post("/api/planning/parse-materials", requireAuth, largeJson, aiLimiter, async (req, res) => {
   try {
     const { fileBase64, mimeType, fileName, accessToken } = req.body;
 
@@ -683,7 +724,7 @@ Retorne obrigatoriamente no formato do esquema JSON definido.
 });
 
 // AI Refinement / Alteration Checkpoint endpoint for materials lists
-app.post("/api/planning/refine-materials", requireAuth, aiLimiter, async (req, res) => {
+app.post("/api/planning/refine-materials", requireAuth, largeJson, aiLimiter, async (req, res) => {
   try {
     const { currentMaterials, userMessage } = req.body;
 
@@ -758,7 +799,7 @@ Retorne estritamente o JSON com a estrutura atualizada.
 // AI Refinement endpoint for a schedule generated by the native rule-based engine
 // (src/lib/scheduleGenerator.ts). A geração inicial NÃO usa IA — este endpoint é o
 // passo opcional de ajuste via comando de texto ("abordagem híbrida").
-app.post("/api/planning/refine-schedule", requireAuth, aiLimiter, async (req, res) => {
+app.post("/api/planning/refine-schedule", requireAuth, largeJson, aiLimiter, async (req, res) => {
   try {
     const { currentPhases, userMessage } = req.body;
 
@@ -836,7 +877,7 @@ Retorne estritamente o JSON com a estrutura atualizada.
 });
 
 // AI Invoice parsing endpoint for construction expenses
-app.post("/api/acompanhamento/parse-invoice", requireAuth, aiLimiter, async (req, res) => {
+app.post("/api/acompanhamento/parse-invoice", requireAuth, largeJson, aiLimiter, async (req, res) => {
   try {
     const { fileBase64, mimeType, fileName } = req.body;
 
@@ -942,7 +983,7 @@ Retorne obrigatoriamente um objeto JSON válido conforme o esquema definido. Nã
 // Bulk Transactions parsing endpoint (Excel spreadsheet, PDF bank statement/table, multiple invoice table).
 // PDFs de tabela agora são lidos por um extrator NATIVO (sem IA) — ver src/lib/bulkTransactionParser.ts.
 // Excel/CSV e imagens continuam usando o Gemini, que já lida bem com esses formatos.
-app.post("/api/acompanhamento/parse-bulk-transactions", requireAuth, aiLimiter, async (req, res) => {
+app.post("/api/acompanhamento/parse-bulk-transactions", requireAuth, largeJson, aiLimiter, async (req, res) => {
   try {
     const { fileBase64, mimeType, fileName, accessToken } = req.body;
 
@@ -1071,7 +1112,7 @@ Não inclua nenhuma outra resposta ou marcação de markdown além do objeto JSO
 });
 
 // AI Material Request parsing endpoint (e.g. WhatsApp prints, contractor photos, list handwritten)
-app.post("/api/quotations/parse-material-request", requireAuth, aiLimiter, async (req, res) => {
+app.post("/api/quotations/parse-material-request", requireAuth, largeJson, aiLimiter, async (req, res) => {
   try {
     const { fileBase64, mimeType, fileName } = req.body;
 
@@ -1164,7 +1205,7 @@ Não inclua nenhuma outra resposta ou markdown fora do objeto JSON.
 });
 
 // AI receipt parsing and auto-uploading to Google Drive
-app.post("/api/office/analyze-receipt", requireAuth, aiLimiter, async (req, res) => {
+app.post("/api/office/analyze-receipt", requireAuth, largeJson, aiLimiter, async (req, res) => {
   try {
     const { fileBase64, mimeType, fileName, accessToken } = req.body;
 
@@ -1328,7 +1369,8 @@ app.post("/api/telegram/config", requireAuth, requireRole("admin"), async (req, 
 });
 
 // Upload de documento ao Telegram. Exige sessão. Valida tamanho e tipo.
-app.post("/api/telegram/upload", requireAuth, async (req, res) => {
+// Usa parser grande (70mb) pois arquivos de projeto podem ter até 50MB (~67MB em base64).
+app.post("/api/telegram/upload", requireAuth, fileUploadJson, async (req, res) => {
   try {
     const { base64Str, fileName, mimeType } = req.body || {};
     if (!base64Str) return res.status(400).json({ error: "Conteúdo do arquivo ausente." });
@@ -1336,8 +1378,8 @@ app.post("/api/telegram/upload", requireAuth, async (req, res) => {
     const clean = String(base64Str).includes("base64,") ? String(base64Str).split("base64,")[1] : String(base64Str);
 
     // Valida TIPO REAL (magic bytes) e tamanho — não confia no mimeType do cliente.
-    // Aceita imagens, PDF e planilhas (o Telegram é usado para comprovantes e planilhas).
-    const check = validateBase64File(clean, RECEIPT_MIMES, { allowSpreadsheet: true });
+    // Aceita imagens, PDF e planilhas. Limite de 50MB (teto do Telegram Bot API).
+    const check = validateBase64File(clean, RECEIPT_MIMES, { allowSpreadsheet: true, maxBytes: 50 * 1024 * 1024 });
     if (!check.ok) return res.status(check.error?.includes("limite") ? 413 : 400).json({ error: check.error });
 
     const result = await telegram.sendDocument(clean, fileName || "arquivo.dat", check.detected || mimeType || "application/octet-stream");

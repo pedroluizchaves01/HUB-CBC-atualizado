@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { subscribeCollection, saveDoc, removeDoc } from '../lib/firebaseDb';
 import { PROJECT_BG } from '../lib/projectBackground';
+import { sendTelegramDocument } from '../lib/telegramService';
 
 interface Props {
   role: string;
@@ -49,8 +50,14 @@ interface ArchFile {
   id: string;
   name: string;
   type: string;
-  base64: string;
   uploadedAt: string;
+  // Storage: arquivos vão para o Telegram (fileId/url). base64 fica só como
+  // miniatura leve de imagens (preview rápido) — nunca o arquivo pesado.
+  storage?: 'telegram' | 'inline';
+  fileId?: string;      // id no Telegram (quando storage='telegram')
+  url?: string;         // caminho do proxy para visualizar/baixar
+  size?: number;        // tamanho em bytes do arquivo original
+  base64?: string;      // miniatura (imagens) ou conteúdo (legado/inline)
 }
 interface PhaseEvent {
   id: string;
@@ -102,32 +109,55 @@ const STATE_META: Record<PhaseState, {
   aprovada:             { label: 'Aprovada',                 filled: true,  muted: false, Icon: CheckCircle2 },
 };
 
-function readFileCompressed(file: File): Promise<ArchFile> {
+// Lê um File como base64 (data URL).
+function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error('Falha ao ler o arquivo.'));
-    reader.onload = () => {
-      const base64 = reader.result as string;
-      const mk = (b64: string): ArchFile => ({
-        id: uid('file'), name: file.name, type: file.type, base64: b64, uploadedAt: new Date().toISOString(),
-      });
-      if (!file.type.startsWith('image/')) return resolve(mk(base64));
-      const img = new Image();
-      img.onload = () => {
-        const maxW = 1600;
-        const scale = Math.min(1, maxW / img.width);
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width * scale; canvas.height = img.height * scale;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return resolve(mk(base64));
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(mk(canvas.toDataURL('image/jpeg', 0.82)));
-      };
-      img.onerror = () => resolve(mk(base64));
-      img.src = base64;
-    };
+    reader.onload = () => resolve(reader.result as string);
     reader.readAsDataURL(file);
   });
+}
+
+// Gera uma miniatura leve (JPEG) de uma imagem, para preview rápido no card.
+function makeThumbnail(base64: string): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const maxW = 480; // miniatura pequena — só para o card
+      const scale = Math.min(1, maxW / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width * scale; canvas.height = img.height * scale;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return resolve('');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.7));
+    };
+    img.onerror = () => resolve('');
+    img.src = base64;
+  });
+}
+
+// Sobe o arquivo ao Telegram (storage) e devolve o ArchFile com a referência.
+// Imagens ganham uma miniatura leve inline para preview instantâneo.
+// O arquivo completo (PDF/imagem em alta) fica no Telegram, acessível por url/fileId.
+async function uploadArchFile(file: File): Promise<ArchFile> {
+  const base64 = await fileToBase64(file);
+  const isImg = file.type.startsWith('image/');
+  const thumb = isImg ? await makeThumbnail(base64) : undefined;
+
+  const sent = await sendTelegramDocument(base64, file.name, file.type || 'application/octet-stream');
+  return {
+    id: uid('file'),
+    name: file.name,
+    type: file.type,
+    uploadedAt: new Date().toISOString(),
+    storage: 'telegram',
+    fileId: sent.fileId,
+    url: sent.url,
+    size: file.size,
+    base64: thumb, // só a miniatura (ou undefined para PDFs)
+  };
 }
 
 export default function ProjectEnvironment({
@@ -363,10 +393,29 @@ function ProjectDetail({
     phases = phases.map((ph, i) => i === idx ? { ...ph, state: 'ajustes' as PhaseState } : ph);
     update(phases);
   };
-  const addFiles = async (idx: number, files: FileList) => {
+  const addFiles = async (idx: number, files: FileList, onStatus?: (msg: string | null) => void) => {
     const parsed: ArchFile[] = [];
-    for (const f of Array.from(files)) parsed.push(await readFileCompressed(f));
-    update(project.phases.map((ph, i) => i === idx ? { ...ph, files: [...ph.files, ...parsed] } : ph));
+    const arr = Array.from(files);
+    for (let k = 0; k < arr.length; k++) {
+      const f = arr[k];
+      // Limite do Telegram Bot API: 50 MB por arquivo.
+      if (f.size > 50 * 1024 * 1024) {
+        onStatus?.(null);
+        alert(`"${f.name}" tem ${(f.size / 1024 / 1024).toFixed(0)}MB e excede o limite de 50MB por arquivo. Comprima o PDF ou divida em partes.`);
+        continue;
+      }
+      try {
+        onStatus?.(`Enviando ${arr.length > 1 ? `(${k + 1}/${arr.length}) ` : ''}${f.name}…`);
+        parsed.push(await uploadArchFile(f));
+      } catch (e: any) {
+        onStatus?.(null);
+        alert(`Falha ao enviar "${f.name}": ${e?.message || 'erro no upload'}. Verifique se o Telegram está configurado nas configurações.`);
+      }
+    }
+    onStatus?.(null);
+    if (parsed.length > 0) {
+      update(project.phases.map((ph, i) => i === idx ? { ...ph, files: [...ph.files, ...parsed] } : ph));
+    }
   };
   const removeFile = (idx: number, fileId: string) =>
     update(project.phases.map((ph, i) => i === idx ? { ...ph, files: ph.files.filter(f => f.id !== fileId) } : ph));
@@ -441,7 +490,7 @@ function ProjectDetail({
             onSendForApproval={() => sendForApproval(i)}
             onApprove={() => approve(i)}
             onRequestChanges={(motivo) => requestChanges(i, motivo)}
-            onAddFiles={(files) => addFiles(i, files)}
+            onAddFiles={(files, onStatus) => addFiles(i, files, onStatus)}
             onRemoveFile={(fid) => removeFile(i, fid)}
             onAddComment={(text) => addComment(i, text)}
           />
@@ -459,13 +508,14 @@ function PhaseCard({
   phase: ArchPhase; index: number; total: number; isAdmin: boolean; isOpen: boolean;
   onToggle: () => void;
   onSendForApproval: () => void; onApprove: () => void; onRequestChanges: (m: string) => void;
-  onAddFiles: (files: FileList) => void; onRemoveFile: (id: string) => void; onAddComment: (t: string) => void;
+  onAddFiles: (files: FileList, onStatus?: (msg: string | null) => void) => void; onRemoveFile: (id: string) => void; onAddComment: (t: string) => void;
 }) {
   const meta = STATE_META[phase.state];
   const Icon = meta.Icon;
   const locked = phase.state === 'bloqueada';
   const [askChanges, setAskChanges] = useState(false);
   const [viewing, setViewing] = useState<ArchFile | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [motivo, setMotivo] = useState('');
   const [comment, setComment] = useState('');
 
@@ -512,13 +562,19 @@ function PhaseCard({
               <div className="flex items-center justify-between mb-2">
                 <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-black font-bold">Arquivos desta etapa</p>
                 {isAdmin && (
-                  <label className="flex items-center gap-1.5 text-xs cursor-pointer px-2.5 py-1.5 border border-black hover:bg-black hover:text-white transition-colors" style={{ fontWeight: 600 }}>
-                    <Upload size={13} /> Enviar arquivo
-                    <input type="file" multiple accept="image/*,application/pdf" className="hidden"
-                      onChange={e => e.target.files && onAddFiles(e.target.files)} />
+                  <label className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 border border-black transition-colors ${uploadStatus ? 'opacity-50 cursor-wait' : 'cursor-pointer hover:bg-black hover:text-white'}`} style={{ fontWeight: 600 }}>
+                    {uploadStatus ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+                    {uploadStatus ? 'Enviando…' : 'Enviar arquivo'}
+                    <input type="file" multiple accept="image/*,application/pdf" className="hidden" disabled={!!uploadStatus}
+                      onChange={e => { if (e.target.files) { onAddFiles(e.target.files, setUploadStatus); e.target.value = ''; } }} />
                   </label>
                 )}
               </div>
+              {uploadStatus && (
+                <p className="text-[11px] text-black/70 mb-2 flex items-center gap-1.5" style={{ fontWeight: 300 }}>
+                  <Loader2 size={11} className="animate-spin" /> {uploadStatus}
+                </p>
+              )}
               {phase.files.length === 0 ? (
                 <p className="text-xs text-black/50 py-4 text-center border border-dashed border-black/30" style={{ fontWeight: 300 }}>
                   {isAdmin ? 'Nenhum arquivo ainda. Envie plantas, PDFs ou imagens.' : 'Os arquivos desta etapa aparecerão aqui.'}
@@ -627,26 +683,35 @@ function PhaseCard({
   );
 }
 
+// Resolve a URL do arquivo: Telegram (proxy) ou base64 legado (inline).
+function fileHref(file: ArchFile): string {
+  if (file.storage === 'telegram' && file.url) return file.url;
+  return file.base64 || '';
+}
+
 function FileCard({ file, isAdmin, onRemove, onView }: {
   file: ArchFile; isAdmin: boolean; onRemove: () => void; onView: () => void;
 }) {
   const isImg = file.type.startsWith('image/');
   const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+  const href = fileHref(file);
+  const sizeLabel = file.size ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : '';
   const download = () => {
+    // Baixa o arquivo COMPLETO (Telegram) — abre o proxy numa nova aba para o navegador salvar.
     const a = document.createElement('a');
-    a.href = file.base64; a.download = file.name; a.click();
+    a.href = href; a.download = file.name; a.target = '_blank'; a.rel = 'noopener'; a.click();
   };
+  // Preview do card: miniatura leve (base64) para imagens; ícone para PDF.
+  const thumb = isImg ? file.base64 : undefined;
   return (
     <div className="border border-black overflow-hidden relative group bg-white">
-      {/* Prévia — clicar abre o visualizador em tela cheia */}
       <button onClick={onView} className="w-full h-28 bg-stone-100 flex items-center justify-center relative overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black">
-        {isImg
-          ? <img src={file.base64} alt={file.name} className="w-full h-full object-cover grayscale" />
+        {thumb
+          ? <img src={thumb} alt={file.name} className="w-full h-full object-cover grayscale" />
           : <div className="flex flex-col items-center gap-1 text-black">
               <FileText size={30} strokeWidth={1.25} />
-              <span className="text-[9px] font-mono uppercase tracking-wider">{isPdf ? 'PDF' : 'Arquivo'}</span>
+              <span className="text-[9px] font-mono uppercase tracking-wider">{isPdf ? 'PDF' : 'Arquivo'}{sizeLabel ? ` · ${sizeLabel}` : ''}</span>
             </div>}
-        {/* Overlay "Visualizar" no hover */}
         <span className="absolute inset-0 bg-black/0 group-hover:bg-black/70 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
           <span className="flex items-center gap-1.5 text-white text-xs bg-black px-3 py-1.5 border border-white" style={{ fontWeight: 700 }}>
             <Eye size={13} /> Visualizar
@@ -655,8 +720,7 @@ function FileCard({ file, isAdmin, onRemove, onView }: {
       </button>
       <div className="p-2 flex items-center gap-1 border-t border-black">
         <span className="flex-1 min-w-0 text-[11px] text-black truncate" title={file.name} style={{ fontWeight: 300 }}>{file.name}</span>
-        {/* Baixar é ação secundária */}
-        <button onClick={download} className="text-black/50 hover:text-black p-0.5" title="Baixar (opção secundária)"><Download size={13} /></button>
+        <button onClick={download} className="text-black/50 hover:text-black p-0.5" title="Baixar arquivo completo"><Download size={13} /></button>
         {isAdmin && <button onClick={onRemove} className="text-black/50 hover:text-black p-0.5" title="Remover"><Trash2 size={13} /></button>}
       </div>
     </div>
@@ -666,9 +730,10 @@ function FileCard({ file, isAdmin, onRemove, onView }: {
 // Visualizador de arquivo em tela cheia (popup). PDFs e imagens 100% online.
 function FileViewer({ file, onClose }: { file: ArchFile; onClose: () => void }) {
   const isImg = file.type.startsWith('image/');
+  const href = fileHref(file);
   const download = () => {
     const a = document.createElement('a');
-    a.href = file.base64; a.download = file.name; a.click();
+    a.href = href; a.download = file.name; a.target = '_blank'; a.rel = 'noopener'; a.click();
   };
   // Fecha com ESC.
   useEffect(() => {
@@ -699,11 +764,11 @@ function FileViewer({ file, onClose }: { file: ArchFile; onClose: () => void }) 
       <div className="flex-1 min-h-0 px-4 pb-4" onClick={e => e.stopPropagation()}>
         {isImg ? (
           <div className="w-full h-full flex items-center justify-center">
-            <img src={file.base64} alt={file.name} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" />
+            <img src={href} alt={file.name} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" />
           </div>
         ) : (
           <iframe
-            src={file.base64}
+            src={href}
             title={file.name}
             className="w-full h-full rounded-lg bg-white shadow-2xl border-none"
           />
