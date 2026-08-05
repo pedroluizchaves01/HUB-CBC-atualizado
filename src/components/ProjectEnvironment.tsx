@@ -131,14 +131,14 @@ function makeThumbnail(base64: string): Promise<string> {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
-      const maxW = 480; // miniatura pequena — só para o card
+      const maxW = 320; // miniatura pequena — só para o card (mantém o documento leve)
       const scale = Math.min(1, maxW / img.width);
       const canvas = document.createElement('canvas');
       canvas.width = img.width * scale; canvas.height = img.height * scale;
       const ctx = canvas.getContext('2d');
       if (!ctx) return resolve('');
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL('image/jpeg', 0.7));
+      resolve(canvas.toDataURL('image/jpeg', 0.6));
     };
     img.onerror = () => resolve('');
     img.src = base64;

@@ -138,8 +138,6 @@ export async function listCollectionForUser(collection: string, req: Requester):
 
   if (collection === "clients") return all.filter((d) => d.id === clientId);
   if (collection === "projects") return all.filter((d) => d.clientId === clientId);
-  // Projetos de arquitetura: ligados ao cliente diretamente por clientId (não por projectId de obra).
-  if (collection === "arch_projects") return all.filter((d) => d.clientId === clientId);
 
   if (PROJECT_SCOPED.has(collection)) {
     // Descobre os projetos do cliente e filtra os itens por projectId.
@@ -203,18 +201,6 @@ export async function assertCanWriteDoc(
     // Impede "mover" o registro para um projeto que não é do cliente (ou criar já em outro).
     if (incomingData && incomingData.projectId && !myProjectIds.has(incomingData.projectId)) {
       throw new Error("Projeto inválido para este cliente.");
-    }
-    return;
-  }
-
-  // 4a) 'arch_projects': o cliente dono pode escrever (aprovar/comentar nas fases).
-  if (collection === "arch_projects") {
-    const existing = await getDocById(collection, id).catch(() => null);
-    if (existing && existing.clientId !== clientId) {
-      throw new Error("Você não tem permissão para alterar estes dados.");
-    }
-    if (incomingData && incomingData.clientId && incomingData.clientId !== clientId) {
-      throw new Error("Você não tem permissão para alterar estes dados.");
     }
     return;
   }

@@ -1,15 +1,14 @@
 // src/components/EnvironmentSelect.tsx
 //
-// Tela de seleção exibida logo após o login: a pessoa escolhe entre o ambiente
-// de PROJETO (arquitetura) e o de OBRA (execução).
+// Tela de bifurcação exibida logo após o login: a pessoa escolhe entre o
+// ambiente de PROJETO (arquitetura/engenharia) e o de OBRA (execução, o que já
+// existe). Dois painéis lado a lado; o que recebe o cursor se expande.
 //
-// Design minimalista, preto e branco. Dois botões compactos e clean; o resumo
-// de cada área aparece apenas quando o cursor passa sobre o botão.
-// Não decide permissões — apenas qual "mundo" abrir.
+// Não decide permissões — apenas qual "mundo" abrir. O App cuida do resto.
 
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Compass, HardHat, LogOut } from 'lucide-react';
+import { motion } from 'motion/react';
+import { Compass, HardHat, ArrowRight, LogOut } from 'lucide-react';
 
 interface Props {
   userName?: string;
@@ -17,95 +16,118 @@ interface Props {
   onLogout: () => void;
 }
 
+const AZUL = '#3E7C8B';       // projeto (arquitetura/engenharia)
+const TERRA = '#C2703D';      // obra (execução) — cor já usada no sistema
+
 export default function EnvironmentSelect({ userName, onSelect, onLogout }: Props) {
   const [hover, setHover] = useState<'projeto' | 'obra' | null>(null);
 
   const panels = [
     {
       key: 'projeto' as const,
+      color: AZUL,
       Icon: Compass,
+      eyebrow: 'Arquitetura & Engenharia',
       title: 'Projeto',
       desc: 'Plantas, fases de projeto e a evolução do desenho até a aprovação.',
     },
     {
       key: 'obra' as const,
+      color: TERRA,
       Icon: HardHat,
+      eyebrow: 'Execução & Acompanhamento',
       title: 'Obra',
       desc: 'Cronograma, medições, gastos e o andamento da construção no canteiro.',
     },
   ];
 
   return (
-    <div className="min-h-screen bg-white text-black flex flex-col">
+    <div className="min-h-screen bg-stone-950 text-white flex flex-col">
       {/* Topo */}
-      <header className="flex items-center justify-between px-6 py-5">
-        <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-black/50">Chaves Brites Correa</p>
+      <header className="flex items-center justify-between px-6 py-5 z-10">
+        <div className="leading-tight">
+          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-stone-500">Chaves Brites Correa</p>
+          <p className="text-sm text-stone-300">
+            {userName ? <>Olá, <span className="font-semibold text-white">{userName}</span>.</> : 'Bem-vindo.'} Escolha por onde entrar.
+          </p>
+        </div>
         <button
           onClick={onLogout}
-          className="flex items-center gap-1.5 text-xs font-mono uppercase tracking-wider text-black/50 hover:text-black transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-black px-1"
+          className="flex items-center gap-1.5 text-xs font-mono uppercase tracking-wider text-stone-400 hover:text-white transition-colors"
         >
           <LogOut size={13} /> Sair
         </button>
       </header>
 
-      {/* Centro */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6">
-        {/* Saudação */}
-        <div className="text-center mb-10">
-          <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-black/40 mb-3">
-            {userName ? `Olá, ${userName}` : 'Bem-vindo'}
-          </p>
-          <h1 className="text-2xl sm:text-3xl tracking-tight" style={{ fontFamily: 'var(--font-serif)' }}>
-            <span style={{ fontWeight: 300 }}>Escolha por </span>
-            <span style={{ fontWeight: 700 }}>onde entrar</span>
-          </h1>
-        </div>
+      {/* Painéis */}
+      <div className="flex-1 flex flex-col md:flex-row">
+        {panels.map((p, i) => {
+          const Icon = p.Icon;
+          const isHover = hover === p.key;
+          const isDimmed = hover !== null && !isHover;
+          return (
+            <motion.button
+              key={p.key}
+              onClick={() => onSelect(p.key)}
+              onMouseEnter={() => setHover(p.key)}
+              onMouseLeave={() => setHover(null)}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{
+                opacity: isDimmed ? 0.55 : 1,
+                y: 0,
+                flexGrow: isHover ? 1.35 : 1,
+              }}
+              transition={{ duration: 0.5, delay: i * 0.12, flexGrow: { duration: 0.4 } }}
+              className="relative flex-1 basis-0 group overflow-hidden cursor-pointer text-left px-8 md:px-12 py-16 md:py-0 md:flex md:flex-col md:justify-center border-t md:border-t-0 md:border-l border-stone-800 first:border-none focus:outline-none"
+              style={{ minHeight: '38vh' }}
+            >
+              {/* Brilho de fundo na cor do painel */}
+              <div
+                className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+                style={{ background: `radial-gradient(circle at 30% 40%, ${p.color}22, transparent 70%)` }}
+              />
+              {/* Barra de acento lateral */}
+              <div
+                className="absolute left-0 top-0 bottom-0 w-1 md:w-1.5 transition-all duration-300"
+                style={{ background: p.color, opacity: isHover ? 1 : 0.4 }}
+              />
 
-        {/* Botões compactos */}
-        <div className="flex flex-col sm:flex-row gap-4 w-full max-w-lg">
-          {panels.map((p) => {
-            const Icon = p.Icon;
-            const isHover = hover === p.key;
-            return (
-              <div key={p.key} className="flex-1">
-                <motion.button
-                  onClick={() => onSelect(p.key)}
-                  onMouseEnter={() => setHover(p.key)}
-                  onMouseLeave={() => setHover(null)}
-                  onFocus={() => setHover(p.key)}
-                  onBlur={() => setHover(null)}
-                  className="w-full flex flex-col items-center gap-3 px-6 py-7 border-2 border-black bg-white text-black hover:bg-black hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2"
+              <div className="relative max-w-sm">
+                <span
+                  className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-6 transition-transform duration-300 group-hover:scale-110"
+                  style={{ background: `${p.color}22`, border: `1px solid ${p.color}55` }}
                 >
-                  <Icon size={26} strokeWidth={1.5} />
-                  <span className="text-lg tracking-tight" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>
-                    {p.title}
-                  </span>
-                </motion.button>
-
-                {/* Resumo — aparece só no hover/foco */}
-                <AnimatePresence>
-                  {isHover && (
-                    <motion.p
-                      initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                      animate={{ opacity: 1, height: 'auto', marginTop: 12 }}
-                      exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="text-xs text-black/60 text-center leading-relaxed px-2 overflow-hidden"
-                      style={{ fontWeight: 300 }}
-                    >
-                      {p.desc}
-                    </motion.p>
-                  )}
-                </AnimatePresence>
+                  <Icon size={26} style={{ color: p.color }} />
+                </span>
+                <p className="text-[10px] font-mono uppercase tracking-[0.2em] mb-2" style={{ color: p.color }}>
+                  {p.eyebrow}
+                </p>
+                <h2
+                  className="text-5xl md:text-6xl font-bold mb-4 tracking-tight"
+                  style={{ fontFamily: 'var(--font-serif)' }}
+                >
+                  {p.title}
+                </h2>
+                <p className="text-sm text-stone-400 leading-relaxed mb-6 max-w-xs">{p.desc}</p>
+                <span
+                  className="inline-flex items-center gap-2 text-sm font-semibold transition-all duration-300"
+                  style={{ color: isHover ? p.color : '#a8a29e' }}
+                >
+                  Entrar
+                  <ArrowRight
+                    size={16}
+                    className="transition-transform duration-300 group-hover:translate-x-1"
+                  />
+                </span>
               </div>
-            );
-          })}
-        </div>
+            </motion.button>
+          );
+        })}
       </div>
 
       {/* Rodapé */}
-      <footer className="px-6 py-5 text-center">
-        <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-black/30">
+      <footer className="px-6 py-4 text-center">
+        <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-stone-600">
           Você pode trocar de ambiente a qualquer momento
         </p>
       </footer>
