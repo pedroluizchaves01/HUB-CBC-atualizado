@@ -201,7 +201,24 @@ export default function ProjectEnvironment({
     createdAt: new Date().toISOString(), notes: '',
   });
 
-  const persist = (p: ArchProject) => saveDoc('arch_projects', p.id, p);
+  const persist = (p: ArchProject) => {
+    // Proteção: mede o tamanho do documento antes de enviar. Arquivos do formato
+    // antigo (base64 inline) podem inchar o projeto e estourar o limite de salvamento.
+    try {
+      const bytes = new Blob([JSON.stringify(p)]).size;
+      if (bytes > 60 * 1024 * 1024) {
+        const legado = p.phases.reduce((n, ph) => n + ph.files.filter(f => f.storage !== 'telegram' && f.base64 && f.base64.length > 200000).length, 0);
+        alert(
+          `Este projeto está muito grande para salvar (${(bytes / 1024 / 1024).toFixed(0)}MB).` +
+          (legado > 0
+            ? `\n\nHá ${legado} arquivo(s) antigo(s) guardado(s) dentro do projeto. Remova-o(s) e reenvie pelo botão "Enviar arquivo" (que agora usa o Telegram), depois salve novamente.`
+            : `\n\nReduza o conteúdo e tente de novo.`)
+        );
+        return Promise.resolve();
+      }
+    } catch { /* se não der para medir, segue o fluxo normal */ }
+    return saveDoc('arch_projects', p.id, p);
+  };
 
   return (
     <div className="projeto-dark min-h-screen text-white relative">

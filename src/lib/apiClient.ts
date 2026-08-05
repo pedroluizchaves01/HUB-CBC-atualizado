@@ -60,9 +60,23 @@ export class ApiError extends Error {
 async function handle(res: Response): Promise<any> {
   const text = await res.text();
   let data: any = null;
-  if (text) { try { data = JSON.parse(text); } catch { data = { error: text }; } }
+  if (text) { try { data = JSON.parse(text); } catch { data = null; } }
   if (!res.ok) {
-    throw new ApiError((data && data.error) || `Erro ${res.status}`, res.status);
+    // Se a resposta não é JSON (ex.: página HTML de erro do proxy/Express),
+    // traduz o status num motivo claro em vez de despejar o HTML cru.
+    let msg: string;
+    if (data && data.error) {
+      msg = data.error;
+    } else if (res.status === 413) {
+      msg = "Os dados são grandes demais para salvar de uma vez. Se houver arquivos pesados anexados, remova-os e reenvie pelo botão de arquivo (que usa o armazenamento externo).";
+    } else if (res.status === 502 || res.status === 503 || res.status === 504) {
+      msg = "O servidor está temporariamente indisponível (pode estar reiniciando). Aguarde alguns segundos e tente novamente.";
+    } else if (res.status === 401 || res.status === 403) {
+      msg = "Sua sessão expirou ou você não tem permissão. Faça login novamente.";
+    } else {
+      msg = `Erro ${res.status} ao comunicar com o servidor.`;
+    }
+    throw new ApiError(msg, res.status);
   }
   return data;
 }

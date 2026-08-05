@@ -190,7 +190,7 @@ app.get("/api/data/:collection", requireAuth, async (req, res) => {
   }
 });
 
-app.put("/api/data/:collection/:id", requireAuth, largeJson, async (req, res) => {
+app.put("/api/data/:collection/:id", requireAuth, fileUploadJson, async (req, res) => {
   try {
     const u = req.sessionUser!;
     const payload = req.body?.data ?? req.body;
