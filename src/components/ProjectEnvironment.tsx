@@ -18,10 +18,12 @@ import {
   Compass, FolderOpen, Plus, ArrowLeftRight, LogOut, Ruler, Lock,
   CheckCircle2, Clock, AlertTriangle, X, Pencil, Trash2, Upload,
   Download, FileText, ChevronRight, MessageSquare, ThumbsUp, Send, Eye, Loader2,
+  Sun, Wind, Thermometer, Droplets, Compass as CompassIcon,
 } from 'lucide-react';
 import { subscribeCollection, saveDoc, removeDoc } from '../lib/firebaseDb';
 import { PROJECT_BG } from '../lib/projectBackground';
 import { sendTelegramDocument } from '../lib/telegramService';
+import { analisarConfortoTermico, coordsDeLocalizacao, type Orientacao } from '../lib/thermalAnalysis';
 
 interface Props {
   role: string;
@@ -29,7 +31,7 @@ interface Props {
   currentUserId?: string;
   clientId?: string;
   clients?: { id: string; name: string }[];
-  obras?: { id: string; name: string; clientId: string; type?: string }[];
+  obras?: { id: string; name: string; clientId: string; type?: string; location?: string; area?: number }[];
   onLogout: () => void;
   onSwitchEnvironment: () => void;   // vai direto para Obra
   onGoToSelect?: () => void;         // vai para a tela de seleção
@@ -88,6 +90,11 @@ interface ArchProject {
   phases: ArchPhase[];
   createdAt: string;
   notes?: string;
+  // Premissas para o estudo de conforto térmico
+  localizacao?: string;    // "Cidade, UF"
+  latitude?: number;
+  longitude?: number;
+  orientacao?: string;     // fachada frontal: N, S, L, O, NE, SE, SO, NO
 }
 
 // Paleta MONOCROMÁTICA: preto absoluto (#000) e branco absoluto (#fff).
@@ -477,6 +484,9 @@ function ProjectDetail({
         </div>
       </div>
 
+      {/* Resumo do estudo de conforto térmico */}
+      <ThermalSummary project={project} />
+
       <div className="space-y-3">
         {project.phases.map((ph, i) => (
           <PhaseCard
@@ -728,6 +738,156 @@ function FileCard({ file, isAdmin, onRemove, onView }: {
 }
 
 // Visualizador de arquivo em tela cheia (popup). PDFs e imagens 100% online.
+// ---------------------------------------------------------------------------
+// Resumo do estudo de conforto térmico (no detalhe do projeto)
+// ---------------------------------------------------------------------------
+function ThermalSummary({ project }: { project: ArchProject }) {
+  const [showReport, setShowReport] = useState(false);
+  const hasLocation = !!(project.localizacao && project.latitude != null && project.longitude != null);
+
+  if (!hasLocation) {
+    return (
+      <div className="border-2 border-black border-dashed p-4 mb-6 flex items-center gap-3">
+        <Sun size={18} className="flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm" style={{ fontWeight: 700 }}>Estudo de conforto térmico</p>
+          <p className="text-xs text-black/60" style={{ fontWeight: 300 }}>
+            Informe a localização do projeto (ou vincule uma obra) para gerar o estudo automático de premissas.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const r = analisarConfortoTermico({
+    localizacao: project.localizacao!,
+    latitude: project.latitude!,
+    longitude: project.longitude!,
+    tipoEdificacao: project.type,
+    orientacao: (project.orientacao as Orientacao) || 'N',
+    areaConstruida: project.area ? Number(project.area) : undefined,
+  });
+
+  const chips: { Icon: React.ComponentType<any>; label: string; value: string }[] = [
+    { Icon: Thermometer, label: 'Temp. média', value: `${r.dados.tempMedia}°C` },
+    { Icon: Droplets, label: 'Umidade', value: `${r.dados.umidadeMedia}%` },
+    { Icon: Wind, label: 'Ventos', value: r.dados.ventosPredominantes },
+    { Icon: CompassIcon, label: 'Exposição', value: r.exposicao },
+  ];
+
+  return (
+    <>
+      <div className="border-2 border-black mb-6">
+        <div className="flex items-center justify-between px-4 py-3 border-b-2 border-black">
+          <p className="text-sm flex items-center gap-2" style={{ fontWeight: 700 }}>
+            <Sun size={15} /> Conforto térmico — {r.dados.classificacao}
+          </p>
+          <button onClick={() => setShowReport(true)}
+            className="text-xs px-3 py-1.5 bg-black text-white hover:bg-white hover:text-black border border-black transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-black" style={{ fontWeight: 600 }}>
+            Ver estudo completo
+          </button>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-black">
+          {chips.map(c => (
+            <div key={c.label} className="bg-white px-4 py-3">
+              <p className="text-[9px] font-mono uppercase tracking-[0.15em] text-black/50 flex items-center gap-1 mb-1"><c.Icon size={10} /> {c.label}</p>
+              <p className="text-sm" style={{ fontWeight: 700 }}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="px-4 py-3 border-t-2 border-black">
+          <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-black/50 mb-1.5">Desafio principal</p>
+          <p className="text-sm" style={{ fontWeight: 300 }}>{r.desafio} · Potencial: {r.potencial} · Eficiência estimada {r.eficiencia}</p>
+        </div>
+      </div>
+
+      {showReport && <ThermalReport project={project} result={r} onClose={() => setShowReport(false)} />}
+    </>
+  );
+}
+
+// Relatório completo do estudo térmico (modal em tela cheia)
+function ThermalReport({ project, result, onClose }: {
+  project: ArchProject; result: ReturnType<typeof analisarConfortoTermico>; onClose: () => void;
+}) {
+  const r = result;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const Section = ({ title, items }: { title: string; items: string[] }) => (
+    <div className="mb-5">
+      <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/50 mb-2">{title}</p>
+      <ul className="space-y-1.5">
+        {items.map((it, i) => (
+          <li key={i} className="text-sm text-white/90 flex gap-2" style={{ fontWeight: 300 }}>
+            <span className="text-white/40 flex-shrink-0">—</span> {it}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-[250] bg-black/90 flex items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
+      <div className="w-full max-w-2xl my-8" style={{ background: '#0a0a0a', border: '2px solid #fff' }} onClick={e => e.stopPropagation()}>
+        {/* Cabeçalho */}
+        <div className="flex items-start justify-between px-6 py-5 border-b-2 border-white">
+          <div>
+            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/50 mb-1">Estudo de conforto térmico</p>
+            <h2 className="text-2xl text-white tracking-tight" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>{project.name}</h2>
+            <p className="text-sm text-white/60 mt-1" style={{ fontWeight: 300 }}>{project.localizacao} · {r.dados.clima}</p>
+          </div>
+          <button onClick={onClose} className="text-white/70 hover:text-white p-1.5 hover:bg-white/10" title="Fechar (ESC)"><X size={20} /></button>
+        </div>
+
+        <div className="px-6 py-5">
+          {/* Métricas principais */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-white/20 border border-white/20 mb-6">
+            {[
+              ['Classificação', r.dados.classificacao],
+              ['Temp. média', `${r.dados.tempMedia}°C`],
+              ['Amplitude', `${r.dados.tempMax - r.dados.tempMin}°C`],
+              ['Umidade', `${r.dados.umidadeMedia}%`],
+              ['Ventos', r.dados.ventosPredominantes],
+              ['Velocidade', `${r.dados.velocidadeVento} m/s`],
+              ['Exposição', r.exposicao],
+              ['Período crítico', r.periodoCritico],
+            ].map(([label, val]) => (
+              <div key={label} style={{ background: '#0a0a0a' }} className="px-3 py-2.5">
+                <p className="text-[9px] font-mono uppercase tracking-[0.12em] text-white/40 mb-0.5">{label}</p>
+                <p className="text-sm text-white" style={{ fontWeight: 600 }}>{val}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Ventos por período */}
+          <div className="border border-white/20 p-4 mb-6">
+            <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/50 mb-2 flex items-center gap-1.5"><Wind size={12} /> Ventos predominantes</p>
+            <p className="text-sm text-white/90" style={{ fontWeight: 300 }}>
+              Período quente: <b style={{ fontWeight: 700 }}>{r.dados.periodoVentoQuente}</b> · Período frio: <b style={{ fontWeight: 700 }}>{r.dados.periodoVentoFrio}</b>
+            </p>
+          </div>
+
+          {/* Recomendações principais */}
+          <Section title="Recomendações principais" items={r.recomendacoes} />
+          {/* Soluções */}
+          <Section title="Estratégias arquitetônicas" items={r.dados.solucoes.arquitetonicas} />
+          <Section title="Estratégias construtivas" items={r.dados.solucoes.construtivas} />
+          <Section title="Detalhes técnicos" items={r.dados.solucoes.detalhes} />
+
+          <p className="text-[10px] text-white/40 mt-6" style={{ fontWeight: 300 }}>
+            Estudo automático de premissas, gerado a partir da localização e orientação. Serve como diretriz inicial de projeto e deve ser validado pelo responsável técnico.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function FileViewer({ file, onClose }: { file: ArchFile; onClose: () => void }) {
   const isImg = file.type.startsWith('image/');
   const href = fileHref(file);
@@ -783,7 +943,7 @@ function ProjectEditor({
 }: {
   project: ArchProject;
   clients: { id: string; name: string }[];
-  obras: { id: string; name: string; clientId: string; type?: string }[];
+  obras: { id: string; name: string; clientId: string; type?: string; location?: string; area?: number }[];
   onChange: (p: ArchProject) => void;
   onSave: () => void; onCancel: () => void; onDelete?: () => void;
 }) {
@@ -836,7 +996,21 @@ function ProjectEditor({
             </label>
             <select
               value={p.obraId || ''}
-              onChange={e => set({ obraId: e.target.value })}
+              onChange={e => {
+                const obraId = e.target.value;
+                const obra = obras.find(o => o.id === obraId);
+                // Puxa da obra o que houver; completa só os campos ainda vazios.
+                const patch: Partial<ArchProject> = { obraId };
+                if (obra) {
+                  if (obra.location && !p.localizacao) {
+                    patch.localizacao = obra.location;
+                    const c = coordsDeLocalizacao(obra.location);
+                    if (c) { patch.latitude = c.lat; patch.longitude = c.lon; }
+                  }
+                  if (obra.area && !p.area) patch.area = String(obra.area);
+                }
+                set(patch);
+              }}
               disabled={obrasDisponiveis.length === 0}
               className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black disabled:bg-stone-100 disabled:text-black/40"
             >
@@ -847,7 +1021,48 @@ function ProjectEditor({
               </option>
               {obrasDisponiveis.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
             </select>
-            <p className="text-[10px] text-stone-400 mt-1">Liga este projeto a um centro de custo/obra existente, para referência futura.</p>
+            <p className="text-[10px] text-stone-400 mt-1">Liga o projeto a uma obra e puxa a localização dela para o estudo térmico.</p>
+          </div>
+
+          {/* Premissas do estudo de conforto térmico */}
+          <div className="border-2 border-black p-3 space-y-3">
+            <p className="text-[10px] font-mono uppercase tracking-[0.12em] font-bold flex items-center gap-1.5">
+              <Sun size={12} /> Premissas do estudo térmico
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-3">
+                <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Localização (Cidade, UF)</label>
+                <input value={p.localizacao || ''} placeholder="Ex.: Campo Mourão, PR"
+                  onChange={e => {
+                    const loc = e.target.value;
+                    const patch: Partial<ArchProject> = { localizacao: loc };
+                    const c = coordsDeLocalizacao(loc);
+                    if (c) { patch.latitude = c.lat; patch.longitude = c.lon; }
+                    set(patch);
+                  }}
+                  className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Latitude</label>
+                <input type="number" step="0.01" value={p.latitude ?? ''} placeholder="-24.04"
+                  onChange={e => set({ latitude: e.target.value === '' ? undefined : Number(e.target.value) })}
+                  className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Longitude</label>
+                <input type="number" step="0.01" value={p.longitude ?? ''} placeholder="-52.38"
+                  onChange={e => set({ longitude: e.target.value === '' ? undefined : Number(e.target.value) })}
+                  className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Orientação frontal</label>
+                <select value={p.orientacao || 'N'} onChange={e => set({ orientacao: e.target.value })}
+                  className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black">
+                  {['N', 'S', 'L', 'O', 'NE', 'SE', 'SO', 'NO'].map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+            </div>
+            <p className="text-[10px] text-stone-400">A latitude/longitude são preenchidas automaticamente para cidades conhecidas; ajuste se necessário.</p>
           </div>
 
           <div className="grid grid-cols-3 gap-3">
