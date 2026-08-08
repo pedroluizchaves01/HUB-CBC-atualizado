@@ -20,6 +20,7 @@ import {
   Download, FileText, ChevronRight, MessageSquare, ThumbsUp, Send, Eye, Loader2,
   Sun, Wind, Thermometer, Droplets, Compass as CompassIcon, ClipboardList,
   Home, Menu, BookOpen, Leaf, Building2,
+  MapPin, Palette, Users, Wallet, Sparkles,
 } from 'lucide-react';
 import { subscribeCollection, saveDoc, removeDoc } from '../lib/firebaseDb';
 import { PROJECT_BG } from '../lib/projectBackground';
@@ -29,6 +30,7 @@ import { openThermalReport } from '../lib/thermalReportHtml';
 import { NORMAS_TECNICAS, REFERENCIAS, comentarioTecnico, comentarioOrientacao } from '../lib/thermalAnalysis';
 import { WindRose, SolarChart, TempBars, ComfortBar } from './thermal/ThermalCharts';
 import { DEFAULT_BRIEFING, BRIEFING_GROUPS, type BriefingQuestion, type BriefingAnswer } from '../lib/briefingTemplate';
+import { openBriefingReport } from '../lib/briefingReportHtml';
 
 interface Props {
   role: string;
@@ -651,9 +653,23 @@ function PageBriefing({ project, isAdmin, userName, role, onPersist }: {
     });
     onPersist({ ...project, briefingAnswers: answers, briefingDone: true, briefingDoneAt: new Date().toISOString(), phases });
   };
+  const questions = project.briefingQuestions && project.briefingQuestions.length > 0 ? project.briefingQuestions : DEFAULT_BRIEFING;
+  const exportarPdf = () => openBriefingReport(questions, project.briefingAnswers || [], BRIEFING_GROUPS, {
+    projeto: project.name, cliente: project.clientName, localizacao: project.localizacao,
+    tipo: project.type, data: project.briefingDoneAt ? new Date(project.briefingDoneAt).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
+  });
+  const temResposta = (project.briefingAnswers || []).some(a => a.answer.trim() !== '');
   return (
     <div>
-      <PageHeader eyebrow="Etapa 02" title="Briefing de Premissas" subtitle="Programa de necessidades e desejos do cliente" />
+      <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
+        <PageHeader eyebrow="Etapa 02" title="Briefing de Premissas" subtitle="Programa de necessidades e desejos do cliente" />
+        {temResposta && (
+          <button onClick={exportarPdf}
+            className="flex items-center gap-1.5 text-xs text-white px-4 py-2 border border-white/30 transition-colors" style={{ fontWeight: 600, background: 'linear-gradient(135deg,#1C7ED6,#1971C2)' }}>
+            <Download size={13} /> Exportar PDF
+          </button>
+        )}
+      </div>
       <BriefingCard project={project} isAdmin={isAdmin} onSaveAnswers={saveBriefingAnswers} onFinish={finishBriefing} />
     </div>
   );
@@ -699,9 +715,52 @@ function PageFase({ project, idx, isAdmin, userName, role, onPersist }: {
   const requestChanges = (motivo: string) => { let ph = withEvent({ kind: 'ajuste', text: motivo }); ph = ph.map((p, i) => i === idx ? { ...p, state: 'ajustes' as PhaseState } : p); update(ph); };
   const addComment = (text: string) => update(withEvent({ kind: 'comentario', text }));
 
+  const stateStyle: Record<PhaseState, { grad: string; label: string; Icon: React.ComponentType<any> }> = {
+    bloqueada: { grad: 'linear-gradient(135deg,#495057,#343a40)', label: 'Aguardando etapa anterior', Icon: Lock },
+    em_elaboracao: { grad: 'linear-gradient(135deg,#1C7ED6,#1971C2)', label: 'Em desenvolvimento pelo arquiteto', Icon: Ruler },
+    aguardando_aprovacao: { grad: 'linear-gradient(135deg,#F59F00,#E8590C)', label: 'Aguardando sua aprovação', Icon: Clock },
+    ajustes: { grad: 'linear-gradient(135deg,#E64980,#C2255C)', label: 'Ajustes solicitados', Icon: AlertTriangle },
+    aprovada: { grad: 'linear-gradient(135deg,#0CA678,#087f5b)', label: 'Etapa aprovada', Icon: CheckCircle2 },
+  };
+  const ss = stateStyle[phase.state];
+
   return (
     <div>
-      <PageHeader eyebrow={`Fase ${String(idx + 1).padStart(2, '0')}`} title={phase.name} subtitle={STATE_META[phase.state].label} />
+      <PageHeader eyebrow={`Fase ${String(idx + 1).padStart(2, '0')} de ${String(project.phases.length).padStart(2, '0')}`} title={phase.name} />
+
+      {/* Timeline das fases */}
+      <div className="flex items-center gap-1 mb-5 overflow-x-auto pb-1">
+        {project.phases.map((ph, i) => {
+          const done = ph.state === 'aprovada';
+          const current = i === idx;
+          return (
+            <React.Fragment key={i}>
+              <div className={`flex flex-col items-center flex-shrink-0 ${current ? '' : 'opacity-60'}`} title={ph.name}>
+                <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-mono border-2"
+                  style={{
+                    fontWeight: 700,
+                    background: done ? '#0CA678' : current ? '#fff' : 'transparent',
+                    color: done ? '#fff' : current ? '#000' : 'rgba(255,255,255,0.6)',
+                    borderColor: done ? '#0CA678' : current ? '#fff' : 'rgba(255,255,255,0.3)',
+                  }}>
+                  {done ? '✓' : String(i + 1).padStart(2, '0')}
+                </div>
+              </div>
+              {i < project.phases.length - 1 && <div className="h-px flex-1 min-w-3" style={{ background: ph.state === 'aprovada' ? '#0CA678' : 'rgba(255,255,255,0.2)' }} />}
+            </React.Fragment>
+          );
+        })}
+      </div>
+
+      {/* Banner de estado */}
+      <div className="flex items-center gap-3 p-4 mb-5 text-white" style={{ background: ss.grad }}>
+        <ss.Icon size={22} className="flex-shrink-0" />
+        <div>
+          <p className="text-[10px] font-mono uppercase tracking-[0.12em] opacity-80">Situação atual</p>
+          <p className="text-base" style={{ fontWeight: 700 }}>{ss.label}</p>
+        </div>
+      </div>
+
       <PhaseCard
         phase={phase} index={idx} total={project.phases.length} isAdmin={isAdmin}
         userName={userName || ''} isOpen locked={phase.state === 'bloqueada'} onToggle={() => {}}
@@ -902,6 +961,20 @@ function StrategyList({ title, icon: Icon, items, accent }: { title: string; ico
 }
 
 // ============ PEÇAS REUTILIZÁVEIS ============
+// Estilo (ícone + cor) por grupo temático do briefing.
+const BRIEFING_GROUP_STYLE: Record<string, { Icon: React.ComponentType<any>; color: string }> = {
+  'Terreno e implantação': { Icon: MapPin, color: '#0CA678' },
+  'Programa de necessidades': { Icon: Home, color: '#1C7ED6' },
+  'Estilo e referências': { Icon: Palette, color: '#E8590C' },
+  'Uso e rotina': { Icon: Users, color: '#9775FA' },
+  'Orçamento e prazo': { Icon: Wallet, color: '#F59F00' },
+  'Sustentabilidade e tecnologia': { Icon: Leaf, color: '#0CA678' },
+  'Observações livres': { Icon: Sparkles, color: '#E64980' },
+};
+function groupStyle(g: string) {
+  return BRIEFING_GROUP_STYLE[g] || { Icon: ClipboardList, color: '#adb5bd' };
+}
+
 function BriefingCard({ project, isAdmin, onSaveAnswers, onFinish }: {
   project: ArchProject;
   isAdmin: boolean;
@@ -930,48 +1003,64 @@ function BriefingCard({ project, isAdmin, onSaveAnswers, onFinish }: {
   const gruposExtras = Array.from(new Set(questions.map(q => q.group))).filter(g => !BRIEFING_GROUPS.includes(g));
   const ordemGrupos = [...grupos, ...gruposExtras];
 
+  // Cabeçalho de grupo colorido (reaproveitado nas duas visões).
+  const GroupHead = ({ grupo }: { grupo: string }) => {
+    const s = groupStyle(grupo);
+    const qs = questions.filter(q => q.group === grupo);
+    const resp = qs.filter(q => (draft[q.id] || '').trim() !== '').length;
+    return (
+      <div className="flex items-center gap-2.5 mb-3">
+        <span className="w-8 h-8 flex items-center justify-center flex-shrink-0" style={{ background: s.color }}>
+          <s.Icon size={16} className="text-white" />
+        </span>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm" style={{ fontWeight: 700 }}>{grupo}</p>
+          <p className="text-[10px] font-mono uppercase tracking-wider text-white/40">{resp}/{qs.length} respondidas</p>
+        </div>
+      </div>
+    );
+  };
+
   // ----- Visão do ADMIN: lê as respostas -----
   if (isAdmin) {
     return (
-      <div className="border-2 border-black mb-6">
-        <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between px-4 py-3 border-b-2 border-black hover:bg-stone-50 transition-colors">
+      <div className="border-2 border-white/25 bg-black/30 backdrop-blur-md">
+        <div className="px-4 py-3 border-b-2 border-white/25 flex items-center justify-between">
           <p className="text-sm flex items-center gap-2" style={{ fontWeight: 700 }}>
-            <ClipboardList size={15} /> Briefing do cliente
+            <ClipboardList size={15} /> Respostas do cliente
             {project.briefingDone
-              ? <span className="text-[10px] font-mono uppercase tracking-wider bg-black text-white px-2 py-0.5">Respondido</span>
-              : <span className="text-[10px] font-mono uppercase tracking-wider border border-black px-2 py-0.5">Aguardando cliente</span>}
+              ? <span className="text-[10px] font-mono uppercase tracking-wider bg-white text-black px-2 py-0.5">Respondido</span>
+              : <span className="text-[10px] font-mono uppercase tracking-wider border border-white/40 px-2 py-0.5">Aguardando</span>}
           </p>
-          <ChevronRight size={16} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
-        </button>
-        {open && (
-          <div className="p-4 space-y-4">
-            {!project.briefingDone && respondidas === 0 && (
-              <p className="text-xs text-black/60" style={{ fontWeight: 300 }}>
-                O cliente ainda não respondeu o briefing. As respostas aparecerão aqui assim que ele preencher. Você pode editar as perguntas no botão "Editar projeto".
-              </p>
-            )}
-            {ordemGrupos.map(grupo => {
-              const qs = questions.filter(q => q.group === grupo);
-              const respondidasGrupo = qs.filter(q => (draft[q.id] || '').trim() !== '');
-              if (respondidasGrupo.length === 0 && !project.briefingDone) return null;
-              return (
-                <div key={grupo}>
-                  <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-black/50 font-bold mb-2">{grupo}</p>
-                  <div className="space-y-2.5">
-                    {qs.map(q => (
-                      <div key={q.id} className="border-l-2 border-black pl-3">
-                        <p className="text-xs text-black/60" style={{ fontWeight: 500 }}>{q.text}</p>
-                        <p className="text-sm mt-0.5" style={{ fontWeight: 300 }}>
-                          {(draft[q.id] || '').trim() || <span className="text-black/30 italic">— sem resposta —</span>}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
+        </div>
+        <div className="p-4 space-y-6">
+          {!project.briefingDone && respondidas === 0 && (
+            <p className="text-xs text-white/60" style={{ fontWeight: 300 }}>
+              O cliente ainda não respondeu. As respostas aparecerão aqui assim que ele preencher. Você pode editar as perguntas em "Editar projeto".
+            </p>
+          )}
+          {ordemGrupos.map(grupo => {
+            const qs = questions.filter(q => q.group === grupo);
+            const respondidasGrupo = qs.filter(q => (draft[q.id] || '').trim() !== '');
+            if (respondidasGrupo.length === 0 && !project.briefingDone) return null;
+            const s = groupStyle(grupo);
+            return (
+              <div key={grupo}>
+                <GroupHead grupo={grupo} />
+                <div className="space-y-3 pl-1">
+                  {qs.map(q => (
+                    <div key={q.id} className="border-l-2 pl-3" style={{ borderColor: s.color }}>
+                      <p className="text-xs text-white/50" style={{ fontWeight: 500 }}>{q.text}</p>
+                      <p className="text-sm mt-0.5 text-white/90 whitespace-pre-wrap" style={{ fontWeight: 300 }}>
+                        {(draft[q.id] || '').trim() || <span className="text-white/25 italic">— sem resposta —</span>}
+                      </p>
+                    </div>
+                  ))}
                 </div>
-              );
-            })}
-          </div>
-        )}
+              </div>
+            );
+          })}
+        </div>
       </div>
     );
   }
@@ -979,49 +1068,53 @@ function BriefingCard({ project, isAdmin, onSaveAnswers, onFinish }: {
   // ----- Visão do CLIENTE já concluído: resumo compacto -----
   if (project.briefingDone && !open) {
     return (
-      <div className="border-2 border-black mb-6 flex items-center justify-between px-4 py-3">
-        <p className="text-sm flex items-center gap-2" style={{ fontWeight: 700 }}>
-          <CheckCircle2 size={16} /> Briefing concluído — obrigado!
-        </p>
-        <button onClick={() => setOpen(true)} className="text-xs px-3 py-1.5 border border-black hover:bg-black hover:text-white transition-colors" style={{ fontWeight: 600 }}>
-          Revisar respostas
-        </button>
+      <div className="border-2 border-white/25 bg-black/30 backdrop-blur-md">
+        <div className="p-6 text-center">
+          <span className="w-14 h-14 mx-auto mb-3 flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#0CA678,#1971C2)' }}>
+            <CheckCircle2 size={28} className="text-white" />
+          </span>
+          <p className="text-lg" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>Briefing concluído!</p>
+          <p className="text-sm text-white/60 mt-1 mb-4" style={{ fontWeight: 300 }}>Obrigado por compartilhar seus desejos. Seu arquiteto já pode começar.</p>
+          <button onClick={() => setOpen(true)} className="text-xs px-4 py-2 border border-white/40 hover:bg-white hover:text-black transition-colors" style={{ fontWeight: 600 }}>
+            Revisar respostas
+          </button>
+        </div>
       </div>
     );
   }
 
   // ----- Visão do CLIENTE: responde -----
   return (
-    <div className="border-2 border-black mb-6">
-      <div className="px-4 py-4 border-b-2 border-black">
+    <div className="border-2 border-white/25 bg-black/30 backdrop-blur-md">
+      <div className="px-5 py-4 border-b-2 border-white/25">
         <p className="text-lg flex items-center gap-2" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>
-          <ClipboardList size={18} /> Briefing do seu projeto
+          <ClipboardList size={18} /> Conte sobre o seu projeto
         </p>
-        <p className="text-xs text-black/60 mt-1" style={{ fontWeight: 300 }}>
-          Conte para o arquiteto o que você deseja. Quanto mais detalhes, melhor o projeto. Você pode salvar e continuar depois.
+        <p className="text-xs text-white/60 mt-1" style={{ fontWeight: 300 }}>
+          Quanto mais detalhes, melhor o projeto. Você pode salvar e continuar depois.
         </p>
-        <div className="flex items-center gap-2 mt-3">
-          <div className="flex-1 h-1 bg-stone-200 relative">
-            <div className="absolute left-0 top-0 h-1 bg-black transition-all" style={{ width: `${pct}%` }} />
+        <div className="flex items-center gap-3 mt-3">
+          <div className="flex-1 h-1.5 bg-white/15 relative rounded-full overflow-hidden">
+            <div className="absolute left-0 top-0 h-1.5 transition-all rounded-full" style={{ width: `${pct}%`, background: 'linear-gradient(90deg,#0CA678,#1971C2)' }} />
           </div>
           <span className="text-[11px] font-mono" style={{ fontWeight: 600 }}>{respondidas}/{total}</span>
         </div>
       </div>
 
-      <div className="p-4 space-y-5 max-h-[60vh] overflow-y-auto">
+      <div className="p-5 space-y-7">
         {ordemGrupos.map(grupo => (
           <div key={grupo}>
-            <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-black/50 font-bold mb-3 pb-1 border-b border-black/20">{grupo}</p>
-            <div className="space-y-4">
+            <GroupHead grupo={grupo} />
+            <div className="space-y-4 pl-1">
               {questions.filter(q => q.group === grupo).map(q => (
                 <div key={q.id}>
-                  <label className="block text-sm mb-1.5" style={{ fontWeight: 500 }}>{q.text}</label>
+                  <label className="block text-sm mb-1.5 text-white/90" style={{ fontWeight: 500 }}>{q.text}</label>
                   <textarea
                     value={draft[q.id] || ''}
                     onChange={e => setDraft(d => ({ ...d, [q.id]: e.target.value }))}
                     rows={2}
                     placeholder="Sua resposta..."
-                    className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black placeholder:text-black/30"
+                    className="w-full border border-white/25 bg-black/40 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-white/50 placeholder:text-white/25 text-white"
                     style={{ fontWeight: 300 }}
                   />
                 </div>
@@ -1031,23 +1124,23 @@ function BriefingCard({ project, isAdmin, onSaveAnswers, onFinish }: {
         ))}
       </div>
 
-      <div className="flex flex-col sm:flex-row items-stretch gap-2 p-4 border-t-2 border-black">
+      <div className="flex flex-col sm:flex-row items-stretch gap-2 p-5 border-t-2 border-white/25">
         <button
           onClick={() => onSaveAnswers(toAnswers())}
-          className="flex items-center justify-center gap-1.5 border-2 border-black px-4 py-2.5 text-sm hover:bg-stone-50 transition-colors"
+          className="flex items-center justify-center gap-1.5 border border-white/40 px-4 py-2.5 text-sm hover:bg-white/10 transition-colors"
           style={{ fontWeight: 600 }}>
           <Send size={14} /> Salvar rascunho
         </button>
         <button
           onClick={() => {
             if (respondidas < total) {
-              if (!confirm(`Você respondeu ${respondidas} de ${total} perguntas. Deseja enviar assim mesmo? As não respondidas ficarão em branco.`)) return;
+              if (!confirm(`Você respondeu ${respondidas} de ${total} perguntas. Deseja enviar assim mesmo?`)) return;
             }
             onFinish(toAnswers());
             setOpen(false);
           }}
-          className="flex-1 flex items-center justify-center gap-1.5 bg-black text-white px-4 py-2.5 text-sm hover:bg-white hover:text-black border-2 border-black transition-colors"
-          style={{ fontWeight: 700 }}>
+          className="flex-1 flex items-center justify-center gap-1.5 text-white px-4 py-2.5 text-sm transition-opacity hover:opacity-90 border border-white/20"
+          style={{ fontWeight: 700, background: 'linear-gradient(135deg,#0CA678,#1971C2)' }}>
           <CheckCircle2 size={15} /> Concluir briefing e enviar
         </button>
       </div>
