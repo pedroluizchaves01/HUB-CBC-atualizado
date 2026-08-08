@@ -19,12 +19,15 @@ import {
   CheckCircle2, Clock, AlertTriangle, X, Pencil, Trash2, Upload,
   Download, FileText, ChevronRight, MessageSquare, ThumbsUp, Send, Eye, Loader2,
   Sun, Wind, Thermometer, Droplets, Compass as CompassIcon, ClipboardList,
+  Home, Menu, BookOpen, Leaf, Building2,
 } from 'lucide-react';
 import { subscribeCollection, saveDoc, removeDoc } from '../lib/firebaseDb';
 import { PROJECT_BG } from '../lib/projectBackground';
 import { sendTelegramDocument } from '../lib/telegramService';
 import { analisarConfortoTermico, coordsDeLocalizacao, type Orientacao } from '../lib/thermalAnalysis';
 import { openThermalReport } from '../lib/thermalReportHtml';
+import { NORMAS_TECNICAS, REFERENCIAS, comentarioTecnico, comentarioOrientacao } from '../lib/thermalAnalysis';
+import { WindRose, SolarChart, TempBars, ComfortBar } from './thermal/ThermalCharts';
 import { DEFAULT_BRIEFING, BRIEFING_GROUPS, type BriefingQuestion, type BriefingAnswer } from '../lib/briefingTemplate';
 
 interface Props {
@@ -174,6 +177,13 @@ async function uploadArchFile(file: File): Promise<ArchFile> {
   };
 }
 
+// ============ SHELL DE NAVEGAÇÃO ============
+// === NOVO SHELL DE NAVEGAÇÃO (parte 2/3 do ProjectEnvironment) ===
+// Este arquivo é concatenado após as fundações. Não é importado diretamente.
+
+// ---------------------------------------------------------------------------
+// Componente principal: lista de projetos (admin) OU entra direto no projeto (cliente)
+// ---------------------------------------------------------------------------
 export default function ProjectEnvironment({
   role, userName, clientId, clients = [], obras = [], onLogout, onSwitchEnvironment, onGoToSelect,
 }: Props) {
@@ -181,15 +191,17 @@ export default function ProjectEnvironment({
   const [selected, setSelected] = useState<string | null>(null);
   const [editing, setEditing] = useState<ArchProject | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<ArchProject | null>(null);
+  // Admin pode ver o projeto "como cliente" (preview).
+  const [previewClient, setPreviewClient] = useState(false);
 
-  const isAdmin = role === 'admin' || role === 'marketing';
+  const isAdminReal = role === 'admin' || role === 'marketing';
 
   useEffect(() => {
     const unsub = subscribeCollection('arch_projects', setAllProjects, [], 'cbc_arch_projects_v1');
     return () => unsub();
   }, []);
 
-  const projects = isAdmin ? allProjects : allProjects.filter(p => p.clientId && p.clientId === clientId);
+  const projects = isAdminReal ? allProjects : allProjects.filter(p => p.clientId && p.clientId === clientId);
   const selectedProject = projects.find(p => p.id === selected);
 
   const progressOf = (p: ArchProject) => {
@@ -202,369 +214,842 @@ export default function ProjectEnvironment({
   const newProject = (): ArchProject => ({
     id: uid(), name: '', clientName: '', clientId: '', type: 'Residencial', area: '', responsible: '',
     status: 'ativo',
-    phases: PHASE_TEMPLATE.map((name) => ({
-      name, state: 'bloqueada', files: [], events: [],
-    })),
+    phases: PHASE_TEMPLATE.map((name) => ({ name, state: 'bloqueada' as PhaseState, files: [], events: [] })),
     createdAt: new Date().toISOString(), notes: '',
     briefingQuestions: DEFAULT_BRIEFING.map(q => ({ ...q })),
-    briefingAnswers: [],
-    briefingDone: false,
+    briefingAnswers: [], briefingDone: false,
   });
 
   const persist = (p: ArchProject) => {
-    // Proteção: mede o tamanho do documento antes de enviar. Arquivos do formato
-    // antigo (base64 inline) podem inchar o projeto e estourar o limite de salvamento.
     try {
       const bytes = new Blob([JSON.stringify(p)]).size;
       if (bytes > 60 * 1024 * 1024) {
-        const legado = p.phases.reduce((n, ph) => n + ph.files.filter(f => f.storage !== 'telegram' && f.base64 && f.base64.length > 200000).length, 0);
-        alert(
-          `Este projeto está muito grande para salvar (${(bytes / 1024 / 1024).toFixed(0)}MB).` +
-          (legado > 0
-            ? `\n\nHá ${legado} arquivo(s) antigo(s) guardado(s) dentro do projeto. Remova-o(s) e reenvie pelo botão "Enviar arquivo" (que agora usa o Telegram), depois salve novamente.`
-            : `\n\nReduza o conteúdo e tente de novo.`)
-        );
+        alert(`Este projeto está muito grande para salvar (${(bytes / 1024 / 1024).toFixed(0)}MB). Remova arquivos antigos e reenvie pelo botão de arquivo.`);
         return Promise.resolve();
       }
-    } catch { /* se não der para medir, segue o fluxo normal */ }
+    } catch { /* segue */ }
     return saveDoc('arch_projects', p.id, p);
   };
 
+  const saveEditing = async () => {
+    if (!editing || !editing.name.trim()) return;
+    await persist(editing);
+    setSelected(editing.id);
+    setEditing(null);
+  };
+
+  // ----- Página do projeto (shell com sidebar) -----
+  if (selectedProject) {
+    return (
+      <div className="projeto-dark min-h-screen text-white relative">
+        <ProjectBackground />
+        <ProjectShell
+          project={selectedProject}
+          isAdminReal={isAdminReal}
+          previewClient={previewClient}
+          onTogglePreview={() => setPreviewClient(v => !v)}
+          userName={userName}
+          role={role}
+          progress={progressOf(selectedProject)}
+          onBack={() => { setSelected(null); setPreviewClient(false); }}
+          onEdit={() => setEditing(selectedProject)}
+          onPersist={persist}
+          onLogout={onLogout}
+          onSwitchEnvironment={onSwitchEnvironment}
+          onGoToSelect={onGoToSelect}
+          clients={clients}
+          obras={obras}
+        />
+        {editing && (
+          <ProjectEditor
+            project={editing} clients={clients} obras={obras}
+            onCancel={() => setEditing(null)} onChange={setEditing}
+            onSave={saveEditing} onDelete={undefined}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // ----- Cliente sem projeto selecionado: entra direto no seu projeto -----
+  if (!isAdminReal) {
+    const meu = projects[0];
+    useEffect(() => { if (meu) setSelected(meu.id); }, [meu?.id]);
+    return (
+      <div className="projeto-dark min-h-screen text-white relative">
+        <ProjectBackground />
+        <div className="relative z-10 flex items-center justify-center min-h-screen px-6">
+          <div className="text-center max-w-md">
+            <Compass size={40} strokeWidth={1.25} className="mx-auto mb-4 opacity-60" />
+            <p className="text-lg" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>
+              {meu ? 'Abrindo seu projeto…' : 'Nenhum projeto ainda'}
+            </p>
+            <p className="text-sm text-white/60 mt-2" style={{ fontWeight: 300 }}>
+              {meu ? '' : 'Assim que seu arquiteto criar seu projeto, ele aparecerá aqui.'}
+            </p>
+            <button onClick={onLogout} className="mt-6 text-xs font-mono uppercase tracking-wider text-white/50 hover:text-white">Sair</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ----- Admin: lista/seleção de projetos -----
   return (
     <div className="projeto-dark min-h-screen text-white relative">
-      {/* Fundo: foto de arquitetura, estática, cobrindo tudo, desfocada + véu escuro */}
-      <div className="fixed inset-0 z-0 pointer-events-none" aria-hidden>
-        <div
-          className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: `url(${PROJECT_BG})`, filter: 'blur(8px) brightness(0.55)', transform: 'scale(1.06)' }}
-        />
-        {/* Véu escuro para garantir contraste do texto branco */}
-        <div className="absolute inset-0 bg-black/55" />
-      </div>
-
+      <ProjectBackground />
       <header className="bg-black/40 backdrop-blur-xl border-b border-white/15 sticky top-0 z-20">
         <div className="max-w-6xl mx-auto px-5 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="w-10 h-10 flex items-center justify-center bg-black">
-              <Compass size={19} className="text-white" strokeWidth={1.5} />
-            </span>
-            <div className="leading-none">
-              <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-black/50 mb-1">Chaves Brites Correa</p>
-              <h1 className="text-lg tracking-tight" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>
-                Estúdio<span style={{ fontWeight: 300 }}> de Projetos</span>
-              </h1>
+            <span className="w-10 h-10 bg-black flex items-center justify-center"><Compass size={20} /></span>
+            <div>
+              <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-white/50">Chaves Brites Correa</p>
+              <h1 className="text-lg"><span style={{ fontWeight: 700 }}>Estúdio</span><span style={{ fontWeight: 300 }}> de Projetos</span></h1>
             </div>
           </div>
-          <div className="flex items-center gap-1 sm:gap-2">
-            <button onClick={onSwitchEnvironment}
-              className="flex items-center gap-1.5 text-xs font-mono uppercase tracking-wider text-black hover:bg-black hover:text-white px-2.5 sm:px-3 py-1.5 border border-black transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-1">
-              <ArrowLeftRight size={13} /> <span className="hidden sm:inline">Ir para Obra</span>
-            </button>
-            <button onClick={onLogout}
-              className="flex items-center gap-1.5 text-xs font-mono uppercase tracking-wider text-black/60 hover:text-black px-2.5 py-1.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-black">
-              <LogOut size={13} /> <span className="hidden sm:inline">Sair</span>
-            </button>
+          <div className="flex items-center gap-2 text-xs font-mono uppercase">
+            <button onClick={onSwitchEnvironment} className="px-3 py-1.5 border border-white/40 hover:bg-white hover:text-black transition-colors flex items-center gap-1.5"><ArrowLeftRight size={13} /> Obra</button>
+            {onGoToSelect && <button onClick={onGoToSelect} className="px-3 py-1.5 text-white/60 hover:text-white">Início</button>}
+            <button onClick={onLogout} className="px-3 py-1.5 text-white/60 hover:text-white flex items-center gap-1.5"><LogOut size={13} /> Sair</button>
           </div>
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-5 py-8 relative z-10">
-        {selectedProject ? (
-          <ProjectDetail
-            project={selectedProject}
-            progress={progressOf(selectedProject)}
-            isAdmin={isAdmin}
-            userName={userName || (isAdmin ? 'Equipe CBC' : 'Cliente')}
-            role={role}
-            onBack={() => setSelected(null)}
-            onEdit={() => setEditing(selectedProject)}
-            onPersist={persist}
-          />
-        ) : (
-          <>
-            <div className="flex items-end justify-between mb-8 gap-4">
-              <div>
-                <h2 className="text-3xl sm:text-4xl tracking-tight leading-[1.05]" style={{ fontFamily: 'var(--font-serif)' }}>
-                  <span style={{ fontWeight: 300 }}>{isAdmin ? 'Projetos de ' : 'Seus '}</span>
-                  <span style={{ fontWeight: 700 }}>{isAdmin ? 'Arquitetura' : 'Projetos'}</span>
-                </h2>
-                <p className="text-sm text-black/60 mt-2" style={{ fontWeight: 300 }}>Acompanhe cada etapa, veja os arquivos e aprove para avançar.</p>
-              </div>
-              {isAdmin && (
-                <button onClick={() => setEditing(newProject())}
-                  className="flex items-center gap-2 bg-black text-white px-5 py-2.5 text-sm transition-transform hover:scale-[1.02] active:scale-100 flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2"
-                  style={{ fontWeight: 600 }}>
-                  <Plus size={16} strokeWidth={2.5} /> <span className="hidden sm:inline">Novo projeto</span>
-                </button>
-              )}
-            </div>
+        <div className="flex items-end justify-between mb-8">
+          <div>
+            <h2 className="text-3xl tracking-tight" style={{ fontFamily: 'var(--font-serif)' }}>
+              <span style={{ fontWeight: 300 }}>Projetos de </span><span style={{ fontWeight: 700 }}>Arquitetura</span>
+            </h2>
+            <p className="text-sm text-white/60 mt-2" style={{ fontWeight: 300 }}>Selecione um projeto para entrar, ou cadastre um novo.</p>
+          </div>
+          <button onClick={() => setEditing(newProject())}
+            className="flex items-center gap-2 bg-black text-white px-5 py-2.5 text-sm border border-white/35 hover:bg-white hover:text-black transition-colors" style={{ fontWeight: 600 }}>
+            <Plus size={16} /> Novo projeto
+          </button>
+        </div>
 
-            {projects.length === 0 ? (
-              <div className="border border-black py-20 text-center">
-                <FolderOpen size={32} className="text-black mx-auto mb-4" strokeWidth={1} />
-                <p className="text-black mb-1" style={{ fontWeight: 700 }}>Nenhum projeto ainda.</p>
-                <p className="text-sm text-black/60" style={{ fontWeight: 300 }}>
-                  {isAdmin ? 'Crie o primeiro projeto para começar.' : 'Assim que um projeto seu for criado, ele aparece aqui.'}
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-black border border-black">
-                {projects.map((p, i) => {
-                  const pct = progressOf(p);
-                  const waiting = p.phases.some(ph => ph.state === 'aguardando_aprovacao');
-                  return (
-                    <div key={p.id} className="bg-white relative group">
-                      <motion.button
-                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.04 }}
-                        onClick={() => setSelected(p.id)}
-                        className="w-full text-left p-6 hover:bg-black hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black block">
-                        <div className="flex items-start justify-between mb-8">
-                          <Ruler size={20} strokeWidth={1.5} className="group-hover:text-white" />
-                          {waiting && !isAdmin && (
-                            <span className="text-[9px] font-mono uppercase tracking-wider border border-current px-2 py-0.5">
-                              Pendente
-                            </span>
-                          )}
-                        </div>
-                        <h3 className="text-xl leading-tight mb-1" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>{p.name || 'Sem nome'}</h3>
-                        <p className="text-xs mb-6 opacity-60" style={{ fontWeight: 300 }}>{p.clientName} · {p.type}</p>
-                        <div className="flex items-baseline justify-between mb-2">
-                          <span className="text-[10px] font-mono uppercase tracking-wider opacity-60">Progresso</span>
-                          <span className="text-lg font-mono" style={{ fontWeight: 700 }}>{pct}%</span>
-                        </div>
-                        <div className="h-px bg-current opacity-20 relative">
-                          <div className="absolute left-0 top-0 h-px bg-current opacity-100" style={{ width: `${pct}%` }} />
-                        </div>
-                      </motion.button>
-                      {/* Excluir — só admin, com confirmação */}
-                      {isAdmin && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setConfirmDelete(p); }}
-                          className="absolute top-4 right-4 p-1.5 text-black/30 hover:text-white hover:bg-black opacity-0 group-hover:opacity-100 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:opacity-100"
-                          title="Excluir projeto" aria-label={`Excluir ${p.name}`}>
-                          <Trash2 size={15} />
-                        </button>
-                      )}
+        {projects.length === 0 ? (
+          <div className="border-2 border-dashed border-white/30 p-12 text-center">
+            <FolderOpen size={36} strokeWidth={1.25} className="mx-auto mb-3 opacity-50" />
+            <p className="text-sm text-white/60" style={{ fontWeight: 300 }}>Nenhum projeto cadastrado. Clique em "Novo projeto" para começar.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {projects.map(p => {
+              const prog = progressOf(p);
+              return (
+                <div key={p.id} className="group relative border-2 border-white/25 hover:border-white bg-black/30 backdrop-blur-md transition-colors cursor-pointer"
+                  onClick={() => setSelected(p.id)}>
+                  <div className="p-6">
+                    <div className="flex items-start justify-between mb-8">
+                      <Ruler size={22} strokeWidth={1.5} />
+                      <button onClick={e => { e.stopPropagation(); setConfirmDelete(p); }}
+                        className="opacity-0 group-hover:opacity-100 text-white/40 hover:text-white transition-opacity" title="Excluir"><Trash2 size={16} /></button>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </>
+                    <h3 className="text-xl leading-tight" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>{p.name}</h3>
+                    <p className="text-xs text-white/60 mt-1" style={{ fontWeight: 300 }}>{p.clientName || 'Sem cliente'} · {p.type}</p>
+                    <div className="mt-6">
+                      <div className="flex justify-between items-baseline mb-2">
+                        <span className="text-[10px] font-mono uppercase tracking-[0.1em] text-white/50">Progresso</span>
+                        <span className="text-lg font-mono" style={{ fontWeight: 700 }}>{prog}%</span>
+                      </div>
+                      <div className="h-px bg-white/20 relative">
+                        <div className="absolute left-0 top-0 h-px bg-white" style={{ width: `${prog}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </main>
 
       {editing && (
         <ProjectEditor
-          project={editing}
-          clients={clients}
-          obras={obras}
-          onChange={setEditing}
-          onSave={async () => { await persist(editing); setEditing(null); }}
-          onCancel={() => setEditing(null)}
-          onDelete={editing.name ? () => { setConfirmDelete(editing); } : undefined}
+          project={editing} clients={clients} obras={obras}
+          onCancel={() => setEditing(null)} onChange={setEditing}
+          onSave={saveEditing}
+          onDelete={editing.name ? () => { setConfirmDelete(editing); setEditing(null); } : undefined}
         />
       )}
-
-      {/* Confirmação de exclusão */}
       {confirmDelete && (
         <ConfirmDialog
           title="Excluir projeto"
-          message={<>Tem certeza que deseja excluir <strong>{confirmDelete.name}</strong>? Esta ação é permanente e apaga todos os arquivos e o histórico das etapas.</>}
+          message={`Tem certeza que deseja excluir "${confirmDelete.name}"? Esta ação é permanente e apaga todos os arquivos e o histórico.`}
           confirmLabel="Excluir projeto"
-          onConfirm={async () => {
-            await removeDoc('arch_projects', confirmDelete.id);
-            if (selected === confirmDelete.id) setSelected(null);
-            if (editing?.id === confirmDelete.id) setEditing(null);
-            setConfirmDelete(null);
-          }}
           onCancel={() => setConfirmDelete(null)}
+          onConfirm={async () => { await removeDoc('arch_projects', confirmDelete.id); setConfirmDelete(null); if (selected === confirmDelete.id) setSelected(null); }}
         />
       )}
     </div>
   );
 }
 
-function ProjectDetail({
-  project, progress, isAdmin, userName, role, onBack, onEdit, onPersist,
+// Fundo compartilhado (foto desfocada + véu).
+function ProjectBackground() {
+  return (
+    <div className="fixed inset-0 z-0 pointer-events-none" aria-hidden>
+      <div className="absolute inset-0 bg-cover bg-center"
+        style={{ backgroundImage: `url(${PROJECT_BG})`, filter: 'blur(8px) brightness(0.5)', transform: 'scale(1.06)' }} />
+      <div className="absolute inset-0 bg-black/60" />
+    </div>
+  );
+}
+
+// ============ PÁGINAS ============
+// === PROJECT SHELL — sidebar fixa + páginas (parte 3/3) ===
+
+type PageId = 'inicio' | 'termico' | 'briefing' | string; // string = fase-<idx>
+
+function ProjectShell({
+  project, isAdminReal, previewClient, onTogglePreview, userName, role, progress,
+  onBack, onEdit, onPersist, onLogout, onSwitchEnvironment, onGoToSelect, clients, obras,
 }: {
   project: ArchProject;
-  progress: number;
-  isAdmin: boolean;
-  userName: string;
+  isAdminReal: boolean;
+  previewClient: boolean;
+  onTogglePreview: () => void;
+  userName?: string;
   role: string;
+  progress: number;
   onBack: () => void;
   onEdit: () => void;
   onPersist: (p: ArchProject) => Promise<any> | void;
+  onLogout: () => void;
+  onSwitchEnvironment: () => void;
+  onGoToSelect?: () => void;
+  clients: { id: string; name: string }[];
+  obras: any[];
 }) {
-  const [openPhase, setOpenPhase] = useState<number | null>(
-    project.phases.findIndex(ph => ph.state === 'aguardando_aprovacao' || ph.state === 'em_elaboracao')
-  );
+  // Papel efetivo: admin que ativou "ver como cliente" age como cliente.
+  const isAdmin = isAdminReal && !previewClient;
+  const [page, setPage] = useState<PageId>('inicio');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const update = (phases: ArchPhase[]) => onPersist({ ...project, phases });
+  const hasThermal = !!(project.localizacao && project.latitude != null && project.longitude != null);
 
-  // Briefing: salva respostas (rascunho) e conclui (destrava o Levantamento).
-  const saveBriefingAnswers = (answers: BriefingAnswer[]) => {
-    onPersist({ ...project, briefingAnswers: answers });
+  // Itens do menu lateral.
+  const navItems: { id: PageId; label: string; Icon: React.ComponentType<any>; badge?: string; locked?: boolean }[] = [
+    { id: 'inicio', label: 'Início', Icon: Home },
+    { id: 'termico', label: 'Conforto Térmico', Icon: Sun, locked: !hasThermal },
+    { id: 'briefing', label: 'Briefing de Premissas', Icon: ClipboardList, badge: project.briefingDone ? '✓' : undefined },
+    ...project.phases.map((ph, i) => ({
+      id: `fase-${i}`, label: ph.name, Icon: phaseIcon(ph.state),
+      locked: ph.state === 'bloqueada',
+    })),
+  ];
+
+  const NavButton = ({ item }: { item: typeof navItems[number] }) => {
+    const active = page === item.id;
+    return (
+      <button
+        onClick={() => { setPage(item.id); setSidebarOpen(false); }}
+        className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors text-sm relative ${
+          active ? 'bg-white text-black' : 'text-white/70 hover:text-white hover:bg-white/10'
+        }`}
+        style={{ fontWeight: active ? 700 : 400 }}
+      >
+        <item.Icon size={16} className="flex-shrink-0" />
+        <span className="flex-1 min-w-0 truncate">{item.label}</span>
+        {item.badge && <span className="text-xs">{item.badge}</span>}
+        {item.locked && <Lock size={12} className="opacity-50 flex-shrink-0" />}
+      </button>
+    );
   };
+
+  return (
+    <div className="relative z-10 flex min-h-screen">
+      {/* Sidebar */}
+      <aside className={`fixed lg:sticky top-0 left-0 h-screen w-72 flex-shrink-0 bg-black/60 backdrop-blur-xl border-r border-white/15 z-30 transition-transform ${
+        sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+      } flex flex-col`}>
+        {/* topo da sidebar */}
+        <div className="p-5 border-b border-white/15">
+          <button onClick={onBack} className="text-xs font-mono uppercase tracking-wider text-white/50 hover:text-white flex items-center gap-1.5 mb-4">
+            ← Projetos
+          </button>
+          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40 mb-1">Projeto</p>
+          <h1 className="text-xl leading-tight" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>{project.name}</h1>
+          <p className="text-xs text-white/50 mt-1" style={{ fontWeight: 300 }}>{project.clientName}</p>
+          {/* progresso */}
+          <div className="mt-4">
+            <div className="flex justify-between items-baseline mb-1.5">
+              <span className="text-[9px] font-mono uppercase tracking-[0.1em] text-white/40">Progresso</span>
+              <span className="text-sm font-mono" style={{ fontWeight: 700 }}>{progress}%</span>
+            </div>
+            <div className="h-px bg-white/20 relative"><div className="absolute left-0 top-0 h-px bg-white" style={{ width: `${progress}%` }} /></div>
+          </div>
+        </div>
+
+        {/* navegação */}
+        <nav className="flex-1 overflow-y-auto py-3">
+          <p className="px-4 text-[9px] font-mono uppercase tracking-[0.15em] text-white/30 mb-1">Etapas</p>
+          {navItems.map(item => <NavButton key={item.id} item={item} />)}
+        </nav>
+
+        {/* rodapé da sidebar */}
+        <div className="p-4 border-t border-white/15 space-y-1">
+          {isAdminReal && (
+            <button onClick={onTogglePreview}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs border border-white/30 hover:bg-white hover:text-black transition-colors" style={{ fontWeight: 600 }}>
+              <Eye size={13} /> {previewClient ? 'Ver como admin' : 'Ver como cliente'}
+            </button>
+          )}
+          {isAdminReal && (
+            <button onClick={onEdit} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-white/60 hover:text-white transition-colors">
+              <Pencil size={13} /> Editar projeto
+            </button>
+          )}
+          <div className="flex items-center gap-1 pt-1">
+            <button onClick={onSwitchEnvironment} className="flex-1 text-[10px] font-mono uppercase text-white/50 hover:text-white px-2 py-1.5 border border-white/20">Obra</button>
+            <button onClick={onLogout} className="flex-1 text-[10px] font-mono uppercase text-white/50 hover:text-white px-2 py-1.5 border border-white/20">Sair</button>
+          </div>
+        </div>
+      </aside>
+
+      {/* Overlay mobile */}
+      {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-20 lg:hidden" onClick={() => setSidebarOpen(false)} />}
+
+      {/* Conteúdo */}
+      <div className="flex-1 min-w-0">
+        {/* barra mobile */}
+        <div className="lg:hidden sticky top-0 z-10 bg-black/50 backdrop-blur-xl border-b border-white/15 px-4 py-3 flex items-center gap-3">
+          <button onClick={() => setSidebarOpen(true)} className="p-1"><Menu size={20} /></button>
+          <span className="text-sm truncate" style={{ fontWeight: 600 }}>{project.name}</span>
+        </div>
+
+        {/* badge "vendo como cliente" */}
+        {isAdminReal && previewClient && (
+          <div className="bg-white/10 border-b border-white/20 px-6 py-2 text-center">
+            <span className="text-xs font-mono uppercase tracking-wider text-white/80">👁 Visualizando como o cliente vê</span>
+          </div>
+        )}
+
+        <div className="max-w-4xl mx-auto px-6 py-8">
+          <ProjectPage page={page} project={project} isAdmin={isAdmin} userName={userName} role={role} onPersist={onPersist} onNavigate={setPage} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Roteador de páginas.
+function ProjectPage({ page, project, isAdmin, userName, role, onPersist, onNavigate }: {
+  page: PageId; project: ArchProject; isAdmin: boolean; userName?: string; role: string;
+  onPersist: (p: ArchProject) => Promise<any> | void; onNavigate: (p: PageId) => void;
+}) {
+  if (page === 'inicio') return <PageInicio project={project} isAdmin={isAdmin} userName={userName} onNavigate={onNavigate} />;
+  if (page === 'termico') return <PageTermico project={project} />;
+  if (page === 'briefing') return <PageBriefing project={project} isAdmin={isAdmin} userName={userName} role={role} onPersist={onPersist} />;
+  if (page.startsWith('fase-')) {
+    const idx = parseInt(page.split('-')[1], 10);
+    return <PageFase project={project} idx={idx} isAdmin={isAdmin} userName={userName} role={role} onPersist={onPersist} />;
+  }
+  return null;
+}
+
+function phaseIcon(state: PhaseState): React.ComponentType<any> {
+  if (state === 'aprovada') return CheckCircle2;
+  if (state === 'aguardando_aprovacao') return Clock;
+  if (state === 'ajustes') return AlertTriangle;
+  if (state === 'bloqueada') return Lock;
+  return Ruler;
+}
+// === PÁGINAS: Início, Briefing, Fase ===
+
+// Página inicial: contrato + boas-vindas + explicação do fluxo.
+function PageInicio({ project, isAdmin, userName, onNavigate }: {
+  project: ArchProject; isAdmin: boolean; userName?: string; onNavigate: (p: PageId) => void;
+}) {
+  const fluxo = [
+    { n: '01', t: 'Conforto Térmico', d: 'Estudo técnico das premissas climáticas do seu terreno.', pg: 'termico' as PageId },
+    { n: '02', t: 'Briefing de Premissas', d: 'Você conta o que deseja: programa, estilo, necessidades.', pg: 'briefing' as PageId },
+    { n: '03', t: 'Fases do Projeto', d: 'Do levantamento ao detalhamento — você acompanha e aprova cada etapa.', pg: 'fase-0' as PageId },
+  ];
+  return (
+    <div>
+      {/* Boas-vindas */}
+      <div className="mb-8">
+        <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-white/40 mb-3">
+          {userName ? `Olá, ${userName}` : 'Bem-vindo'}
+        </p>
+        <h1 className="text-4xl tracking-tight leading-tight" style={{ fontFamily: 'var(--font-serif)' }}>
+          <span style={{ fontWeight: 300 }}>Bem-vindo à sua </span><span style={{ fontWeight: 700 }}>área de projetos</span>
+        </h1>
+        <p className="text-white/70 mt-4 leading-relaxed max-w-2xl" style={{ fontWeight: 300 }}>
+          Aqui você acompanha todo o desenvolvimento do seu projeto arquitetônico, do estudo inicial ao detalhamento final.
+          Cada etapa aparece no menu à esquerda. Você poderá visualizar arquivos, responder o briefing, aprovar entregas
+          e conversar com o arquiteto ao longo do caminho.
+        </p>
+      </div>
+
+      {/* Dados do contrato */}
+      <div className="border-2 border-white/30 bg-black/30 backdrop-blur-md mb-8">
+        <div className="px-5 py-3 border-b-2 border-white/30 flex items-center gap-2">
+          <FileText size={15} /> <p className="text-sm" style={{ fontWeight: 700 }}>Seu contrato</p>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-white/15">
+          {[
+            ['Projeto', project.name],
+            ['Cliente', project.clientName || '—'],
+            ['Tipo', project.type],
+            ['Área', project.area ? `${project.area} m²` : '—'],
+            ['Responsável técnico', project.responsible || '—'],
+            ['Localização', project.localizacao || '—'],
+            ['Início', new Date(project.createdAt).toLocaleDateString('pt-BR')],
+            ['Status', project.status === 'ativo' ? 'Em andamento' : project.status],
+          ].map(([label, val]) => (
+            <div key={label} className="bg-black/40 px-4 py-3">
+              <p className="text-[9px] font-mono uppercase tracking-[0.12em] text-white/40 mb-1">{label}</p>
+              <p className="text-sm" style={{ fontWeight: 600 }}>{val}</p>
+            </div>
+          ))}
+        </div>
+        {project.notes && (
+          <div className="px-5 py-3 border-t-2 border-white/30">
+            <p className="text-[9px] font-mono uppercase tracking-[0.12em] text-white/40 mb-1">Observações</p>
+            <p className="text-sm text-white/80" style={{ fontWeight: 300 }}>{project.notes}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Como funciona o fluxo */}
+      <div>
+        <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/40 mb-4">Como funciona</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {fluxo.map(f => (
+            <button key={f.n} onClick={() => onNavigate(f.pg)}
+              className="text-left border-2 border-white/25 hover:border-white bg-black/30 backdrop-blur-md p-5 transition-colors group">
+              <p className="text-3xl font-mono text-white/30 group-hover:text-white transition-colors" style={{ fontWeight: 700 }}>{f.n}</p>
+              <p className="text-base mt-2" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>{f.t}</p>
+              <p className="text-xs text-white/60 mt-1 leading-relaxed" style={{ fontWeight: 300 }}>{f.d}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Página do briefing (reusa a lógica do BriefingCard, agora como página).
+function PageBriefing({ project, isAdmin, userName, role, onPersist }: {
+  project: ArchProject; isAdmin: boolean; userName?: string; role: string;
+  onPersist: (p: ArchProject) => Promise<any> | void;
+}) {
+  const saveBriefingAnswers = (answers: BriefingAnswer[]) => onPersist({ ...project, briefingAnswers: answers });
   const finishBriefing = (answers: BriefingAnswer[]) => {
-    // Destrava a primeira fase de projeto e registra o evento no histórico dela.
     const phases = project.phases.map((ph, i) => {
       if (i === 0 && ph.state === 'bloqueada') {
-        return {
-          ...ph,
-          state: 'em_elaboracao' as PhaseState,
-          events: [...ph.events, {
-            id: uid('ev'), kind: 'comentario' as const, author: userName, role,
-            at: new Date().toISOString(), text: 'Briefing respondido pelo cliente. Levantamento liberado.',
-          }],
-        };
+        return { ...ph, state: 'em_elaboracao' as PhaseState, events: [...ph.events, {
+          id: uid('ev'), kind: 'comentario' as const, author: userName || 'Cliente', role,
+          at: new Date().toISOString(), text: 'Briefing respondido pelo cliente. Levantamento liberado.',
+        }] };
       }
       return ph;
     });
     onPersist({ ...project, briefingAnswers: answers, briefingDone: true, briefingDoneAt: new Date().toISOString(), phases });
   };
-  const updateBriefingQuestions = (questions: BriefingQuestion[]) => {
-    onPersist({ ...project, briefingQuestions: questions });
-  };
+  return (
+    <div>
+      <PageHeader eyebrow="Etapa 02" title="Briefing de Premissas" subtitle="Programa de necessidades e desejos do cliente" />
+      <BriefingCard project={project} isAdmin={isAdmin} onSaveAnswers={saveBriefingAnswers} onFinish={finishBriefing} />
+    </div>
+  );
+}
 
-  const withEvent = (idx: number, ev: Omit<PhaseEvent, 'id' | 'at' | 'author' | 'role'>): ArchPhase[] =>
+// Página de uma fase do projeto (reusa o PhaseCard).
+function PageFase({ project, idx, isAdmin, userName, role, onPersist }: {
+  project: ArchProject; idx: number; isAdmin: boolean; userName?: string; role: string;
+  onPersist: (p: ArchProject) => Promise<any> | void;
+}) {
+  const phase = project.phases[idx];
+  if (!phase) return null;
+
+  const update = (phases: ArchPhase[]) => onPersist({ ...project, phases });
+  const withEvent = (ev: Omit<PhaseEvent, 'id' | 'at' | 'author' | 'role'>): ArchPhase[] =>
     project.phases.map((ph, i) => i === idx ? {
-      ...ph, events: [...ph.events, { ...ev, id: uid('ev'), author: userName, role, at: new Date().toISOString() }],
+      ...ph, events: [...ph.events, { ...ev, id: uid('ev'), author: userName || '', role, at: new Date().toISOString() }],
     } : ph);
 
-  const sendForApproval = (idx: number) => {
-    let phases = withEvent(idx, { kind: 'envio', text: 'Entrega enviada para aprovação.' });
-    phases = phases.map((ph, i) => i === idx ? { ...ph, state: 'aguardando_aprovacao' as PhaseState } : ph);
-    update(phases);
-  };
-  const approve = (idx: number) => {
-    let phases = withEvent(idx, { kind: 'aprovacao', text: 'Etapa aprovada pelo cliente.' });
-    phases = phases.map((ph, i) => {
-      if (i === idx) return { ...ph, state: 'aprovada' as PhaseState, approvedBy: userName, approvedAt: new Date().toISOString() };
-      if (i === idx + 1 && ph.state === 'bloqueada') return { ...ph, state: 'em_elaboracao' as PhaseState };
-      return ph;
-    });
-    update(phases);
-  };
-  const requestChanges = (idx: number, motivo: string) => {
-    let phases = withEvent(idx, { kind: 'ajuste', text: motivo });
-    phases = phases.map((ph, i) => i === idx ? { ...ph, state: 'ajustes' as PhaseState } : ph);
-    update(phases);
-  };
-  const addFiles = async (idx: number, files: FileList, onStatus?: (msg: string | null) => void) => {
+  const addFiles = async (files: FileList, onStatus?: (m: string | null) => void) => {
     const parsed: ArchFile[] = [];
     const arr = Array.from(files);
     for (let k = 0; k < arr.length; k++) {
       const f = arr[k];
-      // Limite do Telegram Bot API: 50 MB por arquivo.
-      if (f.size > 50 * 1024 * 1024) {
-        onStatus?.(null);
-        alert(`"${f.name}" tem ${(f.size / 1024 / 1024).toFixed(0)}MB e excede o limite de 50MB por arquivo. Comprima o PDF ou divida em partes.`);
-        continue;
-      }
-      try {
-        onStatus?.(`Enviando ${arr.length > 1 ? `(${k + 1}/${arr.length}) ` : ''}${f.name}…`);
-        parsed.push(await uploadArchFile(f));
-      } catch (e: any) {
-        onStatus?.(null);
-        alert(`Falha ao enviar "${f.name}": ${e?.message || 'erro no upload'}. Verifique se o Telegram está configurado nas configurações.`);
-      }
+      if (f.size > 50 * 1024 * 1024) { onStatus?.(null); alert(`"${f.name}" excede 50MB.`); continue; }
+      try { onStatus?.(`Enviando ${arr.length > 1 ? `(${k + 1}/${arr.length}) ` : ''}${f.name}…`); parsed.push(await uploadArchFile(f)); }
+      catch (e: any) { onStatus?.(null); alert(`Falha ao enviar "${f.name}": ${e?.message || 'erro'}.`); }
     }
     onStatus?.(null);
-    if (parsed.length > 0) {
-      update(project.phases.map((ph, i) => i === idx ? { ...ph, files: [...ph.files, ...parsed] } : ph));
-    }
+    if (parsed.length) update(project.phases.map((ph, i) => i === idx ? { ...ph, files: [...ph.files, ...parsed] } : ph));
   };
-  const removeFile = (idx: number, fileId: string) =>
-    update(project.phases.map((ph, i) => i === idx ? { ...ph, files: ph.files.filter(f => f.id !== fileId) } : ph));
-  const addComment = (idx: number, text: string) => update(withEvent(idx, { kind: 'comentario', text }));
+  const removeFile = (fileId: string) => update(project.phases.map((ph, i) => i === idx ? { ...ph, files: ph.files.filter(f => f.id !== fileId) } : ph));
+  const sendForApproval = () => { let ph = withEvent({ kind: 'envio', text: 'Entrega enviada para aprovação.' }); ph = ph.map((p, i) => i === idx ? { ...p, state: 'aguardando_aprovacao' as PhaseState } : p); update(ph); };
+  const approve = () => {
+    let ph = withEvent({ kind: 'aprovacao', text: 'Etapa aprovada pelo cliente.' });
+    ph = ph.map((p, i) => {
+      if (i === idx) return { ...p, state: 'aprovada' as PhaseState, approvedBy: userName, approvedAt: new Date().toISOString() };
+      if (i === idx + 1 && p.state === 'bloqueada') return { ...p, state: 'em_elaboracao' as PhaseState };
+      return p;
+    });
+    update(ph);
+  };
+  const requestChanges = (motivo: string) => { let ph = withEvent({ kind: 'ajuste', text: motivo }); ph = ph.map((p, i) => i === idx ? { ...p, state: 'ajustes' as PhaseState } : p); update(ph); };
+  const addComment = (text: string) => update(withEvent({ kind: 'comentario', text }));
 
   return (
     <div>
-      <button onClick={onBack} className="text-sm text-black/60 hover:text-black mb-5 flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-black px-1" style={{ fontWeight: 500 }}>← Voltar aos projetos</button>
+      <PageHeader eyebrow={`Fase ${String(idx + 1).padStart(2, '0')}`} title={phase.name} subtitle={STATE_META[phase.state].label} />
+      <PhaseCard
+        phase={phase} index={idx} total={project.phases.length} isAdmin={isAdmin}
+        userName={userName || ''} isOpen locked={phase.state === 'bloqueada'} onToggle={() => {}}
+        onAddFiles={addFiles} onRemoveFile={removeFile} onAddComment={addComment}
+        onApprove={approve} onRequestChanges={requestChanges} onSendForApproval={sendForApproval}
+      />
+    </div>
+  );
+}
 
-      {/* Carimbo de projeto (title block) — preto sólido, assinatura de prancheta */}
-      <div className="mb-6 border-2 border-black">
-        <div className="relative p-6 sm:p-8 text-white bg-black">
-          {/* Grade branca sutil no fundo */}
-          <div className="absolute inset-0 opacity-[0.08] pointer-events-none" aria-hidden>
-            <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-              <defs><pattern id="tb-grid" width="24" height="24" patternUnits="userSpaceOnUse">
-                <path d="M 24 0 L 0 0 0 24" fill="none" stroke="white" strokeWidth="1" /></pattern></defs>
-              <rect width="100%" height="100%" fill="url(#tb-grid)" />
-            </svg>
-          </div>
-          <div className="relative flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-white/50 mb-2">Projeto</p>
-              <h2 className="text-3xl sm:text-4xl tracking-tight leading-[1.05]" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>{project.name}</h2>
+// Cabeçalho padrão de página.
+function PageHeader({ eyebrow, title, subtitle }: { eyebrow: string; title: string; subtitle?: string }) {
+  return (
+    <div className="mb-6">
+      <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-white/40 mb-2">{eyebrow}</p>
+      <h1 className="text-3xl tracking-tight" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>{title}</h1>
+      {subtitle && <p className="text-sm text-white/60 mt-1" style={{ fontWeight: 300 }}>{subtitle}</p>}
+    </div>
+  );
+}
+// === PÁGINA: Dashboard de Conforto Térmico ===
+
+function PageTermico({ project }: { project: ArchProject }) {
+  const hasLocation = !!(project.localizacao && project.latitude != null && project.longitude != null);
+  if (!hasLocation) {
+    return (
+      <div>
+        <PageHeader eyebrow="Etapa 01" title="Estudo de Conforto Térmico" />
+        <div className="border-2 border-dashed border-white/30 p-10 text-center">
+          <Sun size={32} strokeWidth={1.25} className="mx-auto mb-3 opacity-50" />
+          <p className="text-sm text-white/60" style={{ fontWeight: 300 }}>
+            Informe a localização do projeto (no cadastro) para gerar o estudo técnico automático.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const r = analisarConfortoTermico({
+    localizacao: project.localizacao!, latitude: project.latitude!, longitude: project.longitude!,
+    tipoEdificacao: project.type, orientacao: (project.orientacao as Orientacao) || 'N',
+    areaConstruida: project.area ? Number(project.area) : undefined,
+  });
+  const d = r.dados;
+
+  const metrics: { Icon: React.ComponentType<any>; label: string; value: string; sub: string; grad: string }[] = [
+    { Icon: Thermometer, label: 'Temp. média', value: `${d.tempMedia}°C`, sub: `${d.tempMin}–${d.tempMax}°C`, grad: 'linear-gradient(135deg,#F76707,#E8590C)' },
+    { Icon: Droplets, label: 'Umidade', value: `${d.umidadeMedia}%`, sub: `${d.precipitacao}mm/ano`, grad: 'linear-gradient(135deg,#1C7ED6,#1971C2)' },
+    { Icon: Wind, label: 'Ventos', value: d.ventosPredominantes, sub: `${d.velocidadeVento} m/s`, grad: 'linear-gradient(135deg,#0CA678,#087f5b)' },
+    { Icon: Sun, label: 'Insolação', value: r.insolacao, sub: r.exposicao, grad: 'linear-gradient(135deg,#F59F00,#E8590C)' },
+  ];
+
+  const Card = ({ title, icon: Icon, children, accent }: { title: string; icon: React.ComponentType<any>; children: React.ReactNode; accent?: string }) => (
+    <div className="border-2 border-white/25 bg-black/30 backdrop-blur-md">
+      <div className="px-4 py-2.5 border-b-2 border-white/25 flex items-center gap-2">
+        <Icon size={14} style={{ color: accent }} /> <p className="text-xs font-mono uppercase tracking-[0.1em]" style={{ fontWeight: 700 }}>{title}</p>
+      </div>
+      <div className="p-4">{children}</div>
+    </div>
+  );
+
+  return (
+    <div>
+      <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
+        <PageHeader eyebrow="Etapa 01" title="Estudo de Conforto Térmico" subtitle={`${project.localizacao} · Clima ${d.clima}`} />
+        <button onClick={() => openThermalReport(r, {
+          projeto: project.name, localizacao: project.localizacao!, latitude: project.latitude!,
+          longitude: project.longitude!, tipo: project.type, area: project.area,
+        })}
+          className="flex items-center gap-1.5 text-xs text-white px-4 py-2 border border-white/30 transition-colors" style={{ fontWeight: 600, background: 'linear-gradient(135deg,#1C7ED6,#1971C2)' }}>
+          <Download size={13} /> Exportar PDF
+        </button>
+      </div>
+
+      {/* Métricas */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        {metrics.map(m => (
+          <div key={m.label} className="p-4 text-white flex items-center gap-3" style={{ background: m.grad }}>
+            <div className="w-11 h-11 flex-shrink-0 bg-white/20 flex items-center justify-center"><m.Icon size={22} /></div>
+            <div>
+              <p className="text-[9px] uppercase tracking-[0.1em] opacity-90" style={{ fontWeight: 500 }}>{m.label}</p>
+              <p className="text-xl leading-none" style={{ fontWeight: 800 }}>{m.value}</p>
+              <p className="text-[9px] opacity-85" style={{ fontWeight: 300 }}>{m.sub}</p>
             </div>
-            {isAdmin && (
-              <div className="flex items-center gap-1.5 flex-shrink-0">
-                <button onClick={onEdit} className="flex items-center gap-1.5 text-xs font-mono uppercase tracking-wider text-white hover:bg-white hover:text-black px-3 py-1.5 border border-white/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
-                  <Pencil size={13} /> <span className="hidden sm:inline">Editar</span>
-                </button>
-              </div>
-            )}
           </div>
-          {/* Ficha técnica: células de carimbo */}
-          <div className="relative grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-4 mt-6 pt-5 border-t border-white/20">
-            {[
-              ['Cliente', project.clientName || '—'],
-              ['Tipo', project.type],
-              ['Área', project.area ? `${project.area} m²` : '—'],
-              ['Responsável', project.responsible || '—'],
-            ].map(([label, val]) => (
-              <div key={label} className="min-w-0">
-                <p className="text-[9px] font-mono uppercase tracking-[0.18em] text-white/40 mb-1">{label}</p>
-                <p className="text-sm truncate" style={{ fontWeight: 600 }} title={val}>{val}</p>
+        ))}
+      </div>
+
+      {/* Zona de conforto */}
+      <div className="border-2 border-white/25 bg-black/30 backdrop-blur-md p-4 mb-4">
+        <p className="text-xs font-mono uppercase tracking-[0.1em] text-white/50 mb-2" style={{ fontWeight: 700 }}>Faixa de conforto térmico</p>
+        <ComfortBar media={d.tempMedia} />
+        <p className="text-[10px] text-white/40 mt-1" style={{ fontWeight: 300 }}>A zona de conforto (18–26°C) é destacada. O marcador indica a temperatura média local.</p>
+      </div>
+
+      {/* Gráficos: rosa dos ventos + carta solar + temp mensal */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+        <Card title="Rosa dos Ventos" icon={Wind} accent="#1C7ED6">
+          <div className="aspect-square max-w-[220px] mx-auto"><WindRose predominante={d.ventosPredominantes} /></div>
+          <p className="text-[11px] text-white/60 mt-2 leading-relaxed" style={{ fontWeight: 300 }}>
+            Ventos predominantes de <b className="text-white">{d.ventosPredominantes}</b>. Quente: {d.periodoVentoQuente}. Frio: {d.periodoVentoFrio}.
+          </p>
+        </Card>
+        <Card title="Trajetória Solar" icon={Sun} accent="#F59F00">
+          <SolarChart latitude={d.latitude} />
+          <p className="text-[11px] text-white/60 mt-2 leading-relaxed" style={{ fontWeight: 300 }}>
+            {comentarioOrientacao((project.orientacao as string) || 'N')}
+          </p>
+        </Card>
+        <Card title="Temperatura ao longo do ano" icon={Thermometer} accent="#E8590C">
+          <TempBars media={d.tempMedia} max={d.tempMax} min={d.tempMin} />
+          <p className="text-[11px] text-white/60 mt-2 leading-relaxed" style={{ fontWeight: 300 }}>
+            Período crítico: <b className="text-white">{r.periodoCritico}</b>. Amplitude de {d.tempMax - d.tempMin}°C.
+          </p>
+        </Card>
+      </div>
+
+      {/* Fundamentação técnica */}
+      <div className="border-2 border-white/25 bg-black/30 backdrop-blur-md p-5 mb-4">
+        <p className="text-xs font-mono uppercase tracking-[0.1em] text-white/50 mb-2 flex items-center gap-2" style={{ fontWeight: 700 }}>
+          <BookOpen size={14} /> Fundamentação técnica
+        </p>
+        <p className="text-sm text-white/85 leading-relaxed" style={{ fontWeight: 300 }}>{comentarioTecnico(d.classificacao)}</p>
+      </div>
+
+      {/* Estratégias em 3 colunas */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+        <StrategyList title="Recomendações" icon={Leaf} items={r.recomendacoes} accent="#E8590C" />
+        <StrategyList title="Arquitetônicas" icon={Building2} items={d.solucoes.arquitetonicas} accent="#1C7ED6" />
+        <StrategyList title="Construtivas" icon={Ruler} items={d.solucoes.construtivas} accent="#0CA678" />
+      </div>
+
+      {/* Detalhes técnicos */}
+      <div className="border-2 border-white/25 bg-black/30 backdrop-blur-md p-5 mb-4">
+        <p className="text-xs font-mono uppercase tracking-[0.1em] text-white/50 mb-3" style={{ fontWeight: 700 }}>Diretrizes dimensionais</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+          {d.solucoes.detalhes.map((it, i) => (
+            <div key={i} className="flex gap-2 text-sm text-white/80" style={{ fontWeight: 300 }}>
+              <span className="text-white/40">—</span> {it}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Normas e referências */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="border-2 border-white/25 bg-black/30 backdrop-blur-md p-5">
+          <p className="text-xs font-mono uppercase tracking-[0.1em] text-white/50 mb-3 flex items-center gap-2" style={{ fontWeight: 700 }}>
+            <FileText size={14} /> Normas aplicáveis
+          </p>
+          <div className="space-y-3">
+            {NORMAS_TECNICAS.map(n => (
+              <div key={n.codigo} className="border-l-2 border-white/30 pl-3">
+                <p className="text-sm" style={{ fontWeight: 700 }}>{n.codigo}</p>
+                <p className="text-xs text-white/70" style={{ fontWeight: 400 }}>{n.titulo}</p>
+                <p className="text-[11px] text-white/50 mt-0.5" style={{ fontWeight: 300 }}>{n.aplicacao}</p>
               </div>
             ))}
           </div>
         </div>
-        {/* Progresso integrado, na base */}
-        <div className="bg-white px-6 sm:px-8 py-4 border-t-2 border-black">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-mono uppercase tracking-[0.15em] text-black/60">Progresso do projeto</span>
-            <span className="text-lg font-mono" style={{ fontWeight: 700 }}>{progress}%</span>
+        <div className="border-2 border-white/25 bg-black/30 backdrop-blur-md p-5">
+          <p className="text-xs font-mono uppercase tracking-[0.1em] text-white/50 mb-3 flex items-center gap-2" style={{ fontWeight: 700 }}>
+            <BookOpen size={14} /> Referências bibliográficas
+          </p>
+          <div className="space-y-2.5">
+            {REFERENCIAS.map((ref, i) => (
+              <div key={i} className="text-xs leading-relaxed" style={{ fontWeight: 300 }}>
+                <span className="text-white/80" style={{ fontWeight: 500 }}>{ref.autor}</span>{' '}
+                <span className="text-white/60 italic">{ref.obra}</span>{' '}
+                <span className="text-white/40">({ref.ano})</span>
+              </div>
+            ))}
           </div>
-          <div className="h-1 bg-black/10 relative">
-            <motion.div className="absolute left-0 top-0 h-1 bg-black"
-              initial={{ width: 0 }} animate={{ width: `${progress}%` }} transition={{ duration: 0.8, ease: 'easeOut' }} />
+          <p className="text-[10px] text-white/40 mt-4" style={{ fontWeight: 300 }}>
+            Estudo automático de premissas gerado a partir da localização e orientação. Serve como diretriz inicial e deve ser validado pelo responsável técnico.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StrategyList({ title, icon: Icon, items, accent }: { title: string; icon: React.ComponentType<any>; items: string[]; accent: string }) {
+  return (
+    <div className="border-2 border-white/25 bg-black/30 backdrop-blur-md">
+      <div className="px-4 py-2.5 border-b-2 border-white/25 flex items-center gap-2">
+        <Icon size={14} style={{ color: accent }} /> <p className="text-xs font-mono uppercase tracking-[0.1em]" style={{ fontWeight: 700 }}>{title}</p>
+      </div>
+      <ul className="p-4 space-y-2">
+        {items.map((it, i) => (
+          <li key={i} className="flex gap-2 text-sm text-white/80 leading-snug" style={{ fontWeight: 300 }}>
+            <span style={{ color: accent }} className="flex-shrink-0 mt-0.5">▸</span> {it}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// ============ PEÇAS REUTILIZÁVEIS ============
+function BriefingCard({ project, isAdmin, onSaveAnswers, onFinish }: {
+  project: ArchProject;
+  isAdmin: boolean;
+  onSaveAnswers: (a: BriefingAnswer[]) => void;
+  onFinish: (a: BriefingAnswer[]) => void;
+}) {
+  const [open, setOpen] = useState(!project.briefingDone);
+  const questions = project.briefingQuestions && project.briefingQuestions.length > 0
+    ? project.briefingQuestions
+    : DEFAULT_BRIEFING;
+
+  const [draft, setDraft] = useState<Record<string, string>>(() => {
+    const m: Record<string, string> = {};
+    (project.briefingAnswers || []).forEach(a => { m[a.questionId] = a.answer; });
+    return m;
+  });
+
+  const toAnswers = (): BriefingAnswer[] =>
+    questions.map(q => ({ questionId: q.id, answer: draft[q.id] || '' })).filter(a => a.answer.trim() !== '');
+
+  const respondidas = questions.filter(q => (draft[q.id] || '').trim() !== '').length;
+  const total = questions.length;
+  const pct = total > 0 ? Math.round((respondidas / total) * 100) : 0;
+
+  const grupos = BRIEFING_GROUPS.filter(g => questions.some(q => q.group === g));
+  const gruposExtras = Array.from(new Set(questions.map(q => q.group))).filter(g => !BRIEFING_GROUPS.includes(g));
+  const ordemGrupos = [...grupos, ...gruposExtras];
+
+  // ----- Visão do ADMIN: lê as respostas -----
+  if (isAdmin) {
+    return (
+      <div className="border-2 border-black mb-6">
+        <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between px-4 py-3 border-b-2 border-black hover:bg-stone-50 transition-colors">
+          <p className="text-sm flex items-center gap-2" style={{ fontWeight: 700 }}>
+            <ClipboardList size={15} /> Briefing do cliente
+            {project.briefingDone
+              ? <span className="text-[10px] font-mono uppercase tracking-wider bg-black text-white px-2 py-0.5">Respondido</span>
+              : <span className="text-[10px] font-mono uppercase tracking-wider border border-black px-2 py-0.5">Aguardando cliente</span>}
+          </p>
+          <ChevronRight size={16} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
+        </button>
+        {open && (
+          <div className="p-4 space-y-4">
+            {!project.briefingDone && respondidas === 0 && (
+              <p className="text-xs text-black/60" style={{ fontWeight: 300 }}>
+                O cliente ainda não respondeu o briefing. As respostas aparecerão aqui assim que ele preencher. Você pode editar as perguntas no botão "Editar projeto".
+              </p>
+            )}
+            {ordemGrupos.map(grupo => {
+              const qs = questions.filter(q => q.group === grupo);
+              const respondidasGrupo = qs.filter(q => (draft[q.id] || '').trim() !== '');
+              if (respondidasGrupo.length === 0 && !project.briefingDone) return null;
+              return (
+                <div key={grupo}>
+                  <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-black/50 font-bold mb-2">{grupo}</p>
+                  <div className="space-y-2.5">
+                    {qs.map(q => (
+                      <div key={q.id} className="border-l-2 border-black pl-3">
+                        <p className="text-xs text-black/60" style={{ fontWeight: 500 }}>{q.text}</p>
+                        <p className="text-sm mt-0.5" style={{ fontWeight: 300 }}>
+                          {(draft[q.id] || '').trim() || <span className="text-black/30 italic">— sem resposta —</span>}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
+        )}
+      </div>
+    );
+  }
+
+  // ----- Visão do CLIENTE já concluído: resumo compacto -----
+  if (project.briefingDone && !open) {
+    return (
+      <div className="border-2 border-black mb-6 flex items-center justify-between px-4 py-3">
+        <p className="text-sm flex items-center gap-2" style={{ fontWeight: 700 }}>
+          <CheckCircle2 size={16} /> Briefing concluído — obrigado!
+        </p>
+        <button onClick={() => setOpen(true)} className="text-xs px-3 py-1.5 border border-black hover:bg-black hover:text-white transition-colors" style={{ fontWeight: 600 }}>
+          Revisar respostas
+        </button>
+      </div>
+    );
+  }
+
+  // ----- Visão do CLIENTE: responde -----
+  return (
+    <div className="border-2 border-black mb-6">
+      <div className="px-4 py-4 border-b-2 border-black">
+        <p className="text-lg flex items-center gap-2" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>
+          <ClipboardList size={18} /> Briefing do seu projeto
+        </p>
+        <p className="text-xs text-black/60 mt-1" style={{ fontWeight: 300 }}>
+          Conte para o arquiteto o que você deseja. Quanto mais detalhes, melhor o projeto. Você pode salvar e continuar depois.
+        </p>
+        <div className="flex items-center gap-2 mt-3">
+          <div className="flex-1 h-1 bg-stone-200 relative">
+            <div className="absolute left-0 top-0 h-1 bg-black transition-all" style={{ width: `${pct}%` }} />
+          </div>
+          <span className="text-[11px] font-mono" style={{ fontWeight: 600 }}>{respondidas}/{total}</span>
         </div>
       </div>
 
-      {/* Briefing do cliente (primeira etapa) */}
-      <BriefingCard
-        project={project}
-        isAdmin={isAdmin}
-        onSaveAnswers={saveBriefingAnswers}
-        onFinish={finishBriefing}
-      />
-
-      {/* Resumo do estudo de conforto térmico */}
-      <ThermalSummary project={project} />
-
-      <div className="space-y-3">
-        {project.phases.map((ph, i) => (
-          <PhaseCard
-            key={i}
-            phase={ph}
-            index={i}
-            total={project.phases.length}
-            isAdmin={isAdmin}
-            isOpen={openPhase === i}
-            onToggle={() => setOpenPhase(openPhase === i ? null : i)}
-            onSendForApproval={() => sendForApproval(i)}
-            onApprove={() => approve(i)}
-            onRequestChanges={(motivo) => requestChanges(i, motivo)}
-            onAddFiles={(files, onStatus) => addFiles(i, files, onStatus)}
-            onRemoveFile={(fid) => removeFile(i, fid)}
-            onAddComment={(text) => addComment(i, text)}
-          />
+      <div className="p-4 space-y-5 max-h-[60vh] overflow-y-auto">
+        {ordemGrupos.map(grupo => (
+          <div key={grupo}>
+            <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-black/50 font-bold mb-3 pb-1 border-b border-black/20">{grupo}</p>
+            <div className="space-y-4">
+              {questions.filter(q => q.group === grupo).map(q => (
+                <div key={q.id}>
+                  <label className="block text-sm mb-1.5" style={{ fontWeight: 500 }}>{q.text}</label>
+                  <textarea
+                    value={draft[q.id] || ''}
+                    onChange={e => setDraft(d => ({ ...d, [q.id]: e.target.value }))}
+                    rows={2}
+                    placeholder="Sua resposta..."
+                    className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black placeholder:text-black/30"
+                    style={{ fontWeight: 300 }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
         ))}
+      </div>
+
+      <div className="flex flex-col sm:flex-row items-stretch gap-2 p-4 border-t-2 border-black">
+        <button
+          onClick={() => onSaveAnswers(toAnswers())}
+          className="flex items-center justify-center gap-1.5 border-2 border-black px-4 py-2.5 text-sm hover:bg-stone-50 transition-colors"
+          style={{ fontWeight: 600 }}>
+          <Send size={14} /> Salvar rascunho
+        </button>
+        <button
+          onClick={() => {
+            if (respondidas < total) {
+              if (!confirm(`Você respondeu ${respondidas} de ${total} perguntas. Deseja enviar assim mesmo? As não respondidas ficarão em branco.`)) return;
+            }
+            onFinish(toAnswers());
+            setOpen(false);
+          }}
+          className="flex-1 flex items-center justify-center gap-1.5 bg-black text-white px-4 py-2.5 text-sm hover:bg-white hover:text-black border-2 border-black transition-colors"
+          style={{ fontWeight: 700 }}>
+          <CheckCircle2 size={15} /> Concluir briefing e enviar
+        </button>
       </div>
     </div>
   );
@@ -804,333 +1289,6 @@ function FileCard({ file, isAdmin, onRemove, onView }: {
 // ---------------------------------------------------------------------------
 // Briefing do cliente — primeira etapa do projeto
 // ---------------------------------------------------------------------------
-function BriefingCard({ project, isAdmin, onSaveAnswers, onFinish }: {
-  project: ArchProject;
-  isAdmin: boolean;
-  onSaveAnswers: (a: BriefingAnswer[]) => void;
-  onFinish: (a: BriefingAnswer[]) => void;
-}) {
-  const [open, setOpen] = useState(!project.briefingDone);
-  const questions = project.briefingQuestions && project.briefingQuestions.length > 0
-    ? project.briefingQuestions
-    : DEFAULT_BRIEFING;
-
-  const [draft, setDraft] = useState<Record<string, string>>(() => {
-    const m: Record<string, string> = {};
-    (project.briefingAnswers || []).forEach(a => { m[a.questionId] = a.answer; });
-    return m;
-  });
-
-  const toAnswers = (): BriefingAnswer[] =>
-    questions.map(q => ({ questionId: q.id, answer: draft[q.id] || '' })).filter(a => a.answer.trim() !== '');
-
-  const respondidas = questions.filter(q => (draft[q.id] || '').trim() !== '').length;
-  const total = questions.length;
-  const pct = total > 0 ? Math.round((respondidas / total) * 100) : 0;
-
-  const grupos = BRIEFING_GROUPS.filter(g => questions.some(q => q.group === g));
-  const gruposExtras = Array.from(new Set(questions.map(q => q.group))).filter(g => !BRIEFING_GROUPS.includes(g));
-  const ordemGrupos = [...grupos, ...gruposExtras];
-
-  // ----- Visão do ADMIN: lê as respostas -----
-  if (isAdmin) {
-    return (
-      <div className="border-2 border-black mb-6">
-        <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between px-4 py-3 border-b-2 border-black hover:bg-stone-50 transition-colors">
-          <p className="text-sm flex items-center gap-2" style={{ fontWeight: 700 }}>
-            <ClipboardList size={15} /> Briefing do cliente
-            {project.briefingDone
-              ? <span className="text-[10px] font-mono uppercase tracking-wider bg-black text-white px-2 py-0.5">Respondido</span>
-              : <span className="text-[10px] font-mono uppercase tracking-wider border border-black px-2 py-0.5">Aguardando cliente</span>}
-          </p>
-          <ChevronRight size={16} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
-        </button>
-        {open && (
-          <div className="p-4 space-y-4">
-            {!project.briefingDone && respondidas === 0 && (
-              <p className="text-xs text-black/60" style={{ fontWeight: 300 }}>
-                O cliente ainda não respondeu o briefing. As respostas aparecerão aqui assim que ele preencher. Você pode editar as perguntas no botão "Editar projeto".
-              </p>
-            )}
-            {ordemGrupos.map(grupo => {
-              const qs = questions.filter(q => q.group === grupo);
-              const respondidasGrupo = qs.filter(q => (draft[q.id] || '').trim() !== '');
-              if (respondidasGrupo.length === 0 && !project.briefingDone) return null;
-              return (
-                <div key={grupo}>
-                  <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-black/50 font-bold mb-2">{grupo}</p>
-                  <div className="space-y-2.5">
-                    {qs.map(q => (
-                      <div key={q.id} className="border-l-2 border-black pl-3">
-                        <p className="text-xs text-black/60" style={{ fontWeight: 500 }}>{q.text}</p>
-                        <p className="text-sm mt-0.5" style={{ fontWeight: 300 }}>
-                          {(draft[q.id] || '').trim() || <span className="text-black/30 italic">— sem resposta —</span>}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // ----- Visão do CLIENTE já concluído: resumo compacto -----
-  if (project.briefingDone && !open) {
-    return (
-      <div className="border-2 border-black mb-6 flex items-center justify-between px-4 py-3">
-        <p className="text-sm flex items-center gap-2" style={{ fontWeight: 700 }}>
-          <CheckCircle2 size={16} /> Briefing concluído — obrigado!
-        </p>
-        <button onClick={() => setOpen(true)} className="text-xs px-3 py-1.5 border border-black hover:bg-black hover:text-white transition-colors" style={{ fontWeight: 600 }}>
-          Revisar respostas
-        </button>
-      </div>
-    );
-  }
-
-  // ----- Visão do CLIENTE: responde -----
-  return (
-    <div className="border-2 border-black mb-6">
-      <div className="px-4 py-4 border-b-2 border-black">
-        <p className="text-lg flex items-center gap-2" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>
-          <ClipboardList size={18} /> Briefing do seu projeto
-        </p>
-        <p className="text-xs text-black/60 mt-1" style={{ fontWeight: 300 }}>
-          Conte para o arquiteto o que você deseja. Quanto mais detalhes, melhor o projeto. Você pode salvar e continuar depois.
-        </p>
-        <div className="flex items-center gap-2 mt-3">
-          <div className="flex-1 h-1 bg-stone-200 relative">
-            <div className="absolute left-0 top-0 h-1 bg-black transition-all" style={{ width: `${pct}%` }} />
-          </div>
-          <span className="text-[11px] font-mono" style={{ fontWeight: 600 }}>{respondidas}/{total}</span>
-        </div>
-      </div>
-
-      <div className="p-4 space-y-5 max-h-[60vh] overflow-y-auto">
-        {ordemGrupos.map(grupo => (
-          <div key={grupo}>
-            <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-black/50 font-bold mb-3 pb-1 border-b border-black/20">{grupo}</p>
-            <div className="space-y-4">
-              {questions.filter(q => q.group === grupo).map(q => (
-                <div key={q.id}>
-                  <label className="block text-sm mb-1.5" style={{ fontWeight: 500 }}>{q.text}</label>
-                  <textarea
-                    value={draft[q.id] || ''}
-                    onChange={e => setDraft(d => ({ ...d, [q.id]: e.target.value }))}
-                    rows={2}
-                    placeholder="Sua resposta..."
-                    className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black placeholder:text-black/30"
-                    style={{ fontWeight: 300 }}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="flex flex-col sm:flex-row items-stretch gap-2 p-4 border-t-2 border-black">
-        <button
-          onClick={() => onSaveAnswers(toAnswers())}
-          className="flex items-center justify-center gap-1.5 border-2 border-black px-4 py-2.5 text-sm hover:bg-stone-50 transition-colors"
-          style={{ fontWeight: 600 }}>
-          <Send size={14} /> Salvar rascunho
-        </button>
-        <button
-          onClick={() => {
-            if (respondidas < total) {
-              if (!confirm(`Você respondeu ${respondidas} de ${total} perguntas. Deseja enviar assim mesmo? As não respondidas ficarão em branco.`)) return;
-            }
-            onFinish(toAnswers());
-            setOpen(false);
-          }}
-          className="flex-1 flex items-center justify-center gap-1.5 bg-black text-white px-4 py-2.5 text-sm hover:bg-white hover:text-black border-2 border-black transition-colors"
-          style={{ fontWeight: 700 }}>
-          <CheckCircle2 size={15} /> Concluir briefing e enviar
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function ThermalSummary({ project }: { project: ArchProject }) {
-  const [showReport, setShowReport] = useState(false);
-  const hasLocation = !!(project.localizacao && project.latitude != null && project.longitude != null);
-
-  if (!hasLocation) {
-    return (
-      <div className="border-2 border-black border-dashed p-4 mb-6 flex items-center gap-3">
-        <Sun size={18} className="flex-shrink-0" />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm" style={{ fontWeight: 700 }}>Estudo de conforto térmico</p>
-          <p className="text-xs text-black/60" style={{ fontWeight: 300 }}>
-            Informe a localização do projeto (ou vincule uma obra) para gerar o estudo automático de premissas.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  const r = analisarConfortoTermico({
-    localizacao: project.localizacao!,
-    latitude: project.latitude!,
-    longitude: project.longitude!,
-    tipoEdificacao: project.type,
-    orientacao: (project.orientacao as Orientacao) || 'N',
-    areaConstruida: project.area ? Number(project.area) : undefined,
-  });
-
-  const chips: { Icon: React.ComponentType<any>; label: string; value: string }[] = [
-    { Icon: Thermometer, label: 'Temp. média', value: `${r.dados.tempMedia}°C` },
-    { Icon: Droplets, label: 'Umidade', value: `${r.dados.umidadeMedia}%` },
-    { Icon: Wind, label: 'Ventos', value: r.dados.ventosPredominantes },
-    { Icon: CompassIcon, label: 'Exposição', value: r.exposicao },
-  ];
-
-  return (
-    <>
-      <div className="border-2 border-black mb-6">
-        <div className="flex items-center justify-between px-4 py-3 border-b-2 border-black">
-          <p className="text-sm flex items-center gap-2" style={{ fontWeight: 700 }}>
-            <Sun size={15} /> Conforto térmico — {r.dados.classificacao}
-          </p>
-          <div className="flex items-center gap-2">
-            <button onClick={() => openThermalReport(r, {
-              projeto: project.name,
-              localizacao: project.localizacao!,
-              latitude: project.latitude!,
-              longitude: project.longitude!,
-              tipo: project.type,
-              area: project.area,
-            })}
-              className="text-xs px-3 py-1.5 text-white border border-black transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-black flex items-center gap-1.5"
-              style={{ fontWeight: 600, background: 'linear-gradient(135deg,#1C7ED6,#1971C2)' }}>
-              <Download size={12} /> Exportar PDF
-            </button>
-            <button onClick={() => setShowReport(true)}
-              className="text-xs px-3 py-1.5 bg-black text-white hover:bg-white hover:text-black border border-black transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-black" style={{ fontWeight: 600 }}>
-              Ver estudo completo
-            </button>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-black">
-          {chips.map(c => (
-            <div key={c.label} className="bg-white px-4 py-3">
-              <p className="text-[9px] font-mono uppercase tracking-[0.15em] text-black/50 flex items-center gap-1 mb-1"><c.Icon size={10} /> {c.label}</p>
-              <p className="text-sm" style={{ fontWeight: 700 }}>{c.value}</p>
-            </div>
-          ))}
-        </div>
-        <div className="px-4 py-3 border-t-2 border-black">
-          <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-black/50 mb-1.5">Desafio principal</p>
-          <p className="text-sm" style={{ fontWeight: 300 }}>{r.desafio} · Potencial: {r.potencial} · Eficiência estimada {r.eficiencia}</p>
-        </div>
-      </div>
-
-      {showReport && <ThermalReport project={project} result={r} onClose={() => setShowReport(false)} />}
-    </>
-  );
-}
-
-// Relatório completo do estudo térmico (modal em tela cheia)
-function ThermalReport({ project, result, onClose }: {
-  project: ArchProject; result: ReturnType<typeof analisarConfortoTermico>; onClose: () => void;
-}) {
-  const r = result;
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  const Section = ({ title, items }: { title: string; items: string[] }) => (
-    <div className="mb-5">
-      <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/50 mb-2">{title}</p>
-      <ul className="space-y-1.5">
-        {items.map((it, i) => (
-          <li key={i} className="text-sm text-white/90 flex gap-2" style={{ fontWeight: 300 }}>
-            <span className="text-white/40 flex-shrink-0">—</span> {it}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-
-  return (
-    <div className="fixed inset-0 z-[250] bg-black/90 flex items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
-      <div className="w-full max-w-2xl my-8" style={{ background: '#0a0a0a', border: '2px solid #fff' }} onClick={e => e.stopPropagation()}>
-        {/* Cabeçalho */}
-        <div className="flex items-start justify-between px-6 py-5 border-b-2 border-white">
-          <div>
-            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/50 mb-1">Estudo de conforto térmico</p>
-            <h2 className="text-2xl text-white tracking-tight" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>{project.name}</h2>
-            <p className="text-sm text-white/60 mt-1" style={{ fontWeight: 300 }}>{project.localizacao} · {r.dados.clima}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => openThermalReport(r, {
-              projeto: project.name,
-              localizacao: project.localizacao!,
-              latitude: project.latitude!,
-              longitude: project.longitude!,
-              tipo: project.type,
-              area: project.area,
-            })}
-              className="flex items-center gap-1.5 text-xs text-white px-3 py-1.5 border border-white/30 transition-colors" style={{ fontWeight: 600, background: 'linear-gradient(135deg,#1C7ED6,#1971C2)' }}>
-              <Download size={13} /> Exportar PDF
-            </button>
-            <button onClick={onClose} className="text-white/70 hover:text-white p-1.5 hover:bg-white/10" title="Fechar (ESC)"><X size={20} /></button>
-          </div>
-        </div>
-
-        <div className="px-6 py-5">
-          {/* Métricas principais */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-white/20 border border-white/20 mb-6">
-            {[
-              ['Classificação', r.dados.classificacao],
-              ['Temp. média', `${r.dados.tempMedia}°C`],
-              ['Amplitude', `${r.dados.tempMax - r.dados.tempMin}°C`],
-              ['Umidade', `${r.dados.umidadeMedia}%`],
-              ['Ventos', r.dados.ventosPredominantes],
-              ['Velocidade', `${r.dados.velocidadeVento} m/s`],
-              ['Exposição', r.exposicao],
-              ['Período crítico', r.periodoCritico],
-            ].map(([label, val]) => (
-              <div key={label} style={{ background: '#0a0a0a' }} className="px-3 py-2.5">
-                <p className="text-[9px] font-mono uppercase tracking-[0.12em] text-white/40 mb-0.5">{label}</p>
-                <p className="text-sm text-white" style={{ fontWeight: 600 }}>{val}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Ventos por período */}
-          <div className="border border-white/20 p-4 mb-6">
-            <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/50 mb-2 flex items-center gap-1.5"><Wind size={12} /> Ventos predominantes</p>
-            <p className="text-sm text-white/90" style={{ fontWeight: 300 }}>
-              Período quente: <b style={{ fontWeight: 700 }}>{r.dados.periodoVentoQuente}</b> · Período frio: <b style={{ fontWeight: 700 }}>{r.dados.periodoVentoFrio}</b>
-            </p>
-          </div>
-
-          {/* Recomendações principais */}
-          <Section title="Recomendações principais" items={r.recomendacoes} />
-          {/* Soluções */}
-          <Section title="Estratégias arquitetônicas" items={r.dados.solucoes.arquitetonicas} />
-          <Section title="Estratégias construtivas" items={r.dados.solucoes.construtivas} />
-          <Section title="Detalhes técnicos" items={r.dados.solucoes.detalhes} />
-
-          <p className="text-[10px] text-white/40 mt-6" style={{ fontWeight: 300 }}>
-            Estudo automático de premissas, gerado a partir da localização e orientação. Serve como diretriz inicial de projeto e deve ser validado pelo responsável técnico.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
 function FileViewer({ file, onClose }: { file: ArchFile; onClose: () => void }) {
   const isImg = file.type.startsWith('image/');
   const href = fileHref(file);

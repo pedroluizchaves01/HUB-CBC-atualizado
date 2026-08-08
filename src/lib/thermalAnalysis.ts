@@ -413,3 +413,66 @@ export function coordsDeLocalizacao(localizacao: string): { lat: number; lon: nu
   if (COORDS_CIDADES[nome]) return COORDS_CIDADES[nome];
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// EMBASAMENTO TÉCNICO — normas, referências e comentários que fundamentam
+// as recomendações do estudo. Usado no dashboard técnico do relatório.
+// ---------------------------------------------------------------------------
+
+export interface Norma {
+  codigo: string;
+  titulo: string;
+  aplicacao: string;
+}
+
+export interface Referencia {
+  autor: string;
+  obra: string;
+  ano: string;
+}
+
+// Normas técnicas brasileiras aplicáveis ao conforto térmico e desempenho.
+export const NORMAS_TECNICAS: Norma[] = [
+  { codigo: 'ABNT NBR 15220', titulo: 'Desempenho térmico de edificações', aplicacao: 'Zoneamento bioclimático brasileiro e diretrizes construtivas para cada zona.' },
+  { codigo: 'ABNT NBR 15575', titulo: 'Edificações habitacionais — Desempenho', aplicacao: 'Exige níveis mínimos de desempenho térmico para paredes, coberturas e aberturas.' },
+  { codigo: 'ABNT NBR 16401', titulo: 'Instalações de ar-condicionado', aplicacao: 'Parâmetros de conforto térmico (temperatura e umidade operativas) para ambientes.' },
+  { codigo: 'ASHRAE 55', titulo: 'Thermal Environmental Conditions', aplicacao: 'Modelo de conforto adaptativo — referência internacional para zona de conforto.' },
+];
+
+// Referências bibliográficas do campo do conforto ambiental.
+export const REFERENCIAS: Referencia[] = [
+  { autor: 'LAMBERTS, R.; DUTRA, L.; PEREIRA, F.', obra: 'Eficiência Energética na Arquitetura', ano: '2014' },
+  { autor: 'FROTA, A. B.; SCHIFFER, S. R.', obra: 'Manual de Conforto Térmico', ano: '2001' },
+  { autor: 'OLGYAY, V.', obra: 'Design with Climate', ano: '1963' },
+  { autor: 'GIVONI, B.', obra: 'Man, Climate and Architecture', ano: '1969' },
+];
+
+// Comentário técnico que fundamenta a estratégia conforme a classificação climática.
+export function comentarioTecnico(classificacao: string): string {
+  switch (classificacao) {
+    case 'Quente Úmido':
+      return 'Em climas quentes e úmidos, a estratégia dominante é a ventilação natural cruzada e permanente (Givoni, 1969), removendo calor e umidade por convecção. A NBR 15220 recomenda, para as zonas bioclimáticas equivalentes (Z7/Z8), grandes aberturas sombreadas e envoltória leve e refletiva. O sombreamento das aberturas é prioritário sobre a inércia térmica.';
+    case 'Quente Seco':
+      return 'Em climas quentes e secos, a inércia térmica da envoltória é a estratégia principal (Olgyay, 1963): paredes de maior massa amortecem a amplitude térmica diária, liberando calor à noite. A ventilação é seletiva (noturna). O resfriamento evaporativo tem alto potencial dada a baixa umidade relativa.';
+    case 'Temperado':
+    case 'Subtropical':
+      return 'Em climas temperados/subtropicais, o desafio é o equilíbrio sazonal (Lamberts et al., 2014): captar sol no inverno e bloquear no verão. A orientação Norte das fachadas principais e o uso de proteções solares horizontais dimensionadas para a latitude permitem ganho solar no inverno e sombreamento no verão. A NBR 15575 estabelece o desempenho mínimo da envoltória.';
+    default:
+      return 'A estratégia bioclimática deve equilibrar ganhos e perdas de calor conforme a estação, priorizando meios passivos de climatização (Lamberts et al., 2014) antes de recorrer a sistemas ativos, conforme diretriz da NBR 15220.';
+  }
+}
+
+// Análise da orientação escolhida (comentário sobre a fachada frontal).
+export function comentarioOrientacao(orientacao: string): string {
+  const map: Record<string, string> = {
+    N: 'A fachada Norte recebe sol constante e de baixa altura no inverno — ideal para ambientes de permanência prolongada no hemisfério sul, com proteção horizontal para o verão.',
+    S: 'A fachada Sul recebe pouca insolação direta no hemisfério sul, sendo indicada para áreas de serviço, circulação ou ambientes que exigem luz difusa e estável.',
+    L: 'A fachada Leste recebe sol da manhã, de baixa altura e fácil de bloquear com proteções verticais. Boa para quartos (sol matinal), evitando o calor da tarde.',
+    O: 'A fachada Oeste recebe o sol da tarde, intenso e de difícil controle (baixa altura). Exige proteção solar reforçada e é a orientação mais crítica para ganho de calor.',
+    NE: 'A orientação Nordeste combina sol da manhã e insolação de inverno — favorável, com atenção ao sombreamento no início do dia no verão.',
+    SE: 'A orientação Sudeste recebe sol ameno da manhã e pouca carga térmica à tarde — equilibrada para a maioria dos ambientes.',
+    SO: 'A orientação Sudoeste soma o sol intenso da tarde à menor insolação de inverno — requer proteção solar cuidadosa contra o superaquecimento vespertino.',
+    NO: 'A orientação Noroeste recebe sol de inverno e o crítico sol da tarde no verão — demanda proteções mistas (horizontais e verticais).',
+  };
+  return map[orientacao] || map.N;
+}
