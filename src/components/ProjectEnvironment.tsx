@@ -18,13 +18,14 @@ import {
   Compass, FolderOpen, Plus, ArrowLeftRight, LogOut, Ruler, Lock,
   CheckCircle2, Clock, AlertTriangle, X, Pencil, Trash2, Upload,
   Download, FileText, ChevronRight, MessageSquare, ThumbsUp, Send, Eye, Loader2,
-  Sun, Wind, Thermometer, Droplets, Compass as CompassIcon,
+  Sun, Wind, Thermometer, Droplets, Compass as CompassIcon, ClipboardList,
 } from 'lucide-react';
 import { subscribeCollection, saveDoc, removeDoc } from '../lib/firebaseDb';
 import { PROJECT_BG } from '../lib/projectBackground';
 import { sendTelegramDocument } from '../lib/telegramService';
 import { analisarConfortoTermico, coordsDeLocalizacao, type Orientacao } from '../lib/thermalAnalysis';
 import { openThermalReport } from '../lib/thermalReportHtml';
+import { DEFAULT_BRIEFING, BRIEFING_GROUPS, type BriefingQuestion, type BriefingAnswer } from '../lib/briefingTemplate';
 
 interface Props {
   role: string;
@@ -96,6 +97,11 @@ interface ArchProject {
   latitude?: number;
   longitude?: number;
   orientacao?: string;     // fachada frontal: N, S, L, O, NE, SE, SO, NO
+  // Briefing do cliente (primeira etapa). Perguntas editáveis pelo arquiteto.
+  briefingQuestions?: BriefingQuestion[];
+  briefingAnswers?: BriefingAnswer[];
+  briefingDone?: boolean;
+  briefingDoneAt?: string;
 }
 
 // Paleta MONOCROMÁTICA: preto absoluto (#000) e branco absoluto (#fff).
@@ -196,10 +202,13 @@ export default function ProjectEnvironment({
   const newProject = (): ArchProject => ({
     id: uid(), name: '', clientName: '', clientId: '', type: 'Residencial', area: '', responsible: '',
     status: 'ativo',
-    phases: PHASE_TEMPLATE.map((name, i) => ({
-      name, state: i === 0 ? 'em_elaboracao' : 'bloqueada', files: [], events: [],
+    phases: PHASE_TEMPLATE.map((name) => ({
+      name, state: 'bloqueada', files: [], events: [],
     })),
     createdAt: new Date().toISOString(), notes: '',
+    briefingQuestions: DEFAULT_BRIEFING.map(q => ({ ...q })),
+    briefingAnswers: [],
+    briefingDone: false,
   });
 
   const persist = (p: ArchProject) => {
@@ -394,6 +403,31 @@ function ProjectDetail({
 
   const update = (phases: ArchPhase[]) => onPersist({ ...project, phases });
 
+  // Briefing: salva respostas (rascunho) e conclui (destrava o Levantamento).
+  const saveBriefingAnswers = (answers: BriefingAnswer[]) => {
+    onPersist({ ...project, briefingAnswers: answers });
+  };
+  const finishBriefing = (answers: BriefingAnswer[]) => {
+    // Destrava a primeira fase de projeto e registra o evento no histórico dela.
+    const phases = project.phases.map((ph, i) => {
+      if (i === 0 && ph.state === 'bloqueada') {
+        return {
+          ...ph,
+          state: 'em_elaboracao' as PhaseState,
+          events: [...ph.events, {
+            id: uid('ev'), kind: 'comentario' as const, author: userName, role,
+            at: new Date().toISOString(), text: 'Briefing respondido pelo cliente. Levantamento liberado.',
+          }],
+        };
+      }
+      return ph;
+    });
+    onPersist({ ...project, briefingAnswers: answers, briefingDone: true, briefingDoneAt: new Date().toISOString(), phases });
+  };
+  const updateBriefingQuestions = (questions: BriefingQuestion[]) => {
+    onPersist({ ...project, briefingQuestions: questions });
+  };
+
   const withEvent = (idx: number, ev: Omit<PhaseEvent, 'id' | 'at' | 'author' | 'role'>): ArchPhase[] =>
     project.phases.map((ph, i) => i === idx ? {
       ...ph, events: [...ph.events, { ...ev, id: uid('ev'), author: userName, role, at: new Date().toISOString() }],
@@ -501,6 +535,14 @@ function ProjectDetail({
           </div>
         </div>
       </div>
+
+      {/* Briefing do cliente (primeira etapa) */}
+      <BriefingCard
+        project={project}
+        isAdmin={isAdmin}
+        onSaveAnswers={saveBriefingAnswers}
+        onFinish={finishBriefing}
+      />
 
       {/* Resumo do estudo de conforto térmico */}
       <ThermalSummary project={project} />
@@ -759,6 +801,162 @@ function FileCard({ file, isAdmin, onRemove, onView }: {
 // ---------------------------------------------------------------------------
 // Resumo do estudo de conforto térmico (no detalhe do projeto)
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Briefing do cliente — primeira etapa do projeto
+// ---------------------------------------------------------------------------
+function BriefingCard({ project, isAdmin, onSaveAnswers, onFinish }: {
+  project: ArchProject;
+  isAdmin: boolean;
+  onSaveAnswers: (a: BriefingAnswer[]) => void;
+  onFinish: (a: BriefingAnswer[]) => void;
+}) {
+  const [open, setOpen] = useState(!project.briefingDone);
+  const questions = project.briefingQuestions && project.briefingQuestions.length > 0
+    ? project.briefingQuestions
+    : DEFAULT_BRIEFING;
+
+  const [draft, setDraft] = useState<Record<string, string>>(() => {
+    const m: Record<string, string> = {};
+    (project.briefingAnswers || []).forEach(a => { m[a.questionId] = a.answer; });
+    return m;
+  });
+
+  const toAnswers = (): BriefingAnswer[] =>
+    questions.map(q => ({ questionId: q.id, answer: draft[q.id] || '' })).filter(a => a.answer.trim() !== '');
+
+  const respondidas = questions.filter(q => (draft[q.id] || '').trim() !== '').length;
+  const total = questions.length;
+  const pct = total > 0 ? Math.round((respondidas / total) * 100) : 0;
+
+  const grupos = BRIEFING_GROUPS.filter(g => questions.some(q => q.group === g));
+  const gruposExtras = Array.from(new Set(questions.map(q => q.group))).filter(g => !BRIEFING_GROUPS.includes(g));
+  const ordemGrupos = [...grupos, ...gruposExtras];
+
+  // ----- Visão do ADMIN: lê as respostas -----
+  if (isAdmin) {
+    return (
+      <div className="border-2 border-black mb-6">
+        <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between px-4 py-3 border-b-2 border-black hover:bg-stone-50 transition-colors">
+          <p className="text-sm flex items-center gap-2" style={{ fontWeight: 700 }}>
+            <ClipboardList size={15} /> Briefing do cliente
+            {project.briefingDone
+              ? <span className="text-[10px] font-mono uppercase tracking-wider bg-black text-white px-2 py-0.5">Respondido</span>
+              : <span className="text-[10px] font-mono uppercase tracking-wider border border-black px-2 py-0.5">Aguardando cliente</span>}
+          </p>
+          <ChevronRight size={16} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
+        </button>
+        {open && (
+          <div className="p-4 space-y-4">
+            {!project.briefingDone && respondidas === 0 && (
+              <p className="text-xs text-black/60" style={{ fontWeight: 300 }}>
+                O cliente ainda não respondeu o briefing. As respostas aparecerão aqui assim que ele preencher. Você pode editar as perguntas no botão "Editar projeto".
+              </p>
+            )}
+            {ordemGrupos.map(grupo => {
+              const qs = questions.filter(q => q.group === grupo);
+              const respondidasGrupo = qs.filter(q => (draft[q.id] || '').trim() !== '');
+              if (respondidasGrupo.length === 0 && !project.briefingDone) return null;
+              return (
+                <div key={grupo}>
+                  <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-black/50 font-bold mb-2">{grupo}</p>
+                  <div className="space-y-2.5">
+                    {qs.map(q => (
+                      <div key={q.id} className="border-l-2 border-black pl-3">
+                        <p className="text-xs text-black/60" style={{ fontWeight: 500 }}>{q.text}</p>
+                        <p className="text-sm mt-0.5" style={{ fontWeight: 300 }}>
+                          {(draft[q.id] || '').trim() || <span className="text-black/30 italic">— sem resposta —</span>}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ----- Visão do CLIENTE já concluído: resumo compacto -----
+  if (project.briefingDone && !open) {
+    return (
+      <div className="border-2 border-black mb-6 flex items-center justify-between px-4 py-3">
+        <p className="text-sm flex items-center gap-2" style={{ fontWeight: 700 }}>
+          <CheckCircle2 size={16} /> Briefing concluído — obrigado!
+        </p>
+        <button onClick={() => setOpen(true)} className="text-xs px-3 py-1.5 border border-black hover:bg-black hover:text-white transition-colors" style={{ fontWeight: 600 }}>
+          Revisar respostas
+        </button>
+      </div>
+    );
+  }
+
+  // ----- Visão do CLIENTE: responde -----
+  return (
+    <div className="border-2 border-black mb-6">
+      <div className="px-4 py-4 border-b-2 border-black">
+        <p className="text-lg flex items-center gap-2" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>
+          <ClipboardList size={18} /> Briefing do seu projeto
+        </p>
+        <p className="text-xs text-black/60 mt-1" style={{ fontWeight: 300 }}>
+          Conte para o arquiteto o que você deseja. Quanto mais detalhes, melhor o projeto. Você pode salvar e continuar depois.
+        </p>
+        <div className="flex items-center gap-2 mt-3">
+          <div className="flex-1 h-1 bg-stone-200 relative">
+            <div className="absolute left-0 top-0 h-1 bg-black transition-all" style={{ width: `${pct}%` }} />
+          </div>
+          <span className="text-[11px] font-mono" style={{ fontWeight: 600 }}>{respondidas}/{total}</span>
+        </div>
+      </div>
+
+      <div className="p-4 space-y-5 max-h-[60vh] overflow-y-auto">
+        {ordemGrupos.map(grupo => (
+          <div key={grupo}>
+            <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-black/50 font-bold mb-3 pb-1 border-b border-black/20">{grupo}</p>
+            <div className="space-y-4">
+              {questions.filter(q => q.group === grupo).map(q => (
+                <div key={q.id}>
+                  <label className="block text-sm mb-1.5" style={{ fontWeight: 500 }}>{q.text}</label>
+                  <textarea
+                    value={draft[q.id] || ''}
+                    onChange={e => setDraft(d => ({ ...d, [q.id]: e.target.value }))}
+                    rows={2}
+                    placeholder="Sua resposta..."
+                    className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black placeholder:text-black/30"
+                    style={{ fontWeight: 300 }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-col sm:flex-row items-stretch gap-2 p-4 border-t-2 border-black">
+        <button
+          onClick={() => onSaveAnswers(toAnswers())}
+          className="flex items-center justify-center gap-1.5 border-2 border-black px-4 py-2.5 text-sm hover:bg-stone-50 transition-colors"
+          style={{ fontWeight: 600 }}>
+          <Send size={14} /> Salvar rascunho
+        </button>
+        <button
+          onClick={() => {
+            if (respondidas < total) {
+              if (!confirm(`Você respondeu ${respondidas} de ${total} perguntas. Deseja enviar assim mesmo? As não respondidas ficarão em branco.`)) return;
+            }
+            onFinish(toAnswers());
+            setOpen(false);
+          }}
+          className="flex-1 flex items-center justify-center gap-1.5 bg-black text-white px-4 py-2.5 text-sm hover:bg-white hover:text-black border-2 border-black transition-colors"
+          style={{ fontWeight: 700 }}>
+          <CheckCircle2 size={15} /> Concluir briefing e enviar
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ThermalSummary({ project }: { project: ArchProject }) {
   const [showReport, setShowReport] = useState(false);
   const hasLocation = !!(project.localizacao && project.latitude != null && project.longitude != null);
@@ -983,6 +1181,63 @@ function FileViewer({ file, onClose }: { file: ArchFile; onClose: () => void }) 
   );
 }
 
+// Editor das perguntas do briefing (usado dentro do ProjectEditor).
+function BriefingEditor({ questions, onChange }: {
+  questions: BriefingQuestion[];
+  onChange: (qs: BriefingQuestion[]) => void;
+}) {
+  const [openEd, setOpenEd] = useState(false);
+  const grupos = Array.from(new Set(questions.map(q => q.group)));
+
+  const updateText = (id: string, text: string) =>
+    onChange(questions.map(q => q.id === id ? { ...q, text } : q));
+  const remove = (id: string) => onChange(questions.filter(q => q.id !== id));
+  const addTo = (group: string) =>
+    onChange([...questions, { id: uid('q'), group, text: 'Nova pergunta' }]);
+
+  return (
+    <div className="border-2 border-black">
+      <button type="button" onClick={() => setOpenEd(!openEd)} className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-stone-50 transition-colors">
+        <span className="text-[10px] font-mono uppercase tracking-[0.12em] font-bold flex items-center gap-1.5">
+          <ClipboardList size={12} /> Perguntas do briefing ({questions.length})
+        </span>
+        <ChevronRight size={15} className={`transition-transform ${openEd ? 'rotate-90' : ''}`} />
+      </button>
+      {openEd && (
+        <div className="p-3 border-t-2 border-black space-y-4 max-h-[50vh] overflow-y-auto">
+          <p className="text-[10px] text-stone-400">O cliente responde estas perguntas como primeira etapa. Edite os textos, remova ou adicione o que quiser.</p>
+          {grupos.map(grupo => (
+            <div key={grupo}>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-black/50 font-bold">{grupo}</p>
+                <button type="button" onClick={() => addTo(grupo)} className="text-[10px] flex items-center gap-1 border border-black px-2 py-0.5 hover:bg-black hover:text-white transition-colors" style={{ fontWeight: 600 }}>
+                  <Plus size={10} /> Pergunta
+                </button>
+              </div>
+              <div className="space-y-2">
+                {questions.filter(q => q.group === grupo).map(q => (
+                  <div key={q.id} className="flex items-start gap-2">
+                    <textarea
+                      value={q.text}
+                      onChange={e => updateText(q.id, e.target.value)}
+                      rows={2}
+                      className="flex-1 border border-black px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-black"
+                      style={{ fontWeight: 300 }}
+                    />
+                    <button type="button" onClick={() => remove(q.id)} className="text-black/40 hover:text-black p-1 flex-shrink-0" title="Remover pergunta">
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProjectEditor({
   project, clients, obras, onChange, onSave, onCancel, onDelete,
 }: {
@@ -1134,6 +1389,12 @@ function ProjectEditor({
             <textarea value={p.notes} onChange={e => set({ notes: e.target.value })} rows={2}
               className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
           </div>
+
+          {/* Perguntas do briefing (editáveis) */}
+          <BriefingEditor
+            questions={p.briefingQuestions && p.briefingQuestions.length > 0 ? p.briefingQuestions : DEFAULT_BRIEFING}
+            onChange={qs => set({ briefingQuestions: qs })}
+          />
         </div>
         <div className="flex items-center gap-2 mt-5 pt-4 border-t-2 border-black">
           <button onClick={onSave} disabled={!p.name.trim()}
