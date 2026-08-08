@@ -24,6 +24,7 @@ import { subscribeCollection, saveDoc, removeDoc } from '../lib/firebaseDb';
 import { PROJECT_BG } from '../lib/projectBackground';
 import { sendTelegramDocument } from '../lib/telegramService';
 import { analisarConfortoTermico, coordsDeLocalizacao, type Orientacao } from '../lib/thermalAnalysis';
+import { openThermalReport } from '../lib/thermalReportHtml';
 
 interface Props {
   role: string;
@@ -799,10 +800,24 @@ function ThermalSummary({ project }: { project: ArchProject }) {
           <p className="text-sm flex items-center gap-2" style={{ fontWeight: 700 }}>
             <Sun size={15} /> Conforto térmico — {r.dados.classificacao}
           </p>
-          <button onClick={() => setShowReport(true)}
-            className="text-xs px-3 py-1.5 bg-black text-white hover:bg-white hover:text-black border border-black transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-black" style={{ fontWeight: 600 }}>
-            Ver estudo completo
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => openThermalReport(r, {
+              projeto: project.name,
+              localizacao: project.localizacao!,
+              latitude: project.latitude!,
+              longitude: project.longitude!,
+              tipo: project.type,
+              area: project.area,
+            })}
+              className="text-xs px-3 py-1.5 text-white border border-black transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-black flex items-center gap-1.5"
+              style={{ fontWeight: 600, background: 'linear-gradient(135deg,#1C7ED6,#1971C2)' }}>
+              <Download size={12} /> Exportar PDF
+            </button>
+            <button onClick={() => setShowReport(true)}
+              className="text-xs px-3 py-1.5 bg-black text-white hover:bg-white hover:text-black border border-black transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-black" style={{ fontWeight: 600 }}>
+              Ver estudo completo
+            </button>
+          </div>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-black">
           {chips.map(c => (
@@ -857,7 +872,20 @@ function ThermalReport({ project, result, onClose }: {
             <h2 className="text-2xl text-white tracking-tight" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>{project.name}</h2>
             <p className="text-sm text-white/60 mt-1" style={{ fontWeight: 300 }}>{project.localizacao} · {r.dados.clima}</p>
           </div>
-          <button onClick={onClose} className="text-white/70 hover:text-white p-1.5 hover:bg-white/10" title="Fechar (ESC)"><X size={20} /></button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => openThermalReport(r, {
+              projeto: project.name,
+              localizacao: project.localizacao!,
+              latitude: project.latitude!,
+              longitude: project.longitude!,
+              tipo: project.type,
+              area: project.area,
+            })}
+              className="flex items-center gap-1.5 text-xs text-white px-3 py-1.5 border border-white/30 transition-colors" style={{ fontWeight: 600, background: 'linear-gradient(135deg,#1C7ED6,#1971C2)' }}>
+              <Download size={13} /> Exportar PDF
+            </button>
+            <button onClick={onClose} className="text-white/70 hover:text-white p-1.5 hover:bg-white/10" title="Fechar (ESC)"><X size={20} /></button>
+          </div>
         </div>
 
         <div className="px-6 py-5">

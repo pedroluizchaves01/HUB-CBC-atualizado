@@ -346,12 +346,70 @@ export function analisarConfortoTermico(input: ThermalInputs): ThermalResult {
 
 // Estimativa simples de coordenadas a partir do texto de localização (fallback),
 // usando a base de cidades conhecidas por nome aproximado.
+// Tabela de coordenadas de cidades brasileiras (capitais + cidades relevantes,
+// com foco no Paraná/região de atuação). Usada para preencher lat/lon
+// automaticamente mesmo quando a cidade não tem dados climáticos completos —
+// nesse caso a análise usa interpolação por latitude.
+const COORDS_CIDADES: Record<string, { lat: number; lon: number }> = {
+  // Paraná
+  'campo mourão': { lat: -24.04, lon: -52.38 },
+  'curitiba': { lat: -25.43, lon: -49.27 },
+  'maringá': { lat: -23.42, lon: -51.94 },
+  'londrina': { lat: -23.31, lon: -51.16 },
+  'cascavel': { lat: -24.96, lon: -53.46 },
+  'ponta grossa': { lat: -25.09, lon: -50.16 },
+  'foz do iguaçu': { lat: -25.52, lon: -54.59 },
+  'guarapuava': { lat: -25.39, lon: -51.46 },
+  'paranaguá': { lat: -25.52, lon: -48.51 },
+  'apucarana': { lat: -23.55, lon: -51.46 },
+  'toledo': { lat: -24.71, lon: -53.74 },
+  'campo largo': { lat: -25.46, lon: -49.53 },
+  'umuarama': { lat: -23.76, lon: -53.32 },
+  'pato branco': { lat: -26.23, lon: -52.67 },
+  // Capitais e grandes cidades
+  'são paulo': { lat: -23.55, lon: -46.63 },
+  'rio de janeiro': { lat: -22.91, lon: -43.17 },
+  'belo horizonte': { lat: -19.92, lon: -43.94 },
+  'brasília': { lat: -15.79, lon: -47.88 },
+  'salvador': { lat: -12.97, lon: -38.51 },
+  'fortaleza': { lat: -3.73, lon: -38.52 },
+  'recife': { lat: -8.05, lon: -34.88 },
+  'porto alegre': { lat: -30.03, lon: -51.23 },
+  'campo grande': { lat: -20.44, lon: -54.62 },
+  'cuiabá': { lat: -15.60, lon: -56.10 },
+  'goiânia': { lat: -16.69, lon: -49.26 },
+  'florianópolis': { lat: -27.60, lon: -48.55 },
+  'vitória': { lat: -20.32, lon: -40.34 },
+  'manaus': { lat: -3.12, lon: -60.02 },
+  'belém': { lat: -1.46, lon: -48.50 },
+  'natal': { lat: -5.79, lon: -35.21 },
+  'joão pessoa': { lat: -7.12, lon: -34.86 },
+  'maceió': { lat: -9.67, lon: -35.74 },
+  'aracaju': { lat: -10.95, lon: -37.07 },
+  'teresina': { lat: -5.09, lon: -42.80 },
+  'são luís': { lat: -2.53, lon: -44.30 },
+  'palmas': { lat: -10.18, lon: -48.33 },
+  'porto velho': { lat: -8.76, lon: -63.90 },
+  'rio branco': { lat: -9.97, lon: -67.81 },
+  'macapá': { lat: 0.03, lon: -51.07 },
+  'boa vista': { lat: 2.82, lon: -60.67 },
+};
+
+// Normaliza o texto da cidade (remove UF, espaços, caixa) para casar na tabela.
+function normalizarCidade(localizacao: string): string {
+  return localizacao.trim().toLowerCase().split(',')[0].trim();
+}
+
 export function coordsDeLocalizacao(localizacao: string): { lat: number; lon: number } | null {
   if (!localizacao) return null;
+  // 1) Cidade com dados climáticos completos (base principal).
   const exato = CIDADES[localizacao];
   if (exato) return { lat: exato.latitude, lon: exato.longitude };
-  // tenta casar pelo início (ex.: "São Paulo")
-  const chave = Object.keys(CIDADES).find(k => k.toLowerCase().startsWith(localizacao.trim().toLowerCase().split(',')[0]));
+  // 2) Casa pelo início na base principal.
+  const chave = Object.keys(CIDADES).find(k => k.toLowerCase().startsWith(normalizarCidade(localizacao)));
   if (chave) return { lat: CIDADES[chave].latitude, lon: CIDADES[chave].longitude };
+  // 3) Tabela ampla de coordenadas (capitais + Paraná).
+  const nome = normalizarCidade(localizacao);
+  if (COORDS_CIDADES[nome]) return COORDS_CIDADES[nome];
   return null;
 }
