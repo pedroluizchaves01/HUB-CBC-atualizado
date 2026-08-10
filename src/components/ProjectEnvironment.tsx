@@ -44,6 +44,34 @@ interface Props {
   onGoToSelect?: () => void;         // vai para a tela de seleção
 }
 
+// Normaliza um cliente vindo do cadastro de obras para { id, name }.
+// Aceita variações de formato (name/nome/nomeCompleto/razaoSocial/fullName).
+function normalizeClient(c: any): { id: string; name: string } {
+  const id = c?.id ?? c?.uid ?? c?._id ?? c?.clientId ?? '';
+  const name = c?.name ?? c?.nome ?? c?.nomeCompleto ?? c?.fullName ?? c?.razaoSocial ?? c?.displayName ?? c?.email ?? '(sem nome)';
+  return { id: String(id), name: String(name) };
+}
+function normalizeClients(list: any[] | undefined): { id: string; name: string }[] {
+  if (!Array.isArray(list)) return [];
+  return list.map(normalizeClient).filter(c => c.id);
+}
+
+// Normaliza uma obra para { id, name, clientId, ... }.
+function normalizeObra(o: any): { id: string; name: string; clientId: string; type?: string; location?: string; area?: number } {
+  return {
+    id: String(o?.id ?? o?.uid ?? o?._id ?? ''),
+    name: String(o?.name ?? o?.nome ?? o?.titulo ?? o?.obra ?? '(sem nome)'),
+    clientId: String(o?.clientId ?? o?.clienteId ?? o?.cliente?.id ?? o?.client?.id ?? ''),
+    type: o?.type ?? o?.tipo,
+    location: o?.location ?? o?.localizacao ?? o?.endereco ?? o?.cidade,
+    area: typeof o?.area === 'number' ? o.area : (o?.area ? Number(o.area) : undefined),
+  };
+}
+function normalizeObras(list: any[] | undefined): { id: string; name: string; clientId: string; type?: string; location?: string; area?: number }[] {
+  if (!Array.isArray(list)) return [];
+  return list.map(normalizeObra).filter(o => o.id);
+}
+
 const PHASE_TEMPLATE = [
   'Levantamento e Programa',
   'Estudo Preliminar',
@@ -187,8 +215,11 @@ async function uploadArchFile(file: File): Promise<ArchFile> {
 // Componente principal: lista de projetos (admin) OU entra direto no projeto (cliente)
 // ---------------------------------------------------------------------------
 export default function ProjectEnvironment({
-  role, userName, clientId, clients = [], obras = [], onLogout, onSwitchEnvironment, onGoToSelect,
+  role, userName, clientId, clients: clientsRaw = [], obras: obrasRaw = [], onLogout, onSwitchEnvironment, onGoToSelect,
 }: Props) {
+  // Normaliza os dados vindos do cadastro de obras (tolerante a variações de formato).
+  const clients = normalizeClients(clientsRaw);
+  const obras = normalizeObras(obrasRaw);
   const [allProjects, setAllProjects] = useState<ArchProject[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [editing, setEditing] = useState<ArchProject | null>(null);
@@ -1526,25 +1557,40 @@ function ProjectEditor({
               className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
           </div>
 
-          {/* Cliente: puxa dos clientes já cadastrados */}
+          {/* Cliente: puxa dos clientes já cadastrados na área de obras */}
           <div>
-            <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Cliente</label>
+            <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">
+              Cliente {clients.length > 0 && <span className="text-stone-400 normal-case font-normal">({clients.length} cadastrado{clients.length > 1 ? 's' : ''})</span>}
+            </label>
             {clients.length > 0 ? (
-              <select
-                value={p.clientId || ''}
-                onChange={e => {
-                  const c = clients.find(x => x.id === e.target.value);
-                  set({ clientId: e.target.value, clientName: c?.name || '', obraId: '' });
-                }}
-                className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
-              >
-                <option value="">Selecione um cliente cadastrado…</option>
-                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <>
+                <select
+                  value={p.clientId && clients.some(c => c.id === p.clientId) ? p.clientId : ''}
+                  onChange={e => {
+                    const c = clients.find(x => x.id === e.target.value);
+                    set({ clientId: e.target.value, clientName: c?.name || '', obraId: '' });
+                  }}
+                  className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                >
+                  <option value="">Selecione um cliente cadastrado…</option>
+                  {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                {/* Se o projeto tem um clientName que não casa com nenhum id, mostra e permite manter */}
+                {p.clientName && !clients.some(c => c.id === p.clientId) && (
+                  <p className="text-[10px] text-amber-700 mt-1">
+                    Cliente atual do projeto: "{p.clientName}" — selecione acima para vincular ao cadastro.
+                  </p>
+                )}
+              </>
             ) : (
-              <input value={p.clientName} onChange={e => set({ clientName: e.target.value })}
-                placeholder="Nome do cliente"
-                className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
+              <>
+                <input value={p.clientName} onChange={e => set({ clientName: e.target.value, clientId: '' })}
+                  placeholder="Nome do cliente"
+                  className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
+                <p className="text-[10px] text-stone-400 mt-1">
+                  Nenhum cliente do cadastro de obras foi carregado aqui. Digite o nome manualmente, ou verifique se há clientes cadastrados na área de Obras.
+                </p>
+              </>
             )}
           </div>
 
