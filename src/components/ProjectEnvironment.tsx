@@ -39,6 +39,7 @@ interface Props {
   clientId?: string;
   clients?: { id: string; name: string }[];
   obras?: { id: string; name: string; clientId: string; type?: string; location?: string; area?: number }[];
+  onAddObra?: (obra: any) => Promise<void> | void;
   onLogout: () => void;
   onSwitchEnvironment: () => void;   // vai direto para Obra
   onGoToSelect?: () => void;         // vai para a tela de seleção
@@ -215,7 +216,7 @@ async function uploadArchFile(file: File): Promise<ArchFile> {
 // Componente principal: lista de projetos (admin) OU entra direto no projeto (cliente)
 // ---------------------------------------------------------------------------
 export default function ProjectEnvironment({
-  role, userName, clientId, clients: clientsRaw = [], obras: obrasRaw = [], onLogout, onSwitchEnvironment, onGoToSelect,
+  role, userName, clientId, clients: clientsRaw = [], obras: obrasRaw = [], onAddObra, onLogout, onSwitchEnvironment, onGoToSelect,
 }: Props) {
   // Normaliza os dados vindos do cadastro de obras (tolerante a variações de formato).
   const clients = normalizeClients(clientsRaw);
@@ -295,7 +296,7 @@ export default function ProjectEnvironment({
         />
         {editing && (
           <ProjectEditor
-            project={editing} clients={clients} obras={obras}
+            project={editing} clients={clients} obras={obras} onAddObra={onAddObra}
             onCancel={() => setEditing(null)} onChange={setEditing}
             onSave={saveEditing} onDelete={undefined}
           />
@@ -401,7 +402,7 @@ export default function ProjectEnvironment({
 
       {editing && (
         <ProjectEditor
-          project={editing} clients={clients} obras={obras}
+          project={editing} clients={clients} obras={obras} onAddObra={onAddObra}
           onCancel={() => setEditing(null)} onChange={setEditing}
           onSave={saveEditing}
           onDelete={editing.name ? () => { setConfirmDelete(editing); setEditing(null); } : undefined}
@@ -1529,19 +1530,53 @@ function BriefingEditor({ questions, onChange }: {
 }
 
 function ProjectEditor({
-  project, clients, obras, onChange, onSave, onCancel, onDelete,
+  project, clients, obras, onAddObra, onChange, onSave, onCancel, onDelete,
 }: {
   project: ArchProject;
   clients: { id: string; name: string }[];
   obras: { id: string; name: string; clientId: string; type?: string; location?: string; area?: number }[];
+  onAddObra?: (obra: any) => Promise<void> | void;
   onChange: (p: ArchProject) => void;
   onSave: () => void; onCancel: () => void; onDelete?: () => void;
 }) {
   const p = project;
   const set = (patch: Partial<ArchProject>) => onChange({ ...p, ...patch });
+  const [criandoObra, setCriandoObra] = useState(false);
+  const [novaObraNome, setNovaObraNome] = useState('');
+  const [salvandoObra, setSalvandoObra] = useState(false);
 
   // Obras filtradas pelo cliente escolhido (se houver), para o vínculo fazer sentido.
   const obrasDisponiveis = p.clientId ? obras.filter(o => o.clientId === p.clientId) : obras;
+
+  // Cria uma obra nova (mínima) vinculada ao cliente selecionado, e já a vincula ao projeto.
+  const criarObra = async () => {
+    if (!novaObraNome.trim() || !onAddObra) return;
+    if (!p.clientId) { alert('Selecione um cliente antes de criar a obra.'); return; }
+    setSalvandoObra(true);
+    try {
+      const novaObra = {
+        id: `project-${Date.now()}`,
+        name: novaObraNome.trim(),
+        clientId: p.clientId,
+        type: p.type || 'Residencial',
+        status: 'ativo',
+        budget: 0,
+        startDate: new Date().toISOString().split('T')[0],
+        location: p.localizacao || 'Não informada',
+        area: p.area ? parseFloat(p.area) : undefined,
+        description: `Obra criada a partir do projeto "${p.name || 'novo'}".`,
+      };
+      await onAddObra(novaObra);
+      // Vincula imediatamente ao projeto.
+      set({ obraId: novaObra.id });
+      setNovaObraNome('');
+      setCriandoObra(false);
+    } catch (e: any) {
+      alert(`Não foi possível criar a obra: ${e?.message || 'erro'}.`);
+    } finally {
+      setSalvandoObra(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={onCancel}>
@@ -1626,6 +1661,38 @@ function ProjectEditor({
               </option>
               {obrasDisponiveis.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
             </select>
+
+            {/* Criar obra nova ali mesmo (precisa de cliente selecionado e da função onAddObra) */}
+            {onAddObra && p.clientId && (
+              !criandoObra ? (
+                <button type="button" onClick={() => setCriandoObra(true)}
+                  className="mt-2 flex items-center gap-1.5 text-xs px-3 py-1.5 border-2 border-black hover:bg-black hover:text-white transition-colors" style={{ fontWeight: 600 }}>
+                  <Plus size={12} /> Criar nova obra para este cliente
+                </button>
+              ) : (
+                <div className="mt-2 border-2 border-black p-3 space-y-2">
+                  <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold">Nome da nova obra</label>
+                  <input
+                    value={novaObraNome}
+                    onChange={e => setNovaObraNome(e.target.value)}
+                    placeholder="Ex.: Residência Jardim Botânico"
+                    autoFocus
+                    className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                  />
+                  <p className="text-[10px] text-stone-400">A obra será criada na área de Obras, vinculada a este cliente, e já ligada ao projeto.</p>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={criarObra} disabled={!novaObraNome.trim() || salvandoObra}
+                      className="flex-1 bg-black text-white px-3 py-2 text-sm disabled:opacity-30 hover:bg-white hover:text-black border-2 border-black transition-colors flex items-center justify-center gap-1.5" style={{ fontWeight: 600 }}>
+                      {salvandoObra ? <><Loader2 size={13} className="animate-spin" /> Criando…</> : <><CheckCircle2 size={13} /> Criar e vincular</>}
+                    </button>
+                    <button type="button" onClick={() => { setCriandoObra(false); setNovaObraNome(''); }}
+                      className="px-3 py-2 text-sm border-2 border-black hover:bg-stone-50 transition-colors" style={{ fontWeight: 600 }}>
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )
+            )}
             <p className="text-[10px] text-stone-400 mt-1">Liga o projeto a uma obra e puxa a localização dela para o estudo térmico.</p>
           </div>
 
