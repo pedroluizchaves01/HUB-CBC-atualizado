@@ -243,7 +243,7 @@ export default function ProjectEnvironment({
   // ----- Página do projeto (shell com sidebar) -----
   if (selectedProject) {
     return (
-      <div className="projeto-dark min-h-screen text-white relative">
+      <div className="projeto-clay min-h-screen relative">
         <ProjectBackground />
         <ProjectShell
           project={selectedProject}
@@ -278,7 +278,7 @@ export default function ProjectEnvironment({
     const meu = projects[0];
     useEffect(() => { if (meu) setSelected(meu.id); }, [meu?.id]);
     return (
-      <div className="projeto-dark min-h-screen text-white relative">
+      <div className="projeto-clay min-h-screen relative">
         <ProjectBackground />
         <div className="relative z-10 flex items-center justify-center min-h-screen px-6">
           <div className="text-center max-w-md">
@@ -298,7 +298,7 @@ export default function ProjectEnvironment({
 
   // ----- Admin: lista/seleção de projetos -----
   return (
-    <div className="projeto-dark min-h-screen text-white relative">
+    <div className="projeto-clay min-h-screen relative">
       <ProjectBackground />
       <header className="bg-black/40 backdrop-blur-xl border-b border-white/15 sticky top-0 z-20">
         <div className="max-w-6xl mx-auto px-5 py-4 flex items-center justify-between">
@@ -391,11 +391,19 @@ export default function ProjectEnvironment({
 
 // Fundo compartilhado (foto desfocada + véu).
 function ProjectBackground() {
+  // Fundo creme sólido + foto como faixa suave e desbotada só no topo.
   return (
-    <div className="fixed inset-0 z-0 pointer-events-none" aria-hidden>
-      <div className="absolute inset-0 bg-cover bg-center"
-        style={{ backgroundImage: `url(${PROJECT_BG})`, filter: 'blur(8px) brightness(0.5)', transform: 'scale(1.06)' }} />
-      <div className="absolute inset-0 bg-black/60" />
+    <div className="fixed inset-0 z-0 pointer-events-none" aria-hidden style={{ background: 'var(--clay-cream)' }}>
+      <div className="absolute top-0 left-0 right-0 h-64"
+        style={{
+          backgroundImage: `url(${PROJECT_BG})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          filter: 'blur(2px)',
+          opacity: 0.18,
+          maskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.9), transparent)',
+          WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.9), transparent)',
+        }} />
     </div>
   );
 }
@@ -448,10 +456,10 @@ function ProjectShell({
     return (
       <button
         onClick={() => { setPage(item.id); setSidebarOpen(false); }}
-        className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors text-sm relative ${
-          active ? 'bg-white text-black' : 'text-white/70 hover:text-white hover:bg-white/10'
+        className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-all text-sm relative mx-2 my-0.5 ${
+          active ? 'clay-nav-active' : 'text-clay-soft hover:bg-black/5 rounded-xl'
         }`}
-        style={{ fontWeight: active ? 700 : 400 }}
+        style={{ fontWeight: active ? 700 : 400, width: 'calc(100% - 16px)' }}
       >
         <item.Icon size={16} className="flex-shrink-0" />
         <span className="flex-1 min-w-0 truncate">{item.label}</span>
@@ -464,7 +472,7 @@ function ProjectShell({
   return (
     <div className="relative z-10 flex min-h-screen">
       {/* Sidebar */}
-      <aside className={`fixed lg:sticky top-0 left-0 h-screen w-72 flex-shrink-0 bg-black/60 backdrop-blur-xl border-r border-white/15 z-30 transition-transform ${
+      <aside className={`clay-sidebar fixed lg:sticky top-0 left-0 h-screen w-72 flex-shrink-0 z-30 transition-transform ${
         sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
       } flex flex-col`}>
         {/* topo da sidebar */}
@@ -753,7 +761,7 @@ function PageFase({ project, idx, isAdmin, userName, role, onPersist }: {
       </div>
 
       {/* Banner de estado */}
-      <div className="flex items-center gap-3 p-4 mb-5 text-white" style={{ background: ss.grad }}>
+      <div className="flex items-center gap-3 p-4 mb-5 text-white clay-color" style={{ background: ss.grad }}>
         <ss.Icon size={22} className="flex-shrink-0" />
         <div>
           <p className="text-[10px] font-mono uppercase tracking-[0.12em] opacity-80">Situação atual</p>
@@ -838,8 +846,8 @@ function PageTermico({ project }: { project: ArchProject }) {
       {/* Métricas */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         {metrics.map(m => (
-          <div key={m.label} className="p-4 text-white flex items-center gap-3" style={{ background: m.grad }}>
-            <div className="w-11 h-11 flex-shrink-0 bg-white/20 flex items-center justify-center"><m.Icon size={22} /></div>
+          <div key={m.label} className="p-4 text-white flex items-center gap-3 clay-color" style={{ background: m.grad }}>
+            <div className="w-11 h-11 flex-shrink-0 bg-white/20 flex items-center justify-center" style={{ borderRadius: 14 }}><m.Icon size={22} /></div>
             <div>
               <p className="text-[9px] uppercase tracking-[0.1em] opacity-90" style={{ fontWeight: 500 }}>{m.label}</p>
               <p className="text-xl leading-none" style={{ fontWeight: 800 }}>{m.value}</p>

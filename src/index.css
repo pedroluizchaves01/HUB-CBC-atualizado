@@ -655,72 +655,139 @@ div#root:nth-of-type(1) > div#login_container:nth-of-type(1) > div#root:nth-of-t
 
 
 /* ============================================================
-   AMBIENTE DE PROJETOS — tema escuro sobre foto de fundo
-   Sobrepõe a regra global de texto (#94A3B8) forçando branco,
-   e converte os painéis claros em "vidro escuro" para legibilidade.
+   AMBIENTE DE PROJETOS — CLAYMORPHISM (tema claro creme/taupe)
+   Cores: creme #FFF2E1 (fundo), taupe #A79277 (acento).
+   Superfícies "clay": cantos muito arredondados + sombra dupla
+   (externa escura + interna clara) para efeito de argila fofa.
    ============================================================ */
 
-/* Texto branco por padrão dentro do ambiente (escapa do cinza global) */
-.projeto-dark p,
-.projeto-dark span,
-.projeto-dark h1,
-.projeto-dark h2,
-.projeto-dark h3,
-.projeto-dark label,
-.projeto-dark button,
-.projeto-dark td,
-.projeto-dark th,
-.projeto-dark div {
-  color: #FFFFFF !important;
+.projeto-clay {
+  --clay-cream: #FFF2E1;
+  --clay-taupe: #A79277;
+  --clay-taupe-dark: #7d6b54;
+  --clay-surface: #FBEAD4;      /* superfície levemente mais escura que o fundo */
+  --clay-surface-2: #F5E1CB;
+  --clay-text: #4a3f30;         /* marrom escuro para texto principal */
+  --clay-text-soft: #8a7a63;    /* texto secundário */
+  background-color: var(--clay-cream);
+  color: var(--clay-text);
 }
 
-/* Painéis/cartões que eram brancos viram vidro escuro translúcido */
-.projeto-dark .bg-white {
-  background-color: rgba(20, 20, 20, 0.55) !important;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+/* Texto: escapa da regra global cinza (#94A3B8), usa marrom quente */
+.projeto-clay p,
+.projeto-clay span,
+.projeto-clay h1,
+.projeto-clay h2,
+.projeto-clay h3,
+.projeto-clay label,
+.projeto-clay td,
+.projeto-clay th,
+.projeto-clay li,
+.projeto-clay div {
+  color: var(--clay-text);
+}
+.projeto-clay .text-white\/60,
+.projeto-clay .text-white\/50,
+.projeto-clay .text-white\/40,
+.projeto-clay .text-white\/70 { color: var(--clay-text-soft) !important; }
+
+/* Sombra clay reutilizável */
+.projeto-clay .clay,
+.projeto-clay .bg-white,
+.projeto-clay .bg-black\/30,
+.projeto-clay .bg-black\/40 {
+  background: var(--clay-surface) !important;
+  border-radius: 24px !important;
+  border: none !important;
+  box-shadow:
+    -6px -6px 14px rgba(255,255,255,0.75),
+    8px 8px 20px rgba(124,107,84,0.28),
+    inset 2px 2px 4px rgba(255,255,255,0.5),
+    inset -2px -2px 6px rgba(124,107,84,0.10) !important;
+  backdrop-filter: none !important;
 }
 
-/* Fundos claros auxiliares (stone-50/100) também escurecem */
-.projeto-dark .bg-stone-50,
-.projeto-dark .bg-stone-100 {
-  background-color: rgba(255, 255, 255, 0.08) !important;
+/* Botões clay pretos → taupe puffy */
+.projeto-clay .bg-black {
+  background: var(--clay-taupe) !important;
+  color: #fff !important;
+  border-radius: 16px !important;
+  border: none !important;
+  box-shadow:
+    -3px -3px 8px rgba(255,255,255,0.5),
+    4px 4px 10px rgba(124,107,84,0.35) !important;
+}
+.projeto-clay .bg-black * { color: #fff !important; }
+.projeto-clay .bg-black:hover {
+  box-shadow:
+    inset -2px -2px 6px rgba(255,255,255,0.25),
+    inset 3px 3px 8px rgba(124,107,84,0.4) !important;
 }
 
-/* Bordas pretas viram brancas translúcidas */
-.projeto-dark .border-black {
-  border-color: rgba(255, 255, 255, 0.35) !important;
-}
-.projeto-dark .border-stone-300,
-.projeto-dark .border-stone-200 {
-  border-color: rgba(255, 255, 255, 0.2) !important;
-}
-
-/* Botões/estados PRETOS sólidos (bg-black) permanecem pretos, texto branco.
-   Mas o hover que invertia para branco precisa continuar legível: */
-.projeto-dark .bg-black {
-  background-color: #000000 !important;
-}
-.projeto-dark .hover\:bg-black:hover {
-  background-color: rgba(255, 255, 255, 0.15) !important;
-}
-.projeto-dark .hover\:text-black:hover {
-  color: #FFFFFF !important;
+/* Bordas viram contornos suaves ou somem (clay não usa borda dura) */
+.projeto-clay .border-2,
+.projeto-clay .border,
+.projeto-clay [class*="border-white"],
+.projeto-clay [class*="border-black"] {
+  border-color: transparent !important;
 }
 
-/* Inputs/textarea: fundo escuro, texto branco, placeholder legível */
-.projeto-dark input,
-.projeto-dark textarea,
-.projeto-dark select {
-  background-color: rgba(0, 0, 0, 0.4) !important;
-  color: #FFFFFF !important;
+/* Inputs e textarea clay: afundados (inset) */
+.projeto-clay input,
+.projeto-clay textarea,
+.projeto-clay select {
+  background: var(--clay-cream) !important;
+  color: var(--clay-text) !important;
+  border-radius: 14px !important;
+  border: none !important;
+  box-shadow:
+    inset 3px 3px 7px rgba(124,107,84,0.22),
+    inset -3px -3px 7px rgba(255,255,255,0.7) !important;
 }
-.projeto-dark input::placeholder,
-.projeto-dark textarea::placeholder {
-  color: rgba(255, 255, 255, 0.45) !important;
+.projeto-clay input::placeholder,
+.projeto-clay textarea::placeholder { color: var(--clay-text-soft) !important; opacity: 0.7; }
+
+/* Barra lateral: superfície clay creme */
+.projeto-clay .clay-sidebar {
+  background: var(--clay-cream) !important;
+  box-shadow: 6px 0 24px rgba(124,107,84,0.15) !important;
 }
 
-/* Imagens de arquivo: remove o grayscale forçado, deixa a foto aparecer */
-.projeto-dark img {
-  filter: none !important;
+/* Item de menu ativo: pílula taupe afundada */
+.projeto-clay .clay-nav-active {
+  background: var(--clay-taupe) !important;
+  color: #fff !important;
+  border-radius: 14px !important;
+  box-shadow:
+    inset 2px 2px 5px rgba(124,107,84,0.5),
+    inset -2px -2px 5px rgba(255,255,255,0.2) !important;
 }
+.projeto-clay .clay-nav-active * { color: #fff !important; }
+
+/* Imagens sem filtro */
+.projeto-clay img { filter: none !important; }
+
+/* Barras de progresso e trilhos ficam suaves */
+.projeto-clay .bg-white\/15,
+.projeto-clay .bg-white\/20,
+.projeto-clay .bg-stone-200 {
+  background: rgba(124,107,84,0.18) !important;
+}
+
+/* Cards coloridos (métricas, gradientes) ganham cantos e sombra clay,
+   mantendo a cor viva por dentro */
+.projeto-clay .clay-color {
+  border-radius: 20px !important;
+  color: #fff !important;
+  box-shadow:
+    -4px -4px 10px rgba(255,255,255,0.6),
+    6px 6px 16px rgba(124,107,84,0.3) !important;
+}
+.projeto-clay .clay-color * { color: #fff !important; }
+
+/* texto suave utilitário */
+.projeto-clay .text-clay-soft { color: var(--clay-text-soft) !important; }
+
+/* faixas de gradiente (topo de relatórios/banners) mantêm cor */
+.projeto-clay .keep-gradient,
+.projeto-clay .keep-gradient * { }
