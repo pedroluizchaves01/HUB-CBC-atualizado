@@ -662,34 +662,48 @@ div#root:nth-of-type(1) > div#login_container:nth-of-type(1) > div#root:nth-of-t
    ============================================================ */
 
 .projeto-clay {
-  --clay-cream: #FFF2E1;
+  --clay-cream: #E8D5BC;         /* FUNDO mais escuro (amadeirado) para dar contraste */
   --clay-taupe: #A79277;
   --clay-taupe-dark: #7d6b54;
-  --clay-surface: #FBEAD4;      /* superfície levemente mais escura que o fundo */
-  --clay-surface-2: #F5E1CB;
-  --clay-text: #4a3f30;         /* marrom escuro para texto principal */
-  --clay-text-soft: #8a7a63;    /* texto secundário */
+  --clay-surface: #FFF6EA;       /* SUPERFÍCIE clara — salta à frente do fundo */
+  --clay-surface-2: #FFF2E1;
+  --clay-text: #4a3f30;          /* marrom escuro para texto principal */
+  --clay-text-soft: #6b5d47;     /* texto secundário (mais escuro = mais legível) */
   background-color: var(--clay-cream);
   color: var(--clay-text);
 }
 
-/* Texto: escapa da regra global cinza (#94A3B8), usa marrom quente */
+/* Texto: escapa da regra global cinza (#94A3B8 !important), usa marrom quente.
+   Precisa de !important para vencer a regra global de mesma especificidade. */
 .projeto-clay p,
 .projeto-clay span,
 .projeto-clay h1,
 .projeto-clay h2,
 .projeto-clay h3,
+.projeto-clay h4,
 .projeto-clay label,
 .projeto-clay td,
 .projeto-clay th,
 .projeto-clay li,
+.projeto-clay a,
+.projeto-clay small,
+.projeto-clay strong,
+.projeto-clay b,
 .projeto-clay div {
-  color: var(--clay-text);
+  color: var(--clay-text) !important;
 }
-.projeto-clay .text-white\/60,
-.projeto-clay .text-white\/50,
-.projeto-clay .text-white\/40,
-.projeto-clay .text-white\/70 { color: var(--clay-text-soft) !important; }
+/* Textos secundarios (classes utilitarias de opacidade) -> marrom suave legivel */
+.projeto-clay [class*="text-white/"],
+.projeto-clay [class*="text-black/"],
+.projeto-clay [class*="text-stone-"],
+.projeto-clay [class*="text-slate-"] { color: var(--clay-text-soft) !important; }
+/* Mas dentro de superficies coloridas e botoes taupe, o texto continua branco */
+.projeto-clay .clay-color,
+.projeto-clay .clay-color *,
+.projeto-clay .bg-black,
+.projeto-clay .bg-black *,
+.projeto-clay .clay-nav-active,
+.projeto-clay .clay-nav-active * { color: #fff !important; }
 
 /* Sombra clay reutilizável */
 .projeto-clay .clay,
