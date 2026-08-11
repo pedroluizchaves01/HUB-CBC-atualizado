@@ -572,7 +572,7 @@ function ProjectShell({
           </div>
         )}
 
-        <div className="max-w-5xl w-full">
+        <div className="w-full max-w-[1400px]">
           <ProjectPage page={page} project={project} isAdmin={isAdmin} userName={userName} role={role} onPersist={onPersist} onNavigate={setPage} />
         </div>
       </div>
@@ -829,7 +829,7 @@ function PageBriefing({ project, isAdmin, userName, role, onPersist }: {
         <PageHeader eyebrow="Etapa 02" title="Briefing de Premissas" subtitle="Programa de necessidades e desejos do cliente" />
         {temResposta && (
           <button onClick={exportarPdf}
-            className="flex items-center gap-1.5 text-xs text-white px-4 py-2 border border-white/30 transition-colors" style={{ fontWeight: 600, background: 'linear-gradient(135deg,#1C7ED6,#1971C2)' }}>
+            className="v-btn flex items-center gap-1.5 text-[13px] px-4 py-2.5" style={{ fontWeight: 700 }}>
             <Download size={13} /> Exportar PDF
           </button>
         )}
@@ -1015,7 +1015,7 @@ function PageTermico({ project }: { project: ArchProject }) {
 
       {/* Zona de conforto */}
       <div className="v-card p-4 mb-4">
-        <p className="text-xs uppercase tracking-[0.1em]  mb-2" style={{ fontWeight: 700 }}>Faixa de conforto térmico</p>
+        <p className="text-xs uppercase tracking-[0.1em] text-vsoft mb-2" style={{ fontWeight: 700 }}>Faixa de conforto térmico</p>
         <ComfortBar media={d.tempMedia} />
         <p className="text-[10px]  mt-1" style={{ fontWeight: 300 }}>A zona de conforto (18–26°C) é destacada. O marcador indica a temperatura média local.</p>
       </div>
@@ -1024,30 +1024,30 @@ function PageTermico({ project }: { project: ArchProject }) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         <Card title="Rosa dos Ventos" icon={Wind} accent="#1C7ED6">
           <div className="aspect-square max-w-[220px] mx-auto"><WindRose predominante={d.ventosPredominantes} /></div>
-          <p className="text-[11px]  mt-2 leading-relaxed" style={{ fontWeight: 300 }}>
-            Ventos predominantes de <b className="text-white">{d.ventosPredominantes}</b>. Quente: {d.periodoVentoQuente}. Frio: {d.periodoVentoFrio}.
+          <p className="text-[11px] text-vsoft mt-2 leading-relaxed" style={{ fontWeight: 300 }}>
+            Ventos predominantes de <b style={{ color: 'var(--v-text)', fontWeight: 700 }}>{d.ventosPredominantes}</b>. Quente: {d.periodoVentoQuente}. Frio: {d.periodoVentoFrio}.
           </p>
         </Card>
         <Card title="Trajetória Solar" icon={Sun} accent="#F59F00">
           <SolarChart latitude={d.latitude} />
-          <p className="text-[11px]  mt-2 leading-relaxed" style={{ fontWeight: 300 }}>
+          <p className="text-[11px] text-vsoft mt-2 leading-relaxed" style={{ fontWeight: 300 }}>
             {comentarioOrientacao((project.orientacao as string) || 'N')}
           </p>
         </Card>
         <Card title="Temperatura ao longo do ano" icon={Thermometer} accent="#E8590C">
           <TempBars media={d.tempMedia} max={d.tempMax} min={d.tempMin} />
-          <p className="text-[11px]  mt-2 leading-relaxed" style={{ fontWeight: 300 }}>
-            Período crítico: <b className="text-white">{r.periodoCritico}</b>. Amplitude de {d.tempMax - d.tempMin}°C.
+          <p className="text-[11px] text-vsoft mt-2 leading-relaxed" style={{ fontWeight: 300 }}>
+            Período crítico: <b style={{ color: 'var(--v-text)', fontWeight: 700 }}>{r.periodoCritico}</b>. Amplitude de {d.tempMax - d.tempMin}°C.
           </p>
         </Card>
       </div>
 
       {/* Fundamentação técnica */}
       <div className="v-card p-5 mb-4">
-        <p className="text-xs uppercase tracking-[0.1em]  mb-2 flex items-center gap-2" style={{ fontWeight: 700 }}>
+        <p className="text-xs uppercase tracking-[0.1em] text-vsoft mb-2 flex items-center gap-2" style={{ fontWeight: 700 }}>
           <BookOpen size={14} /> Fundamentação técnica
         </p>
-        <p className="text-sm  leading-relaxed" style={{ fontWeight: 300 }}>{comentarioTecnico(d.classificacao)}</p>
+        <p className="text-sm text-vsoft leading-relaxed" style={{ fontWeight: 300 }}>{comentarioTecnico(d.classificacao)}</p>
       </div>
 
       {/* Estratégias em 3 colunas */}
@@ -1059,10 +1059,10 @@ function PageTermico({ project }: { project: ArchProject }) {
 
       {/* Detalhes técnicos */}
       <div className="v-card p-5 mb-4">
-        <p className="text-xs uppercase tracking-[0.1em]  mb-3" style={{ fontWeight: 700 }}>Diretrizes dimensionais</p>
+        <p className="text-xs uppercase tracking-[0.1em] text-vsoft mb-3" style={{ fontWeight: 700 }}>Diretrizes dimensionais</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
           {d.solucoes.detalhes.map((it, i) => (
-            <div key={i} className="flex gap-2 text-sm " style={{ fontWeight: 300 }}>
+            <div key={i} className="flex gap-2 text-sm text-vsoft" style={{ fontWeight: 300 }}>
               <span className="">—</span> {it}
             </div>
           ))}
@@ -1072,7 +1072,7 @@ function PageTermico({ project }: { project: ArchProject }) {
       {/* Normas e referências */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="v-card p-5">
-          <p className="text-xs uppercase tracking-[0.1em]  mb-3 flex items-center gap-2" style={{ fontWeight: 700 }}>
+          <p className="text-xs uppercase tracking-[0.1em] text-vsoft mb-3 flex items-center gap-2" style={{ fontWeight: 700 }}>
             <FileText size={14} /> Normas aplicáveis
           </p>
           <div className="space-y-3">
@@ -1086,7 +1086,7 @@ function PageTermico({ project }: { project: ArchProject }) {
           </div>
         </div>
         <div className="v-card p-5">
-          <p className="text-xs uppercase tracking-[0.1em]  mb-3 flex items-center gap-2" style={{ fontWeight: 700 }}>
+          <p className="text-xs uppercase tracking-[0.1em] text-vsoft mb-3 flex items-center gap-2" style={{ fontWeight: 700 }}>
             <BookOpen size={14} /> Referências bibliográficas
           </p>
           <div className="space-y-2.5">
@@ -1304,7 +1304,7 @@ function BriefingCard({ project, isAdmin, onSaveAnswers, onFinish }: {
             setOpen(false);
           }}
           className="flex-1 flex items-center justify-center gap-1.5 text-white px-4 py-2.5 text-sm transition-opacity hover:opacity-90 "
-          style={{ fontWeight: 700, background: 'linear-gradient(135deg,#0CA678,#1971C2)' }}>
+          style={{ fontWeight: 700, background: 'var(--v-accent-grad)' }}>
           <CheckCircle2 size={15} /> Concluir briefing e enviar
         </button>
       </div>
