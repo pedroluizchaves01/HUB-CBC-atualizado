@@ -248,8 +248,24 @@ export default function ProjectEnvironment({
     return () => unsub();
   }, []);
 
-  const projects = isAdminReal ? allProjects : allProjects.filter(p => p.clientId && p.clientId === clientId);
+  // Projetos visíveis ao usuário. Para cliente, casa o clientId de forma tolerante:
+  // compara como string e também aceita o vínculo por obraId, caso o clientId tenha
+  // sido gravado de forma diferente entre o cadastro (obras) e o projeto.
+  const clientKey = clientId != null ? String(clientId) : '';
+  const projects = isAdminReal
+    ? allProjects
+    : allProjects.filter(p => {
+        const pc = p.clientId != null ? String(p.clientId) : '';
+        return clientKey !== '' && pc === clientKey;
+      });
   const selectedProject = projects.find(p => p.id === selected);
+
+  // Auto-seleção do único projeto do cliente. Fica AQUI no topo (nunca depois de um
+  // return condicional) para respeitar as Regras dos Hooks e não crashar a tela.
+  const meuProjeto = !isAdminReal ? projects[0] : undefined;
+  useEffect(() => {
+    if (meuProjeto && selected == null) setSelected(meuProjeto.id);
+  }, [meuProjeto?.id]);
 
   const progressOf = (p: ArchProject) => {
     if (!p.phases?.length) return 0;
@@ -320,21 +336,37 @@ export default function ProjectEnvironment({
 
   // ----- Cliente sem projeto selecionado: entra direto no seu projeto -----
   if (!isAdminReal) {
-    const meu = projects[0];
-    useEffect(() => { if (meu) setSelected(meu.id); }, [meu?.id]);
+    const meu = meuProjeto;
+    // Diagnóstico: se não há projeto, mostra por que (ajuda a achar descompasso de clientId).
+    const idsNosProjetos = Array.from(new Set(allProjects.map(p => p.clientId).filter(Boolean)));
+    const temProjetosMasNaoCasa = !meu && allProjects.length > 0 && clientKey !== '';
     return (
       <div className="projeto-violet min-h-screen relative">
         <ProjectBackground />
         <div className="relative z-10 flex items-center justify-center min-h-screen px-6">
-          <div className="text-center max-w-md">
-            <Compass size={40} strokeWidth={1.25} className="mx-auto mb-4 opacity-60" />
-            <p className="text-lg" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>
+          <div className="v-card text-center max-w-md p-10">
+            <Compass size={40} strokeWidth={1.5} className="mx-auto mb-4" style={{ color: 'var(--v-accent)' }} />
+            <p className="text-lg" style={{ fontWeight: 800 }}>
               {meu ? 'Abrindo seu projeto…' : 'Nenhum projeto ainda'}
             </p>
-            <p className="text-sm text-white/60 mt-2" style={{ fontWeight: 300 }}>
-              {meu ? '' : 'Assim que seu arquiteto criar seu projeto, ele aparecerá aqui.'}
+            <p className="text-[13px] mt-2" style={{ color: 'var(--v-text-soft)' }}>
+              {meu ? 'Um instante.'
+                : temProjetosMasNaoCasa
+                  ? 'Existe projeto cadastrado, mas ele não está vinculado a este login. Peça ao arquiteto para conferir o vínculo do cliente no projeto.'
+                  : 'Assim que seu arquiteto criar seu projeto, ele aparecerá aqui.'}
             </p>
-            <button onClick={onLogout} className="mt-6 text-xs font-mono uppercase tracking-wider text-white/50 hover:text-white">Sair</button>
+            {temProjetosMasNaoCasa && (
+              <div className="v-tint mt-4 p-3 text-left">
+                <p className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--v-text-mute)', fontWeight: 700 }}>Diagnóstico</p>
+                <p className="text-[11px] mt-1" style={{ color: 'var(--v-text-soft)' }}>
+                  Seu identificador de cliente: <code style={{ fontWeight: 700 }}>{clientKey || '(vazio)'}</code>
+                </p>
+                <p className="text-[11px] mt-1" style={{ color: 'var(--v-text-soft)' }}>
+                  Vínculos nos projetos: {idsNosProjetos.length ? idsNosProjetos.map(x => <code key={x} className="mr-1" style={{ fontWeight: 700 }}>{String(x)}</code>) : '(nenhum)'}
+                </p>
+              </div>
+            )}
+            <button onClick={onLogout} className="mt-6 text-[11px] uppercase tracking-wider hover:underline" style={{ color: 'var(--v-text-mute)', fontWeight: 700 }}>Sair</button>
           </div>
         </div>
       </div>

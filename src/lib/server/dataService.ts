@@ -138,6 +138,8 @@ export async function listCollectionForUser(collection: string, req: Requester):
 
   if (collection === "clients") return all.filter((d) => d.id === clientId);
   if (collection === "projects") return all.filter((d) => d.clientId === clientId);
+  // Projetos de arquitetura: ligados ao cliente diretamente por clientId (não por projectId de obra).
+  if (collection === "arch_projects") return all.filter((d) => d.clientId === clientId);
 
   if (PROJECT_SCOPED.has(collection)) {
     // Descobre os projetos do cliente e filtra os itens por projectId.
@@ -205,6 +207,18 @@ export async function assertCanWriteDoc(
     return;
   }
 
+  // 4a) 'arch_projects': o cliente dono pode escrever (aprovar/comentar nas fases).
+  if (collection === "arch_projects") {
+    const existing = await getDocById(collection, id).catch(() => null);
+    if (existing && existing.clientId !== clientId) {
+      throw new Error("Você não tem permissão para alterar estes dados.");
+    }
+    if (incomingData && incomingData.clientId && incomingData.clientId !== clientId) {
+      throw new Error("Você não tem permissão para alterar estes dados.");
+    }
+    return;
+  }
+
   // 4) 'projects': só o próprio projeto do cliente.
   if (collection === "projects") {
     const existing = await getDocById(collection, id).catch(() => null);
@@ -259,4 +273,71 @@ export async function batchSet(collection: string, docs: Array<{ id: string; dat
     batch.set(db.collection(collection).doc(id), sanitize(data), { merge: true });
   }
   await batch.commit();
+}
+
+/**
+ * Autorização de LEITURA de arquivo (Telegram) por posse.
+ * Corrige o IDOR de download: um cliente só baixa arquivos que pertencem a algum
+ * dos seus projetos. Admin e marketing podem baixar qualquer arquivo.
+ *
+ * Varre as coleções que guardam arquivos com fileId (projetos de arquitetura e
+ * projetos/obras) e confirma que o fileId aparece em um documento do cliente.
+ */
+export async function assertCanReadFile(fileId: string, req: Requester): Promise<void> {
+  if (!fileId || typeof fileId !== "string") {
+    throw new Error("Arquivo inválido.");
+  }
+  // Admin e marketing: acesso liberado (seguem a regra de papel, sem posse).
+  if (req.role !== "client") return;
+
+  const clientId = req.clientId;
+  if (!clientId) throw new Error("Acesso negado.");
+
+  // Coleta todos os fileIds que pertencem a projetos do cliente.
+  const ownedFileIds = new Set<string>();
+
+  const collectFrom = (docs: any[]) => {
+    for (const d of docs) {
+      // arch_projects: arquivos ficam em phases[].files[].fileId
+      if (Array.isArray(d?.phases)) {
+        for (const ph of d.phases) {
+          for (const f of (ph?.files || [])) {
+            if (f?.fileId) ownedFileIds.add(String(f.fileId));
+          }
+        }
+      }
+      // projects/obras: arquivos podem ficar em files[].fileId ou documents[].fileId
+      for (const key of ["files", "documents", "attachments"]) {
+        for (const f of (d?.[key] || [])) {
+          if (f?.fileId) ownedFileIds.add(String(f.fileId));
+        }
+      }
+    }
+  };
+
+  // arch_projects do cliente
+  try {
+    const arch = await listCollection("arch_projects");
+    collectFrom(arch.filter((d) => d.clientId === clientId));
+  } catch { /* coleção pode não existir ainda */ }
+
+  // projects (obras) do cliente + itens project-scoped que tenham fileId
+  try {
+    const projects = await listCollection("projects");
+    const mine = projects.filter((d) => d.clientId === clientId);
+    collectFrom(mine);
+    const myProjectIds = new Set(mine.map((p) => p.id));
+
+    // Itens ligados a projeto que guardem arquivos (ex.: comprovantes do cliente).
+    for (const coll of PROJECT_SCOPED) {
+      try {
+        const items = await listCollection(coll);
+        collectFrom(items.filter((it) => myProjectIds.has(it.projectId)));
+      } catch { /* ignora coleção ausente */ }
+    }
+  } catch { /* ignora */ }
+
+  if (!ownedFileIds.has(String(fileId))) {
+    throw new Error("Acesso negado.");
+  }
 }

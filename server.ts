@@ -1349,7 +1349,7 @@ Retorne estritamente um objeto JSON com as chaves indicadas. Não inclua markdow
 // ==========================================
 
 // Config mascarada (nunca revela o token). Exige sessão.
-app.get("/api/telegram/config", requireAuth, async (req, res) => {
+app.get("/api/telegram/config", requireAuth, requireRole("admin"), async (req, res) => {
   try {
     return res.json(await telegram.getMaskedTelegramConfig());
   } catch (e: any) {
@@ -1393,11 +1393,18 @@ app.post("/api/telegram/upload", requireAuth, fileUploadJson, async (req, res) =
 // Proxy de download — exige sessão; valida o fileId (anti SSRF/path traversal).
 app.get("/api/telegram/file/:fileId", requireAuth, async (req, res) => {
   try {
+    const u = req.sessionUser!;
+    // Autorização por posse: cliente só baixa arquivos dos próprios projetos.
+    // Admin/marketing passam direto (checado dentro de assertCanReadFile).
+    await dataService.assertCanReadFile(req.params.fileId, { role: u.role, clientId: u.clientId, userId: u.id });
     const { buffer, contentType, fileName } = await telegram.fetchFileBinary(req.params.fileId);
     res.setHeader("Content-Type", contentType);
     res.setHeader("Content-Disposition", `inline; filename="${fileName}"`);
     return res.send(buffer);
   } catch (e: any) {
+    if (/Acesso negado/i.test(e?.message || "")) {
+      return res.status(403).send("Acesso negado.");
+    }
     console.error("Erro no download do Telegram:", e);
     return res.status(400).send(`Erro ao buscar arquivo: ${e.message || e}`);
   }
@@ -1419,7 +1426,7 @@ app.post("/api/telegram/test", requireAuth, requireRole("admin"), async (req, re
 // ---------------------------------------------------------------------------
 
 // Config mascarada — qualquer usuário autenticado pode ver o estado (sem segredos).
-app.get("/api/whatsapp/config", requireAuth, async (req, res) => {
+app.get("/api/whatsapp/config", requireAuth, requireRole("admin"), async (req, res) => {
   try {
     return res.json(await whatsapp.getMaskedWhatsAppConfig());
   } catch (e: any) {
@@ -1437,7 +1444,7 @@ app.post("/api/whatsapp/config", requireAuth, requireRole("admin"), async (req, 
 });
 
 // Diagnóstico: para o Evolution, consulta se a instância ainda está pareada.
-app.get("/api/whatsapp/status", requireAuth, async (req, res) => {
+app.get("/api/whatsapp/status", requireAuth, requireRole("admin"), async (req, res) => {
   try {
     return res.json(await whatsapp.getWhatsAppStatus());
   } catch (e: any) {
