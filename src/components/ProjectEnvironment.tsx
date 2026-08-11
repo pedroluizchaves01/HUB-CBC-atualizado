@@ -21,6 +21,7 @@ import {
   Sun, Wind, Thermometer, Droplets, Compass as CompassIcon, ClipboardList,
   Home, Menu, BookOpen, Leaf, Building2,
   MapPin, Palette, Users, Wallet, Sparkles,
+  Search, Bell, MessageSquare,
 } from 'lucide-react';
 import { subscribeCollection, saveDoc, removeDoc } from '../lib/firebaseDb';
 import { PROJECT_BG } from '../lib/projectBackground';
@@ -275,7 +276,7 @@ export default function ProjectEnvironment({
   // ----- Página do projeto (shell com sidebar) -----
   if (selectedProject) {
     return (
-      <div className="projeto-clay min-h-screen relative">
+      <div className="projeto-violet min-h-screen relative">
         <ProjectBackground />
         <ProjectShell
           project={selectedProject}
@@ -310,7 +311,7 @@ export default function ProjectEnvironment({
     const meu = projects[0];
     useEffect(() => { if (meu) setSelected(meu.id); }, [meu?.id]);
     return (
-      <div className="projeto-clay min-h-screen relative">
+      <div className="projeto-violet min-h-screen relative">
         <ProjectBackground />
         <div className="relative z-10 flex items-center justify-center min-h-screen px-6">
           <div className="text-center max-w-md">
@@ -330,68 +331,68 @@ export default function ProjectEnvironment({
 
   // ----- Admin: lista/seleção de projetos -----
   return (
-    <div className="projeto-clay min-h-screen relative">
+    <div className="projeto-violet min-h-screen relative">
       <ProjectBackground />
-      <header className="bg-black/40 backdrop-blur-xl border-b border-white/15 sticky top-0 z-20">
+      <header className="sticky top-0 z-20 v-glass rounded-none" style={{ borderRadius: 0 }}>
         <div className="max-w-6xl mx-auto px-5 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="w-10 h-10 bg-black flex items-center justify-center"><Compass size={20} /></span>
+            <span className="w-10 h-10 rounded-[13px] flex items-center justify-center text-white" style={{ background: 'var(--v-accent-grad)', fontWeight: 800 }}>C</span>
             <div>
-              <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-white/50">Chaves Brites Correa</p>
-              <h1 className="text-lg"><span style={{ fontWeight: 700 }}>Estúdio</span><span style={{ fontWeight: 300 }}> de Projetos</span></h1>
+              <p className="text-[10px] uppercase tracking-[0.22em]" style={{ color: 'var(--v-text-mute)', fontWeight: 700 }}>Chaves Brites Correa</p>
+              <h1 className="text-lg" style={{ fontWeight: 800 }}>Estúdio de Projetos</h1>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-xs font-mono uppercase">
-            <button onClick={onSwitchEnvironment} className="px-3 py-1.5 border border-white/40 hover:bg-white hover:text-black transition-colors flex items-center gap-1.5"><ArrowLeftRight size={13} /> Obra</button>
-            {onGoToSelect && <button onClick={onGoToSelect} className="px-3 py-1.5 text-white/60 hover:text-white">Início</button>}
-            <button onClick={onLogout} className="px-3 py-1.5 text-white/60 hover:text-white flex items-center gap-1.5"><LogOut size={13} /> Sair</button>
+          <div className="flex items-center gap-2 text-xs">
+            <button onClick={onSwitchEnvironment} className="v-btn-ghost px-4 py-2 flex items-center gap-1.5"><ArrowLeftRight size={13} /> Obra</button>
+            {onGoToSelect && <button onClick={onGoToSelect} className="px-3 py-2 hover:underline" style={{ color: 'var(--v-text-soft)', fontWeight: 600 }}>Início</button>}
+            <button onClick={onLogout} className="px-3 py-2 hover:underline flex items-center gap-1.5" style={{ color: 'var(--v-text-soft)', fontWeight: 600 }}><LogOut size={13} /> Sair</button>
           </div>
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-5 py-8 relative z-10">
-        <div className="flex items-end justify-between mb-8">
+        <div className="flex items-end justify-between gap-4 mb-6 flex-wrap">
           <div>
-            <h2 className="text-3xl tracking-tight" style={{ fontFamily: 'var(--font-serif)' }}>
-              <span style={{ fontWeight: 300 }}>Projetos de </span><span style={{ fontWeight: 700 }}>Arquitetura</span>
-            </h2>
-            <p className="text-sm text-white/60 mt-2" style={{ fontWeight: 300 }}>Selecione um projeto para entrar, ou cadastre um novo.</p>
+            <h2 className="text-2xl sm:text-3xl m-0" style={{ fontWeight: 800, letterSpacing: '-0.02em' }}>Projetos de Arquitetura</h2>
+            <p className="text-[13px] mt-1.5" style={{ color: 'var(--v-text-soft)' }}>Selecione um projeto para entrar, ou cadastre um novo.</p>
           </div>
-          <button onClick={() => setEditing(newProject())}
-            className="flex items-center gap-2 bg-black text-white px-5 py-2.5 text-sm border border-white/35 hover:bg-white hover:text-black transition-colors" style={{ fontWeight: 600 }}>
+          <button onClick={() => setEditing(newProject())} className="v-btn flex items-center gap-2 px-5 py-3 text-[13px]">
             <Plus size={16} /> Novo projeto
           </button>
         </div>
 
         {projects.length === 0 ? (
-          <div className="border-2 border-dashed border-white/30 p-12 text-center">
-            <FolderOpen size={36} strokeWidth={1.25} className="mx-auto mb-3 opacity-50" />
-            <p className="text-sm text-white/60" style={{ fontWeight: 300 }}>Nenhum projeto cadastrado. Clique em "Novo projeto" para começar.</p>
+          <div className="v-card p-12 text-center">
+            <FolderOpen size={36} strokeWidth={1.5} className="mx-auto mb-3" style={{ color: 'var(--v-text-mute)' }} />
+            <p className="text-[13px]" style={{ color: 'var(--v-text-soft)' }}>Nenhum projeto cadastrado. Clique em "Novo projeto" para começar.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
             {projects.map(p => {
               const prog = progressOf(p);
+              const chipCls = p.status === 'ativo' ? 'v-chip-ok' : 'v-chip-mute';
+              const statusLabel = p.status === 'ativo' ? 'Ativo' : (p.status || 'Pausado');
               return (
-                <div key={p.id} className="group relative border-2 border-white/25 hover:border-white bg-black/30 backdrop-blur-md transition-colors cursor-pointer"
+                <div key={p.id} className="group v-card p-[22px] flex flex-col gap-[18px] cursor-pointer transition-transform hover:-translate-y-0.5"
                   onClick={() => setSelected(p.id)}>
-                  <div className="p-6">
-                    <div className="flex items-start justify-between mb-8">
-                      <Ruler size={22} strokeWidth={1.5} />
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px]" style={{ color: 'var(--v-text-soft)', fontWeight: 600 }}>{p.type}</span>
+                    <div className="flex items-center gap-2">
+                      <span className={`v-chip ${chipCls}`}>{statusLabel}</span>
                       <button onClick={e => { e.stopPropagation(); setConfirmDelete(p); }}
-                        className="opacity-0 group-hover:opacity-100 text-white/40 hover:text-white transition-opacity" title="Excluir"><Trash2 size={16} /></button>
+                        className="opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: 'var(--v-text-mute)' }} title="Excluir"><Trash2 size={15} /></button>
                     </div>
-                    <h3 className="text-xl leading-tight" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>{p.name}</h3>
-                    <p className="text-xs text-white/60 mt-1" style={{ fontWeight: 300 }}>{p.clientName || 'Sem cliente'} · {p.type}</p>
-                    <div className="mt-6">
-                      <div className="flex justify-between items-baseline mb-2">
-                        <span className="text-[10px] font-mono uppercase tracking-[0.1em] text-white/50">Progresso</span>
-                        <span className="text-lg font-mono" style={{ fontWeight: 700 }}>{prog}%</span>
-                      </div>
-                      <div className="h-px bg-white/20 relative">
-                        <div className="absolute left-0 top-0 h-px bg-white" style={{ width: `${prog}%` }} />
-                      </div>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <b className="text-[18px] leading-tight" style={{ fontWeight: 800, letterSpacing: '-0.01em' }}>{p.name}</b>
+                    <span className="text-[12px]" style={{ color: 'var(--v-text-soft)' }}>{p.clientName || 'Sem cliente'}</span>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-[10px] uppercase tracking-[0.1em]" style={{ color: 'var(--v-text-soft)', fontWeight: 700 }}>Progresso</span>
+                      <b className="text-[18px]" style={{ fontWeight: 800 }}>{prog}%</b>
                     </div>
+                    <div className="v-track"><div className="v-fill" style={{ width: `${prog}%` }} /></div>
                   </div>
                 </div>
               );
@@ -423,21 +424,8 @@ export default function ProjectEnvironment({
 
 // Fundo compartilhado (foto desfocada + véu).
 function ProjectBackground() {
-  // Fundo creme sólido + foto como faixa suave e desbotada só no topo.
-  return (
-    <div className="fixed inset-0 z-0 pointer-events-none" aria-hidden style={{ background: 'var(--clay-cream)' }}>
-      <div className="absolute top-0 left-0 right-0 h-64"
-        style={{
-          backgroundImage: `url(${PROJECT_BG})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          filter: 'blur(2px)',
-          opacity: 0.18,
-          maskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.9), transparent)',
-          WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.9), transparent)',
-        }} />
-    </div>
-  );
+  // No tema violeta o fundo (gradientes lilás) vem do CSS .projeto-violet.
+  return null;
 }
 
 // ============ PÁGINAS ============
@@ -487,89 +475,104 @@ function ProjectShell({
     const active = page === item.id;
     return (
       <button
-        onClick={() => { setPage(item.id); setSidebarOpen(false); }}
-        className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-all text-sm relative mx-2 my-0.5 ${
-          active ? 'clay-nav-active' : 'text-clay-soft hover:bg-black/5 rounded-xl'
+        onClick={() => { if (item.locked) return; setPage(item.id); setSidebarOpen(false); }}
+        className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-all text-[13px] ${
+          active ? 'v-nav-active' : item.locked ? 'v-nav-mute' : 'v-nav-item'
         }`}
-        style={{ fontWeight: active ? 700 : 400, width: 'calc(100% - 16px)' }}
+        style={{ fontWeight: active ? 700 : 500, cursor: item.locked ? 'default' : 'pointer' }}
       >
-        <item.Icon size={16} className="flex-shrink-0" />
+        <item.Icon size={15} className="flex-shrink-0" />
         <span className="flex-1 min-w-0 truncate">{item.label}</span>
-        {item.badge && <span className="text-xs">{item.badge}</span>}
-        {item.locked && <Lock size={12} className="opacity-50 flex-shrink-0" />}
+        {item.badge && <span className="text-[11px]">{item.badge}</span>}
+        {item.locked && <Lock size={11} className="opacity-60 flex-shrink-0" />}
       </button>
     );
   };
 
+  const initials = (userName || 'CL').split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase();
+
   return (
-    <div className="relative z-10 flex min-h-screen">
+    <div className="relative z-10 flex min-h-screen p-3 lg:p-5 gap-4">
       {/* Sidebar */}
-      <aside className={`clay-sidebar fixed lg:sticky top-0 left-0 h-screen w-72 flex-shrink-0 z-30 transition-transform ${
-        sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-      } flex flex-col`}>
-        {/* topo da sidebar */}
-        <div className="p-5 border-b border-white/15">
-          <button onClick={onBack} className="text-xs font-mono uppercase tracking-wider text-white/50 hover:text-white flex items-center gap-1.5 mb-4">
-            ← Projetos
-          </button>
-          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40 mb-1">Projeto</p>
-          <h1 className="text-xl leading-tight" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>{project.name}</h1>
-          <p className="text-xs text-white/50 mt-1" style={{ fontWeight: 300 }}>{project.clientName}</p>
-          {/* progresso */}
-          <div className="mt-4">
-            <div className="flex justify-between items-baseline mb-1.5">
-              <span className="text-[9px] font-mono uppercase tracking-[0.1em] text-white/40">Progresso</span>
-              <span className="text-sm font-mono" style={{ fontWeight: 700 }}>{progress}%</span>
-            </div>
-            <div className="h-px bg-white/20 relative"><div className="absolute left-0 top-0 h-px bg-white" style={{ width: `${progress}%` }} /></div>
-          </div>
+      <aside className={`v-sidebar fixed lg:sticky top-3 left-3 lg:left-0 h-[calc(100vh-24px)] lg:h-[calc(100vh-40px)] w-64 flex-shrink-0 z-30 transition-transform rounded-[22px] ${
+        sidebarOpen ? 'translate-x-0' : '-translate-x-[110%] lg:translate-x-0'
+      } flex flex-col p-3.5`}>
+        {/* logo */}
+        <div className="flex items-center gap-2.5 p-2.5 bg-white rounded-2xl" style={{ boxShadow: '0 3px 12px rgba(70,50,150,0.08)' }}>
+          <span className="w-8 h-8 rounded-[11px] flex items-center justify-center text-white text-sm" style={{ background: 'var(--v-accent-grad)', fontWeight: 800 }}>C</span>
+          <span className="flex flex-col leading-tight min-w-0">
+            <b className="text-[13px]" style={{ fontWeight: 700 }}>Estúdio</b>
+            <span className="text-[10px] truncate" style={{ color: 'var(--v-text-mute)' }}>Chaves Brites Correa</span>
+          </span>
+        </div>
+
+        <button onClick={onBack} className="text-[11px] mt-3 mb-1 hover:underline flex items-center gap-1.5 px-1" style={{ color: 'var(--v-text-mute)', fontWeight: 600 }}>
+          ← Lista de projetos
+        </button>
+
+        {/* projeto atual */}
+        <div className="px-1 mb-2">
+          <p className="text-[9px] uppercase tracking-[0.16em] mb-0.5" style={{ color: 'var(--v-text-mute)', fontWeight: 700 }}>Projeto</p>
+          <h1 className="text-base leading-tight" style={{ fontWeight: 800 }}>{project.name}</h1>
+          <p className="text-[11px] mt-0.5" style={{ color: 'var(--v-text-soft)' }}>{project.clientName}</p>
         </div>
 
         {/* navegação */}
-        <nav className="flex-1 overflow-y-auto py-3">
-          <p className="px-4 text-[9px] font-mono uppercase tracking-[0.15em] text-white/30 mb-1">Etapas</p>
+        <nav className="flex-1 overflow-y-auto -mx-1 px-1">
+          <p className="px-2 text-[9px] uppercase tracking-[0.16em] mb-1 mt-2" style={{ color: 'var(--v-text-mute)', fontWeight: 700 }}>Etapas</p>
           {navItems.map(item => <NavButton key={item.id} item={item} />)}
         </nav>
 
-        {/* rodapé da sidebar */}
-        <div className="p-4 border-t border-white/15 space-y-1">
-          {isAdminReal && (
-            <button onClick={onTogglePreview}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs border border-white/30 hover:bg-white hover:text-black transition-colors" style={{ fontWeight: 600 }}>
+        {/* progresso */}
+        <div className="mt-3 p-3.5 bg-white rounded-2xl" style={{ boxShadow: '0 3px 12px rgba(70,50,150,0.07)' }}>
+          <div className="flex justify-between items-baseline mb-2">
+            <span className="text-[10px] uppercase tracking-[0.1em]" style={{ color: 'var(--v-text-soft)', fontWeight: 700 }}>Progresso</span>
+            <b className="text-base" style={{ fontWeight: 800 }}>{progress}%</b>
+          </div>
+          <div className="v-track"><div className="v-fill" style={{ width: `${progress}%` }} /></div>
+        </div>
+
+        {/* ações admin */}
+        {isAdminReal && (
+          <div className="mt-2 space-y-1">
+            <button onClick={onTogglePreview} className="w-full flex items-center justify-center gap-2 px-3 py-2 text-[12px] v-btn-ghost" style={{ fontWeight: 600 }}>
               <Eye size={13} /> {previewClient ? 'Ver como admin' : 'Ver como cliente'}
             </button>
-          )}
-          {isAdminReal && (
-            <button onClick={onEdit} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-white/60 hover:text-white transition-colors">
-              <Pencil size={13} /> Editar projeto
+            <button onClick={onEdit} className="w-full flex items-center justify-center gap-2 px-3 py-1.5 text-[11px] hover:underline" style={{ color: 'var(--v-text-soft)', fontWeight: 600 }}>
+              <Pencil size={12} /> Editar projeto
             </button>
-          )}
-          <div className="flex items-center gap-1 pt-1">
-            <button onClick={onSwitchEnvironment} className="flex-1 text-[10px] font-mono uppercase text-white/50 hover:text-white px-2 py-1.5 border border-white/20">Obra</button>
-            <button onClick={onLogout} className="flex-1 text-[10px] font-mono uppercase text-white/50 hover:text-white px-2 py-1.5 border border-white/20">Sair</button>
           </div>
+        )}
+        <div className="flex items-center gap-1 pt-2">
+          <button onClick={onSwitchEnvironment} className="flex-1 text-[10px] uppercase px-2 py-1.5 rounded-lg hover:bg-black/5" style={{ color: 'var(--v-text-mute)', fontWeight: 700 }}>Obra</button>
+          <button onClick={onLogout} className="flex-1 text-[10px] uppercase px-2 py-1.5 rounded-lg hover:bg-black/5" style={{ color: 'var(--v-text-mute)', fontWeight: 700 }}>Sair</button>
         </div>
       </aside>
 
       {/* Overlay mobile */}
-      {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-20 lg:hidden" onClick={() => setSidebarOpen(false)} />}
+      {sidebarOpen && <div className="fixed inset-0 bg-black/20 z-20 lg:hidden" onClick={() => setSidebarOpen(false)} />}
 
       {/* Conteúdo */}
-      <div className="flex-1 min-w-0">
-        {/* barra mobile */}
-        <div className="lg:hidden sticky top-0 z-10 bg-black/50 backdrop-blur-xl border-b border-white/15 px-4 py-3 flex items-center gap-3">
-          <button onClick={() => setSidebarOpen(true)} className="p-1"><Menu size={20} /></button>
-          <span className="text-sm truncate" style={{ fontWeight: 600 }}>{project.name}</span>
+      <div className="flex-1 min-w-0 flex flex-col gap-4">
+        {/* topbar */}
+        <div className="flex items-center gap-2.5">
+          <button onClick={() => setSidebarOpen(true)} className="lg:hidden w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0" style={{ boxShadow: 'var(--v-shadow-sm)' }}><Menu size={18} /></button>
+          <div className="flex-1 flex items-center gap-2.5 rounded-full px-4 py-2.5" style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(108,77,246,0.10)', boxShadow: 'var(--v-shadow-sm)' }}>
+            <Search size={15} style={{ color: 'var(--v-text-mute)' }} />
+            <span className="text-[13px]" style={{ color: 'var(--v-text-mute)' }}>Buscar etapas, arquivos…</span>
+          </div>
+          <span className="w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0" style={{ boxShadow: 'var(--v-shadow-sm)' }}><Bell size={17} style={{ color: 'var(--v-text-soft)' }} /></span>
+          <span className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white text-[13px]" style={{ background: 'var(--v-accent-grad)', fontWeight: 700, boxShadow: '0 6px 18px rgba(108,77,246,0.35)' }}>{initials}</span>
         </div>
 
         {/* badge "vendo como cliente" */}
         {isAdminReal && previewClient && (
-          <div className="bg-white/10 border-b border-white/20 px-6 py-2 text-center">
-            <span className="text-xs font-mono uppercase tracking-wider text-white/80">👁 Visualizando como o cliente vê</span>
+          <div className="v-card px-5 py-2 text-center" style={{ background: '#ece7fd' }}>
+            <span className="text-[12px] uppercase tracking-wider" style={{ color: 'var(--v-accent-2)', fontWeight: 700 }}>Visualizando como o cliente vê</span>
           </div>
         )}
 
-        <div className="max-w-4xl mx-auto px-6 py-8">
+        <div className="max-w-5xl w-full">
           <ProjectPage page={page} project={project} isAdmin={isAdmin} userName={userName} role={role} onPersist={onPersist} onNavigate={setPage} />
         </div>
       </div>
@@ -601,74 +604,195 @@ function phaseIcon(state: PhaseState): React.ComponentType<any> {
 }
 // === PÁGINAS: Início, Briefing, Fase ===
 
-// Página inicial: contrato + boas-vindas + explicação do fluxo.
+// Página inicial: contrato + cards de status + andamento das fases + painel do arquiteto.
 function PageInicio({ project, isAdmin, userName, onNavigate }: {
   project: ArchProject; isAdmin: boolean; userName?: string; onNavigate: (p: PageId) => void;
 }) {
-  const fluxo = [
-    { n: '01', t: 'Conforto Térmico', d: 'Estudo técnico das premissas climáticas do seu terreno.', pg: 'termico' as PageId },
-    { n: '02', t: 'Briefing de Premissas', d: 'Você conta o que deseja: programa, estilo, necessidades.', pg: 'briefing' as PageId },
-    { n: '03', t: 'Fases do Projeto', d: 'Do levantamento ao detalhamento — você acompanha e aprova cada etapa.', pg: 'fase-0' as PageId },
-  ];
-  return (
-    <div>
-      {/* Boas-vindas */}
-      <div className="mb-8">
-        <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-white/40 mb-3">
-          {userName ? `Olá, ${userName}` : 'Bem-vindo'}
-        </p>
-        <h1 className="text-4xl tracking-tight leading-tight" style={{ fontFamily: 'var(--font-serif)' }}>
-          <span style={{ fontWeight: 300 }}>Bem-vindo à sua </span><span style={{ fontWeight: 700 }}>área de projetos</span>
-        </h1>
-        <p className="text-white/70 mt-4 leading-relaxed max-w-2xl" style={{ fontWeight: 300 }}>
-          Aqui você acompanha todo o desenvolvimento do seu projeto arquitetônico, do estudo inicial ao detalhamento final.
-          Cada etapa aparece no menu à esquerda. Você poderá visualizar arquivos, responder o briefing, aprovar entregas
-          e conversar com o arquiteto ao longo do caminho.
-        </p>
-      </div>
+  // ----- Cálculos de status reais a partir do projeto -----
+  const phases = project.phases;
+  const aprovadas = phases.filter(p => p.state === 'aprovada').length;
+  const total = phases.length;
+  const ultimaAprovada = [...phases].reverse().find(p => p.state === 'aprovada');
+  const aguardando = phases.find(p => p.state === 'aguardando_aprovacao');
+  const emAjustes = phases.find(p => p.state === 'ajustes');
+  const faseAtual = phases.find(p => p.state === 'em_elaboracao' || p.state === 'aguardando_aprovacao' || p.state === 'ajustes');
+  const totalArquivos = phases.reduce((acc, p) => acc + (p.files?.length || 0), 0);
 
-      {/* Dados do contrato */}
-      <div className="border-2 border-white/30 bg-black/30 backdrop-blur-md mb-8">
-        <div className="px-5 py-3 border-b-2 border-white/30 flex items-center gap-2">
-          <FileText size={15} /> <p className="text-sm" style={{ fontWeight: 700 }}>Seu contrato</p>
+  // Data e dias desde o envio da entrega aguardando aprovação (último evento de envio).
+  const diasAguardando = (() => {
+    if (!aguardando) return null;
+    const envio = [...(aguardando.events || [])].reverse().find(e => e.kind === 'envio');
+    if (!envio) return null;
+    const dias = Math.floor((Date.now() - new Date(envio.at).getTime()) / 86400000);
+    return { dias, data: new Date(envio.at).toLocaleDateString('pt-BR') };
+  })();
+
+  const fmtData = (iso?: string) => iso ? new Date(iso).toLocaleDateString('pt-BR') : '—';
+
+  const contract: [string, string][] = [
+    ['Tipo', project.type],
+    ['Área', project.area ? `${project.area} m²` : '—'],
+    ['Responsável técnico', project.responsible || '—'],
+    ['Início', fmtData(project.createdAt)],
+    ['Localização', project.localizacao || '—'],
+    ['Fase atual', faseAtual?.name || (aprovadas === total ? 'Concluído' : '—')],
+  ];
+
+  // 4 cards de status
+  const statusCards = [
+    {
+      Icon: CheckCircle2, iconColor: '#12805a', label: 'Fases aprovadas',
+      value: `${aprovadas} / ${total}`,
+      chip: aprovadas > 0 ? { txt: `${Math.round((aprovadas / total) * 100)}%`, cls: 'v-chip-ok' } : null,
+      sub: ultimaAprovada ? `${ultimaAprovada.name} aprovada${ultimaAprovada.approvedAt ? ` em ${fmtData(ultimaAprovada.approvedAt)}` : ''}` : 'Nenhuma fase aprovada ainda',
+    },
+    {
+      Icon: Clock, iconColor: '#b06d05', label: aguardando ? 'Aguardando você' : emAjustes ? 'Em ajustes' : 'Em dia',
+      value: diasAguardando ? `${diasAguardando.dias} dia${diasAguardando.dias !== 1 ? 's' : ''}` : (aguardando ? 'Nova' : '—'),
+      chip: diasAguardando && diasAguardando.dias > 5 ? { txt: 'atenção', cls: 'v-chip-warn' } : null,
+      sub: aguardando ? `${aguardando.name} aguarda aprovação${diasAguardando ? ` (enviado ${diasAguardando.data})` : ''}` : emAjustes ? `${emAjustes.name} em ajustes` : 'Nenhuma entrega pendente',
+    },
+    {
+      Icon: FileText, iconColor: '#4f2fd4', label: 'Arquivos',
+      value: String(totalArquivos),
+      chip: null,
+      sub: 'Pranchas, memoriais e referências',
+    },
+    {
+      Icon: Sun, iconColor: '#4f2fd4', label: 'Briefing',
+      value: project.briefingDone ? 'Concluído' : 'Pendente',
+      chip: project.briefingDone ? { txt: 'ok', cls: 'v-chip-ok' } : { txt: 'responder', cls: 'v-chip-warn' },
+      sub: project.briefingDone ? `Respondido em ${fmtData(project.briefingDoneAt)}` : 'Premissas do cliente',
+    },
+  ];
+
+  // Andamento das fases (barras)
+  const phaseRows = phases.map(ph => {
+    const meta = STATE_META[ph.state];
+    const pct = ph.state === 'aprovada' ? 100 : ph.state === 'aguardando_aprovacao' ? 70 : ph.state === 'ajustes' ? 55 : ph.state === 'em_elaboracao' ? 35 : 0;
+    const ok = ph.state === 'aprovada', wait = ph.state === 'aguardando_aprovacao', adj = ph.state === 'ajustes';
+    return {
+      name: ph.name, label: meta.label,
+      mark: ok ? '✓' : wait ? '!' : adj ? '~' : ph.state === 'bloqueada' ? '–' : '•',
+      pct, barBg: ok ? '#3fbf82' : wait ? '#f0a83c' : adj ? '#ec6b8f' : ph.state === 'em_elaboracao' ? '#7d5bf8' : '#e4e0f6',
+      chipCls: ok ? 'v-chip-ok' : wait || adj ? 'v-chip-warn' : 'v-chip-mute',
+      dim: ph.state === 'bloqueada',
+    };
+  });
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Contrato */}
+      <div className="v-card p-6">
+        <div className="flex items-end justify-between gap-4 flex-wrap mb-4">
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.16em] mb-1" style={{ color: 'var(--v-text-soft)', fontWeight: 700 }}>
+              {userName ? `Olá, ${userName.split(' ')[0]} — seu contrato` : 'Seu contrato'}
+            </p>
+            <h2 className="text-2xl sm:text-3xl m-0" style={{ fontWeight: 800, letterSpacing: '-0.02em' }}>{project.name}</h2>
+            <span className="text-[13px]" style={{ color: 'var(--v-text-soft)' }}>
+              {project.clientName}{project.localizacao ? ` · ${project.localizacao}` : ''}
+            </span>
+          </div>
+          <span className="v-chip v-chip-ok" style={{ padding: '7px 14px', fontSize: 11 }}>
+            {project.status === 'ativo' ? 'Em andamento' : project.status}
+          </span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-white/15">
-          {[
-            ['Projeto', project.name],
-            ['Cliente', project.clientName || '—'],
-            ['Tipo', project.type],
-            ['Área', project.area ? `${project.area} m²` : '—'],
-            ['Responsável técnico', project.responsible || '—'],
-            ['Localização', project.localizacao || '—'],
-            ['Início', new Date(project.createdAt).toLocaleDateString('pt-BR')],
-            ['Status', project.status === 'ativo' ? 'Em andamento' : project.status],
-          ].map(([label, val]) => (
-            <div key={label} className="bg-black/40 px-4 py-3">
-              <p className="text-[9px] font-mono uppercase tracking-[0.12em] text-white/40 mb-1">{label}</p>
-              <p className="text-sm" style={{ fontWeight: 600 }}>{val}</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {contract.map(([label, value]) => (
+            <div key={label} className="v-tint px-4 py-3">
+              <p className="text-[10px] uppercase tracking-[0.08em] mb-0.5" style={{ color: 'var(--v-text-soft)', fontWeight: 700 }}>{label}</p>
+              <p className="text-[13px]" style={{ fontWeight: 700 }}>{value}</p>
             </div>
           ))}
         </div>
-        {project.notes && (
-          <div className="px-5 py-3 border-t-2 border-white/30">
-            <p className="text-[9px] font-mono uppercase tracking-[0.12em] text-white/40 mb-1">Observações</p>
-            <p className="text-sm text-white/80" style={{ fontWeight: 300 }}>{project.notes}</p>
-          </div>
-        )}
       </div>
 
-      {/* Como funciona o fluxo */}
-      <div>
-        <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/40 mb-4">Como funciona</p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {fluxo.map(f => (
-            <button key={f.n} onClick={() => onNavigate(f.pg)}
-              className="text-left border-2 border-white/25 hover:border-white bg-black/30 backdrop-blur-md p-5 transition-colors group">
-              <p className="text-3xl font-mono text-white/30 group-hover:text-white transition-colors" style={{ fontWeight: 700 }}>{f.n}</p>
-              <p className="text-base mt-2" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>{f.t}</p>
-              <p className="text-xs text-white/60 mt-1 leading-relaxed" style={{ fontWeight: 300 }}>{f.d}</p>
-            </button>
-          ))}
+      {/* 4 cards de status */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {statusCards.map((c, i) => (
+          <div key={i} className="v-card p-4 flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <c.Icon size={15} style={{ color: c.iconColor }} strokeWidth={2} />
+              <span className="text-[12px]" style={{ color: 'var(--v-text-soft)', fontWeight: 600 }}>{c.label}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <b className="text-[22px]" style={{ fontWeight: 800, letterSpacing: '-0.02em' }}>{c.value}</b>
+              {c.chip && <span className={`v-chip ${c.chip.cls}`}>{c.chip.txt}</span>}
+            </div>
+            <span className="text-[11px] leading-snug" style={{ color: 'var(--v-text-mute)' }}>{c.sub}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Andamento das fases + Painel do arquiteto */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-4 items-stretch">
+        {/* Andamento */}
+        <div className="v-card p-6 flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <b className="text-[15px]" style={{ fontWeight: 800 }}>Andamento das fases</b>
+            <button onClick={() => onNavigate('fase-0')} className="text-[11px] px-3 py-1.5 rounded-full" style={{ background: '#f4f1fe', color: 'var(--v-text-soft)', fontWeight: 600 }}>Ver etapas</button>
+          </div>
+          <div className="flex flex-col gap-3.5">
+            {phaseRows.map((f, i) => (
+              <button key={i} onClick={() => onNavigate(`fase-${i}`)} className="grid grid-cols-[24px_1fr_auto] items-center gap-3.5 text-left" style={{ opacity: f.dim ? 0.55 : 1 }}>
+                <span className="w-6 h-6 rounded-full flex items-center justify-center text-[10px]" style={{ background: '#f4f1fe', color: 'var(--v-accent-2)', fontWeight: 800 }}>{f.mark}</span>
+                <div className="flex flex-col gap-1.5 min-w-0">
+                  <span className="text-[13px] truncate" style={{ fontWeight: 600 }}>{f.name}</span>
+                  <div className="v-track" style={{ height: 7 }}><div className="v-fill" style={{ width: `${f.pct}%`, background: f.barBg }} /></div>
+                </div>
+                <span className={`v-chip ${f.chipCls}`} style={{ whiteSpace: 'nowrap' }}>{f.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Painel do arquiteto / avisos */}
+        <div className="flex flex-col gap-3 min-w-0">
+          <b className="text-[15px] px-0.5" style={{ fontWeight: 800 }}>{isAdmin ? 'Painel do arquiteto' : 'Seu acompanhamento'}</b>
+
+          {aguardando ? (
+            <div className="rounded-2xl p-4 flex flex-col gap-2" style={{ background: '#fff8ec', border: '1px solid #f6dfb5' }}>
+              <span className="flex items-center gap-1.5 text-[12px]" style={{ color: '#b06d05', fontWeight: 800 }}>
+                <AlertTriangle size={14} /> {isAdmin ? 'Aguardando o cliente' : 'Aguardando você'}
+              </span>
+              <span className="text-[11px] leading-relaxed" style={{ color: '#7a6a4d' }}>
+                {aguardando.name} {diasAguardando ? `foi enviado em ${diasAguardando.data} e aguarda aprovação há ${diasAguardando.dias} dia${diasAguardando.dias !== 1 ? 's' : ''}.` : 'aguarda aprovação.'}
+              </span>
+              <button onClick={() => onNavigate(`fase-${phases.indexOf(aguardando)}`)} className="text-[11px] text-left" style={{ color: '#b06d05', fontWeight: 700 }}>Ver entrega →</button>
+            </div>
+          ) : (
+            <div className="rounded-2xl p-4 flex flex-col gap-2" style={{ background: '#f1fbf4', border: '1px solid #c3e9d1' }}>
+              <span className="flex items-center gap-1.5 text-[12px]" style={{ color: '#12805a', fontWeight: 800 }}>
+                <CheckCircle2 size={14} /> Tudo em dia
+              </span>
+              <span className="text-[11px] leading-relaxed" style={{ color: '#4d7565' }}>
+                {aprovadas === total ? 'Todas as fases foram aprovadas. Projeto concluído!' : 'Nenhuma entrega pendente de aprovação no momento.'}
+              </span>
+            </div>
+          )}
+
+          {faseAtual && faseAtual.state !== 'aguardando_aprovacao' && (
+            <div className="rounded-2xl p-4 flex flex-col gap-2" style={{ background: '#f1fbf4', border: '1px solid #c3e9d1' }}>
+              <span className="flex items-center gap-1.5 text-[12px]" style={{ color: '#12805a', fontWeight: 800 }}>
+                <Clock size={14} /> Em desenvolvimento
+              </span>
+              <span className="text-[11px] leading-relaxed" style={{ color: '#4d7565' }}>
+                {faseAtual.name} está em elaboração pelo arquiteto.
+              </span>
+            </div>
+          )}
+
+          {/* Campo escreva ao arquiteto (atalho para a fase atual) */}
+          <button
+            onClick={() => faseAtual && onNavigate(`fase-${phases.indexOf(faseAtual)}`)}
+            className="mt-auto rounded-2xl px-4 py-3.5 flex items-center justify-between gap-2.5 text-left"
+            style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(108,77,246,0.12)', boxShadow: 'var(--v-shadow-sm)' }}>
+            <span className="text-[13px]" style={{ color: 'var(--v-text-mute)' }}>{isAdmin ? 'Comentar com o cliente…' : 'Escreva ao arquiteto…'}</span>
+            <span className="w-9 h-9 flex-shrink-0 rounded-xl flex items-center justify-center" style={{ background: 'var(--v-accent-grad)' }}>
+              <Send size={15} className="text-white" />
+            </span>
+          </button>
         </div>
       </div>
     </div>
@@ -793,7 +917,7 @@ function PageFase({ project, idx, isAdmin, userName, role, onPersist }: {
       </div>
 
       {/* Banner de estado */}
-      <div className="flex items-center gap-3 p-4 mb-5 text-white clay-color" style={{ background: ss.grad }}>
+      <div className="flex items-center gap-3 p-4 mb-5 text-white v-metric" style={{ background: ss.grad }}>
         <ss.Icon size={22} className="flex-shrink-0" />
         <div>
           <p className="text-[10px] font-mono uppercase tracking-[0.12em] opacity-80">Situação atual</p>
@@ -814,10 +938,10 @@ function PageFase({ project, idx, isAdmin, userName, role, onPersist }: {
 // Cabeçalho padrão de página.
 function PageHeader({ eyebrow, title, subtitle }: { eyebrow: string; title: string; subtitle?: string }) {
   return (
-    <div className="mb-6">
-      <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-white/40 mb-2">{eyebrow}</p>
-      <h1 className="text-3xl tracking-tight" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>{title}</h1>
-      {subtitle && <p className="text-sm text-white/60 mt-1" style={{ fontWeight: 300 }}>{subtitle}</p>}
+    <div className="mb-1">
+      <p className="text-[10px] uppercase tracking-[0.16em] mb-1.5" style={{ color: 'var(--v-text-soft)', fontWeight: 700 }}>{eyebrow}</p>
+      <h1 className="text-2xl sm:text-3xl m-0" style={{ fontWeight: 800, letterSpacing: '-0.02em' }}>{title}</h1>
+      {subtitle && <p className="text-[13px] mt-1" style={{ color: 'var(--v-text-soft)' }}>{subtitle}</p>}
     </div>
   );
 }
@@ -829,9 +953,9 @@ function PageTermico({ project }: { project: ArchProject }) {
     return (
       <div>
         <PageHeader eyebrow="Etapa 01" title="Estudo de Conforto Térmico" />
-        <div className="border-2 border-dashed border-white/30 p-10 text-center">
+        <div className="v-card border-dashed p-10 text-center">
           <Sun size={32} strokeWidth={1.25} className="mx-auto mb-3 opacity-50" />
-          <p className="text-sm text-white/60" style={{ fontWeight: 300 }}>
+          <p className="text-sm " style={{ fontWeight: 300 }}>
             Informe a localização do projeto (no cadastro) para gerar o estudo técnico automático.
           </p>
         </div>
@@ -854,9 +978,9 @@ function PageTermico({ project }: { project: ArchProject }) {
   ];
 
   const Card = ({ title, icon: Icon, children, accent }: { title: string; icon: React.ComponentType<any>; children: React.ReactNode; accent?: string }) => (
-    <div className="border-2 border-white/25 bg-black/30 backdrop-blur-md">
-      <div className="px-4 py-2.5 border-b-2 border-white/25 flex items-center gap-2">
-        <Icon size={14} style={{ color: accent }} /> <p className="text-xs font-mono uppercase tracking-[0.1em]" style={{ fontWeight: 700 }}>{title}</p>
+    <div className="v-card">
+      <div className="px-4 py-2.5 border-b flex items-center gap-2">
+        <Icon size={14} style={{ color: accent }} /> <p className="text-xs uppercase tracking-[0.1em]" style={{ fontWeight: 700 }}>{title}</p>
       </div>
       <div className="p-4">{children}</div>
     </div>
@@ -870,7 +994,7 @@ function PageTermico({ project }: { project: ArchProject }) {
           projeto: project.name, localizacao: project.localizacao!, latitude: project.latitude!,
           longitude: project.longitude!, tipo: project.type, area: project.area,
         })}
-          className="flex items-center gap-1.5 text-xs text-white px-4 py-2 border border-white/30 transition-colors" style={{ fontWeight: 600, background: 'linear-gradient(135deg,#1C7ED6,#1971C2)' }}>
+          className="v-btn flex items-center gap-1.5 text-[13px] px-4 py-2.5" style={{ fontWeight: 700 }}>
           <Download size={13} /> Exportar PDF
         </button>
       </div>
@@ -878,8 +1002,8 @@ function PageTermico({ project }: { project: ArchProject }) {
       {/* Métricas */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         {metrics.map(m => (
-          <div key={m.label} className="p-4 text-white flex items-center gap-3 clay-color" style={{ background: m.grad }}>
-            <div className="w-11 h-11 flex-shrink-0 bg-white/20 flex items-center justify-center" style={{ borderRadius: 14 }}><m.Icon size={22} /></div>
+          <div key={m.label} className="p-4 text-white flex items-center gap-3 v-metric" style={{ background: m.grad }}>
+            <div className="w-11 h-11 flex-shrink-0 bg-white/25 flex items-center justify-center" style={{ borderRadius: 14 }}><m.Icon size={22} /></div>
             <div>
               <p className="text-[9px] uppercase tracking-[0.1em] opacity-90" style={{ fontWeight: 500 }}>{m.label}</p>
               <p className="text-xl leading-none" style={{ fontWeight: 800 }}>{m.value}</p>
@@ -890,40 +1014,40 @@ function PageTermico({ project }: { project: ArchProject }) {
       </div>
 
       {/* Zona de conforto */}
-      <div className="border-2 border-white/25 bg-black/30 backdrop-blur-md p-4 mb-4">
-        <p className="text-xs font-mono uppercase tracking-[0.1em] text-white/50 mb-2" style={{ fontWeight: 700 }}>Faixa de conforto térmico</p>
+      <div className="v-card p-4 mb-4">
+        <p className="text-xs uppercase tracking-[0.1em]  mb-2" style={{ fontWeight: 700 }}>Faixa de conforto térmico</p>
         <ComfortBar media={d.tempMedia} />
-        <p className="text-[10px] text-white/40 mt-1" style={{ fontWeight: 300 }}>A zona de conforto (18–26°C) é destacada. O marcador indica a temperatura média local.</p>
+        <p className="text-[10px]  mt-1" style={{ fontWeight: 300 }}>A zona de conforto (18–26°C) é destacada. O marcador indica a temperatura média local.</p>
       </div>
 
       {/* Gráficos: rosa dos ventos + carta solar + temp mensal */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         <Card title="Rosa dos Ventos" icon={Wind} accent="#1C7ED6">
           <div className="aspect-square max-w-[220px] mx-auto"><WindRose predominante={d.ventosPredominantes} /></div>
-          <p className="text-[11px] text-white/60 mt-2 leading-relaxed" style={{ fontWeight: 300 }}>
+          <p className="text-[11px]  mt-2 leading-relaxed" style={{ fontWeight: 300 }}>
             Ventos predominantes de <b className="text-white">{d.ventosPredominantes}</b>. Quente: {d.periodoVentoQuente}. Frio: {d.periodoVentoFrio}.
           </p>
         </Card>
         <Card title="Trajetória Solar" icon={Sun} accent="#F59F00">
           <SolarChart latitude={d.latitude} />
-          <p className="text-[11px] text-white/60 mt-2 leading-relaxed" style={{ fontWeight: 300 }}>
+          <p className="text-[11px]  mt-2 leading-relaxed" style={{ fontWeight: 300 }}>
             {comentarioOrientacao((project.orientacao as string) || 'N')}
           </p>
         </Card>
         <Card title="Temperatura ao longo do ano" icon={Thermometer} accent="#E8590C">
           <TempBars media={d.tempMedia} max={d.tempMax} min={d.tempMin} />
-          <p className="text-[11px] text-white/60 mt-2 leading-relaxed" style={{ fontWeight: 300 }}>
+          <p className="text-[11px]  mt-2 leading-relaxed" style={{ fontWeight: 300 }}>
             Período crítico: <b className="text-white">{r.periodoCritico}</b>. Amplitude de {d.tempMax - d.tempMin}°C.
           </p>
         </Card>
       </div>
 
       {/* Fundamentação técnica */}
-      <div className="border-2 border-white/25 bg-black/30 backdrop-blur-md p-5 mb-4">
-        <p className="text-xs font-mono uppercase tracking-[0.1em] text-white/50 mb-2 flex items-center gap-2" style={{ fontWeight: 700 }}>
+      <div className="v-card p-5 mb-4">
+        <p className="text-xs uppercase tracking-[0.1em]  mb-2 flex items-center gap-2" style={{ fontWeight: 700 }}>
           <BookOpen size={14} /> Fundamentação técnica
         </p>
-        <p className="text-sm text-white/85 leading-relaxed" style={{ fontWeight: 300 }}>{comentarioTecnico(d.classificacao)}</p>
+        <p className="text-sm  leading-relaxed" style={{ fontWeight: 300 }}>{comentarioTecnico(d.classificacao)}</p>
       </div>
 
       {/* Estratégias em 3 colunas */}
@@ -934,12 +1058,12 @@ function PageTermico({ project }: { project: ArchProject }) {
       </div>
 
       {/* Detalhes técnicos */}
-      <div className="border-2 border-white/25 bg-black/30 backdrop-blur-md p-5 mb-4">
-        <p className="text-xs font-mono uppercase tracking-[0.1em] text-white/50 mb-3" style={{ fontWeight: 700 }}>Diretrizes dimensionais</p>
+      <div className="v-card p-5 mb-4">
+        <p className="text-xs uppercase tracking-[0.1em]  mb-3" style={{ fontWeight: 700 }}>Diretrizes dimensionais</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
           {d.solucoes.detalhes.map((it, i) => (
-            <div key={i} className="flex gap-2 text-sm text-white/80" style={{ fontWeight: 300 }}>
-              <span className="text-white/40">—</span> {it}
+            <div key={i} className="flex gap-2 text-sm " style={{ fontWeight: 300 }}>
+              <span className="">—</span> {it}
             </div>
           ))}
         </div>
@@ -947,34 +1071,34 @@ function PageTermico({ project }: { project: ArchProject }) {
 
       {/* Normas e referências */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="border-2 border-white/25 bg-black/30 backdrop-blur-md p-5">
-          <p className="text-xs font-mono uppercase tracking-[0.1em] text-white/50 mb-3 flex items-center gap-2" style={{ fontWeight: 700 }}>
+        <div className="v-card p-5">
+          <p className="text-xs uppercase tracking-[0.1em]  mb-3 flex items-center gap-2" style={{ fontWeight: 700 }}>
             <FileText size={14} /> Normas aplicáveis
           </p>
           <div className="space-y-3">
             {NORMAS_TECNICAS.map(n => (
               <div key={n.codigo} className="border-l-2 border-white/30 pl-3">
                 <p className="text-sm" style={{ fontWeight: 700 }}>{n.codigo}</p>
-                <p className="text-xs text-white/70" style={{ fontWeight: 400 }}>{n.titulo}</p>
-                <p className="text-[11px] text-white/50 mt-0.5" style={{ fontWeight: 300 }}>{n.aplicacao}</p>
+                <p className="text-xs " style={{ fontWeight: 400 }}>{n.titulo}</p>
+                <p className="text-[11px]  mt-0.5" style={{ fontWeight: 300 }}>{n.aplicacao}</p>
               </div>
             ))}
           </div>
         </div>
-        <div className="border-2 border-white/25 bg-black/30 backdrop-blur-md p-5">
-          <p className="text-xs font-mono uppercase tracking-[0.1em] text-white/50 mb-3 flex items-center gap-2" style={{ fontWeight: 700 }}>
+        <div className="v-card p-5">
+          <p className="text-xs uppercase tracking-[0.1em]  mb-3 flex items-center gap-2" style={{ fontWeight: 700 }}>
             <BookOpen size={14} /> Referências bibliográficas
           </p>
           <div className="space-y-2.5">
             {REFERENCIAS.map((ref, i) => (
               <div key={i} className="text-xs leading-relaxed" style={{ fontWeight: 300 }}>
-                <span className="text-white/80" style={{ fontWeight: 500 }}>{ref.autor}</span>{' '}
-                <span className="text-white/60 italic">{ref.obra}</span>{' '}
-                <span className="text-white/40">({ref.ano})</span>
+                <span className="" style={{ fontWeight: 500 }}>{ref.autor}</span>{' '}
+                <span className=" italic">{ref.obra}</span>{' '}
+                <span className="">({ref.ano})</span>
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-white/40 mt-4" style={{ fontWeight: 300 }}>
+          <p className="text-[10px]  mt-4" style={{ fontWeight: 300 }}>
             Estudo automático de premissas gerado a partir da localização e orientação. Serve como diretriz inicial e deve ser validado pelo responsável técnico.
           </p>
         </div>
@@ -985,13 +1109,13 @@ function PageTermico({ project }: { project: ArchProject }) {
 
 function StrategyList({ title, icon: Icon, items, accent }: { title: string; icon: React.ComponentType<any>; items: string[]; accent: string }) {
   return (
-    <div className="border-2 border-white/25 bg-black/30 backdrop-blur-md">
-      <div className="px-4 py-2.5 border-b-2 border-white/25 flex items-center gap-2">
-        <Icon size={14} style={{ color: accent }} /> <p className="text-xs font-mono uppercase tracking-[0.1em]" style={{ fontWeight: 700 }}>{title}</p>
+    <div className="v-card">
+      <div className="px-4 py-2.5 border-b flex items-center gap-2">
+        <Icon size={14} style={{ color: accent }} /> <p className="text-xs uppercase tracking-[0.1em]" style={{ fontWeight: 700 }}>{title}</p>
       </div>
       <ul className="p-4 space-y-2">
         {items.map((it, i) => (
-          <li key={i} className="flex gap-2 text-sm text-white/80 leading-snug" style={{ fontWeight: 300 }}>
+          <li key={i} className="flex gap-2 text-sm  leading-snug" style={{ fontWeight: 300 }}>
             <span style={{ color: accent }} className="flex-shrink-0 mt-0.5">▸</span> {it}
           </li>
         ))}
@@ -1055,7 +1179,7 @@ function BriefingCard({ project, isAdmin, onSaveAnswers, onFinish }: {
         </span>
         <div className="flex-1 min-w-0">
           <p className="text-sm" style={{ fontWeight: 700 }}>{grupo}</p>
-          <p className="text-[10px] font-mono uppercase tracking-wider text-white/40">{resp}/{qs.length} respondidas</p>
+          <p className="text-[10px] uppercase tracking-wider text-vmute">{resp}/{qs.length} respondidas</p>
         </div>
       </div>
     );
@@ -1064,18 +1188,18 @@ function BriefingCard({ project, isAdmin, onSaveAnswers, onFinish }: {
   // ----- Visão do ADMIN: lê as respostas -----
   if (isAdmin) {
     return (
-      <div className="border-2 border-white/25 bg-black/30 backdrop-blur-md">
-        <div className="px-4 py-3 border-b-2 border-white/25 flex items-center justify-between">
+      <div className="v-card-border bg-white">
+        <div className="px-4 py-3 border-b flex items-center justify-between">
           <p className="text-sm flex items-center gap-2" style={{ fontWeight: 700 }}>
             <ClipboardList size={15} /> Respostas do cliente
             {project.briefingDone
-              ? <span className="text-[10px] font-mono uppercase tracking-wider bg-white text-black px-2 py-0.5">Respondido</span>
-              : <span className="text-[10px] font-mono uppercase tracking-wider border border-white/40 px-2 py-0.5">Aguardando</span>}
+              ? <span className="text-[10px] uppercase tracking-wider bg-white text-black px-2 py-0.5">Respondido</span>
+              : <span className="text-[10px] uppercase tracking-wider  px-2 py-0.5">Aguardando</span>}
           </p>
         </div>
         <div className="p-4 space-y-6">
           {!project.briefingDone && respondidas === 0 && (
-            <p className="text-xs text-white/60" style={{ fontWeight: 300 }}>
+            <p className="text-xs text-vsoft" style={{ fontWeight: 300 }}>
               O cliente ainda não respondeu. As respostas aparecerão aqui assim que ele preencher. Você pode editar as perguntas em "Editar projeto".
             </p>
           )}
@@ -1090,9 +1214,9 @@ function BriefingCard({ project, isAdmin, onSaveAnswers, onFinish }: {
                 <div className="space-y-3 pl-1">
                   {qs.map(q => (
                     <div key={q.id} className="border-l-2 pl-3" style={{ borderColor: s.color }}>
-                      <p className="text-xs text-white/50" style={{ fontWeight: 500 }}>{q.text}</p>
-                      <p className="text-sm mt-0.5 text-white/90 whitespace-pre-wrap" style={{ fontWeight: 300 }}>
-                        {(draft[q.id] || '').trim() || <span className="text-white/25 italic">— sem resposta —</span>}
+                      <p className="text-xs text-vsoft" style={{ fontWeight: 500 }}>{q.text}</p>
+                      <p className="text-sm mt-0.5  whitespace-pre-wrap" style={{ fontWeight: 300 }}>
+                        {(draft[q.id] || '').trim() || <span className="text-vmute italic">— sem resposta —</span>}
                       </p>
                     </div>
                   ))}
@@ -1108,14 +1232,14 @@ function BriefingCard({ project, isAdmin, onSaveAnswers, onFinish }: {
   // ----- Visão do CLIENTE já concluído: resumo compacto -----
   if (project.briefingDone && !open) {
     return (
-      <div className="border-2 border-white/25 bg-black/30 backdrop-blur-md">
+      <div className="v-card-border bg-white">
         <div className="p-6 text-center">
           <span className="w-14 h-14 mx-auto mb-3 flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#0CA678,#1971C2)' }}>
             <CheckCircle2 size={28} className="text-white" />
           </span>
-          <p className="text-lg" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>Briefing concluído!</p>
-          <p className="text-sm text-white/60 mt-1 mb-4" style={{ fontWeight: 300 }}>Obrigado por compartilhar seus desejos. Seu arquiteto já pode começar.</p>
-          <button onClick={() => setOpen(true)} className="text-xs px-4 py-2 border border-white/40 hover:bg-white hover:text-black transition-colors" style={{ fontWeight: 600 }}>
+          <p className="text-lg" style={{ fontWeight: 700 }}>Briefing concluído!</p>
+          <p className="text-sm text-vsoft mt-1 mb-4" style={{ fontWeight: 300 }}>Obrigado por compartilhar seus desejos. Seu arquiteto já pode começar.</p>
+          <button onClick={() => setOpen(true)} className="text-xs px-4 py-2   transition-colors" style={{ fontWeight: 600 }}>
             Revisar respostas
           </button>
         </div>
@@ -1125,12 +1249,12 @@ function BriefingCard({ project, isAdmin, onSaveAnswers, onFinish }: {
 
   // ----- Visão do CLIENTE: responde -----
   return (
-    <div className="border-2 border-white/25 bg-black/30 backdrop-blur-md">
-      <div className="px-5 py-4 border-b-2 border-white/25">
-        <p className="text-lg flex items-center gap-2" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>
+    <div className="v-card-border bg-white">
+      <div className="px-5 py-4 border-b">
+        <p className="text-lg flex items-center gap-2" style={{ fontWeight: 700 }}>
           <ClipboardList size={18} /> Conte sobre o seu projeto
         </p>
-        <p className="text-xs text-white/60 mt-1" style={{ fontWeight: 300 }}>
+        <p className="text-xs text-vsoft mt-1" style={{ fontWeight: 300 }}>
           Quanto mais detalhes, melhor o projeto. Você pode salvar e continuar depois.
         </p>
         <div className="flex items-center gap-3 mt-3">
@@ -1148,13 +1272,13 @@ function BriefingCard({ project, isAdmin, onSaveAnswers, onFinish }: {
             <div className="space-y-4 pl-1">
               {questions.filter(q => q.group === grupo).map(q => (
                 <div key={q.id}>
-                  <label className="block text-sm mb-1.5 text-white/90" style={{ fontWeight: 500 }}>{q.text}</label>
+                  <label className="block text-sm mb-1.5 " style={{ fontWeight: 500 }}>{q.text}</label>
                   <textarea
                     value={draft[q.id] || ''}
                     onChange={e => setDraft(d => ({ ...d, [q.id]: e.target.value }))}
                     rows={2}
                     placeholder="Sua resposta..."
-                    className="w-full border border-white/25 bg-black/40 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-white/50 placeholder:text-white/25 text-white"
+                    className="w-full border border-white/25 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-white/50 placeholder:text-vmute text-white"
                     style={{ fontWeight: 300 }}
                   />
                 </div>
@@ -1164,10 +1288,10 @@ function BriefingCard({ project, isAdmin, onSaveAnswers, onFinish }: {
         ))}
       </div>
 
-      <div className="flex flex-col sm:flex-row items-stretch gap-2 p-5 border-t-2 border-white/25">
+      <div className="flex flex-col sm:flex-row items-stretch gap-2 p-5 border-t">
         <button
           onClick={() => onSaveAnswers(toAnswers())}
-          className="flex items-center justify-center gap-1.5 border border-white/40 px-4 py-2.5 text-sm hover:bg-white/10 transition-colors"
+          className="flex items-center justify-center gap-1.5  px-4 py-2.5 text-sm hover:bg-black/5 transition-colors"
           style={{ fontWeight: 600 }}>
           <Send size={14} /> Salvar rascunho
         </button>
@@ -1179,7 +1303,7 @@ function BriefingCard({ project, isAdmin, onSaveAnswers, onFinish }: {
             onFinish(toAnswers());
             setOpen(false);
           }}
-          className="flex-1 flex items-center justify-center gap-1.5 text-white px-4 py-2.5 text-sm transition-opacity hover:opacity-90 border border-white/20"
+          className="flex-1 flex items-center justify-center gap-1.5 text-white px-4 py-2.5 text-sm transition-opacity hover:opacity-90 "
           style={{ fontWeight: 700, background: 'linear-gradient(135deg,#0CA678,#1971C2)' }}>
           <CheckCircle2 size={15} /> Concluir briefing e enviar
         </button>
@@ -1216,12 +1340,12 @@ function PhaseCard({
       )}
 
       <div className={`bg-white border overflow-hidden transition-all ${
-        phase.state === 'aguardando_aprovacao' ? 'border-black border-2' : phase.state === 'bloqueada' ? 'border-stone-300' : 'border-black'
+        phase.state === 'aguardando_aprovacao' ? ' border-2' : phase.state === 'bloqueada' ? 'border-stone-300' : ''
       }`}>
         <button onClick={onToggle} disabled={locked}
-          className={`w-full flex items-center gap-3 p-4 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black ${locked ? 'cursor-default' : 'cursor-pointer hover:bg-stone-50'}`}>
+          className={`w-full flex items-center gap-3 p-4 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black ${locked ? 'cursor-default' : 'cursor-pointer hover:bg-white'}`}>
           {/* Marcador: aprovada = preto sólido; ativa = contorno preto grosso; bloqueada = cinza fino */}
-          <span className="relative w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 z-10 font-mono text-xs bg-white"
+          <span className="relative w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 z-10 text-xs bg-white"
             style={{
               background: meta.filled ? '#000' : '#fff',
               color: meta.filled ? '#fff' : (meta.muted ? '#a8a29e' : '#000'),
@@ -1233,24 +1357,24 @@ function PhaseCard({
               : String(index + 1).padStart(2, '0')}
           </span>
           <div className="flex-1 min-w-0">
-            <p className="text-sm" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700, color: meta.muted ? '#a8a29e' : '#000' }}>{phase.name}</p>
-            <p className="text-[10px] font-mono uppercase tracking-[0.12em] mt-0.5 flex items-center gap-1" style={{ color: meta.muted ? '#a8a29e' : '#000', fontWeight: 500 }}>
+            <p className="text-sm" style={{ fontWeight: 700, color: meta.muted ? '#a8a29e' : '#000' }}>{phase.name}</p>
+            <p className="text-[10px] uppercase tracking-[0.12em] mt-0.5 flex items-center gap-1" style={{ color: meta.muted ? '#a8a29e' : '#000', fontWeight: 500 }}>
               <Icon size={11} /> {meta.label}
             </p>
           </div>
           {phase.files.length > 0 && (
-            <span className="text-[11px] text-black/60 flex items-center gap-1 flex-shrink-0 font-mono"><FileText size={12} /> {phase.files.length}</span>
+            <span className="text-[11px] text-vsoft flex items-center gap-1 flex-shrink-0 font-mono"><FileText size={12} /> {phase.files.length}</span>
           )}
           {!locked && <ChevronRight size={16} className={`text-black transition-transform flex-shrink-0 ${isOpen ? 'rotate-90' : ''}`} />}
         </button>
 
         {isOpen && !locked && (
-          <div className="px-4 pb-4 border-t border-black pt-4 space-y-4">
+          <div className="px-4 pb-4 border-t  pt-4 space-y-4">
             <div>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-black font-bold">Arquivos desta etapa</p>
+                <p className="text-[10px] uppercase tracking-[0.12em] text-black font-bold">Arquivos desta etapa</p>
                 {isAdmin && (
-                  <label className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 border border-black transition-colors ${uploadStatus ? 'opacity-50 cursor-wait' : 'cursor-pointer hover:bg-black hover:text-white'}`} style={{ fontWeight: 600 }}>
+                  <label className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 border  transition-colors ${uploadStatus ? 'opacity-50 cursor-wait' : 'cursor-pointer hover:bg-black hover:text-white'}`} style={{ fontWeight: 600 }}>
                     {uploadStatus ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
                     {uploadStatus ? 'Enviando…' : 'Enviar arquivo'}
                     <input type="file" multiple accept="image/*,application/pdf" className="hidden" disabled={!!uploadStatus}
@@ -1264,7 +1388,7 @@ function PhaseCard({
                 </p>
               )}
               {phase.files.length === 0 ? (
-                <p className="text-xs text-black/50 py-4 text-center border border-dashed border-black/30" style={{ fontWeight: 300 }}>
+                <p className="text-xs text-vsoft py-4 text-center border border-dashed /30" style={{ fontWeight: 300 }}>
                   {isAdmin ? 'Nenhum arquivo ainda. Envie plantas, PDFs ou imagens.' : 'Os arquivos desta etapa aparecerão aqui.'}
                 </p>
               ) : (
@@ -1277,17 +1401,17 @@ function PhaseCard({
             </div>
 
             {!isAdmin && phase.state === 'aguardando_aprovacao' && (
-              <div className="border-2 border-black p-4">
+              <div className="v-card-border p-4">
                 <p className="text-sm mb-1" style={{ fontWeight: 700 }}>Esta etapa aguarda sua aprovação</p>
-                <p className="text-xs text-black/60 mb-3" style={{ fontWeight: 300 }}>Revise os arquivos acima. Ao aprovar, a próxima etapa é liberada.</p>
+                <p className="text-xs text-vsoft mb-3" style={{ fontWeight: 300 }}>Revise os arquivos acima. Ao aprovar, a próxima etapa é liberada.</p>
                 {!askChanges ? (
                   <div className="flex flex-col sm:flex-row gap-2">
                     <button onClick={onApprove}
-                      className="flex items-center justify-center gap-1.5 bg-black text-white px-4 py-2.5 text-sm hover:bg-white hover:text-black border-2 border-black transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2" style={{ fontWeight: 700 }}>
+                      className="flex items-center justify-center gap-1.5 v-btn-solid px-4 py-2.5 text-sm  v-card-border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2" style={{ fontWeight: 700 }}>
                       <ThumbsUp size={15} /> Aprovar etapa
                     </button>
                     <button onClick={() => setAskChanges(true)}
-                      className="flex items-center justify-center gap-1.5 bg-white border-2 border-black text-black px-4 py-2.5 text-sm hover:bg-black hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2" style={{ fontWeight: 600 }}>
+                      className="flex items-center justify-center gap-1.5 bg-white v-card-border text-black px-4 py-2.5 text-sm hover:bg-black hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2" style={{ fontWeight: 600 }}>
                       <MessageSquare size={15} /> Solicitar ajustes
                     </button>
                   </div>
@@ -1295,14 +1419,14 @@ function PhaseCard({
                   <div>
                     <textarea value={motivo} onChange={e => setMotivo(e.target.value)} rows={2}
                       placeholder="Descreva o que precisa ser ajustado..."
-                      className="w-full border-2 border-black px-3 py-2 text-sm text-black placeholder:text-black/40 focus:outline-none focus:ring-2 focus:ring-black mb-2" style={{ fontWeight: 300 }} />
+                      className="w-full v-card-border px-3 py-2 text-sm text-black placeholder:text-vmute focus:outline-none focus:ring-2 focus:ring-black mb-2" style={{ fontWeight: 300 }} />
                     <div className="flex flex-col sm:flex-row gap-2">
                       <button onClick={() => { if (motivo.trim()) { onRequestChanges(motivo.trim()); setMotivo(''); setAskChanges(false); } }}
                         disabled={!motivo.trim()}
-                        className="flex items-center justify-center gap-1.5 bg-black text-white px-4 py-2.5 text-sm disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white hover:text-black border-2 border-black transition-colors" style={{ fontWeight: 700 }}>
+                        className="flex items-center justify-center gap-1.5 v-btn-solid px-4 py-2.5 text-sm disabled:opacity-30 disabled:cursor-not-allowed  v-card-border transition-colors" style={{ fontWeight: 700 }}>
                         <Send size={14} /> Enviar solicitação
                       </button>
-                      <button onClick={() => { setAskChanges(false); setMotivo(''); }} className="text-sm text-black/60 hover:text-black px-3 py-2.5" style={{ fontWeight: 600 }}>Cancelar</button>
+                      <button onClick={() => { setAskChanges(false); setMotivo(''); }} className="text-sm text-vsoft hover:text-black px-3 py-2.5" style={{ fontWeight: 600 }}>Cancelar</button>
                     </div>
                   </div>
                 )}
@@ -1312,12 +1436,12 @@ function PhaseCard({
             {isAdmin && (phase.state === 'em_elaboracao' || phase.state === 'ajustes') && (
               <div>
                 <button onClick={onSendForApproval} disabled={phase.files.length === 0}
-                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 bg-black text-white px-4 py-2.5 text-sm disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white hover:text-black border-2 border-black transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2"
+                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 v-btn-solid px-4 py-2.5 text-sm disabled:opacity-30 disabled:cursor-not-allowed  v-card-border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2"
                   style={{ fontWeight: 700 }}>
                   <Send size={14} /> Enviar para aprovação do cliente
                 </button>
                 {phase.files.length === 0 && (
-                  <p className="text-xs text-black/50 mt-1.5" style={{ fontWeight: 300 }}>Envie ao menos um arquivo antes de mandar para aprovação.</p>
+                  <p className="text-xs text-vsoft mt-1.5" style={{ fontWeight: 300 }}>Envie ao menos um arquivo antes de mandar para aprovação.</p>
                 )}
                 {phase.state === 'ajustes' && phase.files.length > 0 && (
                   <p className="text-xs mt-2 flex items-center gap-1 text-black" style={{ fontWeight: 500 }}><AlertTriangle size={12} /> O cliente pediu ajustes. Corrija, atualize os arquivos e reenvie.</p>
@@ -1326,7 +1450,7 @@ function PhaseCard({
             )}
 
             {phase.state === 'aprovada' && phase.approvedAt && (
-              <div className="bg-black text-white p-3 flex items-center gap-2">
+              <div className="v-btn-solid p-3 flex items-center gap-2">
                 <CheckCircle2 size={16} className="text-white flex-shrink-0" />
                 <p className="text-xs" style={{ fontWeight: 300 }}>
                   Aprovada por <b style={{ fontWeight: 700 }}>{phase.approvedBy}</b> em {new Date(phase.approvedAt).toLocaleString('pt-BR')}.
@@ -1336,7 +1460,7 @@ function PhaseCard({
 
             {phase.events.length > 0 && (
               <div>
-                <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-black font-bold mb-2">Histórico da etapa</p>
+                <p className="text-[10px] uppercase tracking-[0.12em] text-black font-bold mb-2">Histórico da etapa</p>
                 <div className="space-y-2.5">
                   {phase.events.slice().reverse().map(ev => (
                     <div key={ev.id} className="flex gap-2.5 text-xs">
@@ -1348,7 +1472,7 @@ function PhaseCard({
                       </span>
                       <div className="flex-1 min-w-0">
                         <p className="text-black" style={{ fontWeight: 400 }}>{ev.text}</p>
-                        <p className="text-[10px] text-black/50 mt-0.5 font-mono">{ev.author} · {new Date(ev.at).toLocaleString('pt-BR')}</p>
+                        <p className="text-[10px] text-vsoft mt-0.5 font-mono">{ev.author} · {new Date(ev.at).toLocaleString('pt-BR')}</p>
                       </div>
                     </div>
                   ))}
@@ -1358,7 +1482,7 @@ function PhaseCard({
 
             <div className="flex gap-2">
               <input value={comment} onChange={e => setComment(e.target.value)}
-                placeholder="Deixe um comentário..." className="flex-1 border-2 border-black px-3 py-2 text-sm text-black placeholder:text-black/40 focus:outline-none focus:ring-2 focus:ring-black" style={{ fontWeight: 300 }} />
+                placeholder="Deixe um comentário..." className="flex-1 v-card-border px-3 py-2 text-sm text-black placeholder:text-vmute focus:outline-none focus:ring-2 focus:ring-black" style={{ fontWeight: 300 }} />
               <button onClick={() => { if (comment.trim()) { onAddComment(comment.trim()); setComment(''); } }}
                 disabled={!comment.trim()} className="text-stone-500 hover:text-stone-900 disabled:opacity-30 px-2"><Send size={16} /></button>
             </div>
@@ -1392,13 +1516,13 @@ function FileCard({ file, isAdmin, onRemove, onView }: {
   // Preview do card: miniatura leve (base64) para imagens; ícone para PDF.
   const thumb = isImg ? file.base64 : undefined;
   return (
-    <div className="border border-black overflow-hidden relative group bg-white">
+    <div className="border  overflow-hidden relative group bg-white">
       <button onClick={onView} className="w-full h-28 bg-stone-100 flex items-center justify-center relative overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black">
         {thumb
           ? <img src={thumb} alt={file.name} className="w-full h-full object-cover grayscale" />
           : <div className="flex flex-col items-center gap-1 text-black">
               <FileText size={30} strokeWidth={1.25} />
-              <span className="text-[9px] font-mono uppercase tracking-wider">{isPdf ? 'PDF' : 'Arquivo'}{sizeLabel ? ` · ${sizeLabel}` : ''}</span>
+              <span className="text-[9px] uppercase tracking-wider">{isPdf ? 'PDF' : 'Arquivo'}{sizeLabel ? ` · ${sizeLabel}` : ''}</span>
             </div>}
         <span className="absolute inset-0 bg-black/0 group-hover:bg-black/70 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
           <span className="flex items-center gap-1.5 text-white text-xs bg-black px-3 py-1.5 border border-white" style={{ fontWeight: 700 }}>
@@ -1406,10 +1530,10 @@ function FileCard({ file, isAdmin, onRemove, onView }: {
           </span>
         </span>
       </button>
-      <div className="p-2 flex items-center gap-1 border-t border-black">
+      <div className="p-2 flex items-center gap-1 border-t ">
         <span className="flex-1 min-w-0 text-[11px] text-black truncate" title={file.name} style={{ fontWeight: 300 }}>{file.name}</span>
-        <button onClick={download} className="text-black/50 hover:text-black p-0.5" title="Baixar arquivo completo"><Download size={13} /></button>
-        {isAdmin && <button onClick={onRemove} className="text-black/50 hover:text-black p-0.5" title="Remover"><Trash2 size={13} /></button>}
+        <button onClick={download} className="text-vsoft hover:text-black p-0.5" title="Baixar arquivo completo"><Download size={13} /></button>
+        {isAdmin && <button onClick={onRemove} className="text-vsoft hover:text-black p-0.5" title="Remover"><Trash2 size={13} /></button>}
       </div>
     </div>
   );
@@ -1449,7 +1573,7 @@ function FileViewer({ file, onClose }: { file: ArchFile; onClose: () => void }) 
             className="flex items-center gap-1.5 text-xs font-semibold text-stone-300 hover:text-white border border-stone-600 hover:border-stone-400 px-3 py-1.5 rounded-lg transition-colors">
             <Download size={13} /> Baixar
           </button>
-          <button onClick={onClose} className="text-stone-300 hover:text-white p-1.5 rounded-lg hover:bg-white/10" title="Fechar (ESC)">
+          <button onClick={onClose} className="text-stone-300 hover:text-white p-1.5 rounded-lg hover:bg-black/5" title="Fechar (ESC)">
             <X size={20} />
           </button>
         </div>
@@ -1487,21 +1611,21 @@ function BriefingEditor({ questions, onChange }: {
     onChange([...questions, { id: uid('q'), group, text: 'Nova pergunta' }]);
 
   return (
-    <div className="border-2 border-black">
-      <button type="button" onClick={() => setOpenEd(!openEd)} className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-stone-50 transition-colors">
-        <span className="text-[10px] font-mono uppercase tracking-[0.12em] font-bold flex items-center gap-1.5">
+    <div className="v-card-border">
+      <button type="button" onClick={() => setOpenEd(!openEd)} className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-white transition-colors">
+        <span className="text-[10px] uppercase tracking-[0.12em] font-bold flex items-center gap-1.5">
           <ClipboardList size={12} /> Perguntas do briefing ({questions.length})
         </span>
         <ChevronRight size={15} className={`transition-transform ${openEd ? 'rotate-90' : ''}`} />
       </button>
       {openEd && (
-        <div className="p-3 border-t-2 border-black space-y-4 max-h-[50vh] overflow-y-auto">
+        <div className="p-3 border-t space-y-4 max-h-[50vh] overflow-y-auto">
           <p className="text-[10px] text-stone-400">O cliente responde estas perguntas como primeira etapa. Edite os textos, remova ou adicione o que quiser.</p>
           {grupos.map(grupo => (
             <div key={grupo}>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-black/50 font-bold">{grupo}</p>
-                <button type="button" onClick={() => addTo(grupo)} className="text-[10px] flex items-center gap-1 border border-black px-2 py-0.5 hover:bg-black hover:text-white transition-colors" style={{ fontWeight: 600 }}>
+                <p className="text-[10px] uppercase tracking-[0.12em] text-vsoft font-bold">{grupo}</p>
+                <button type="button" onClick={() => addTo(grupo)} className="text-[10px] flex items-center gap-1 border  px-2 py-0.5 hover:bg-black hover:text-white transition-colors" style={{ fontWeight: 600 }}>
                   <Plus size={10} /> Pergunta
                 </button>
               </div>
@@ -1512,10 +1636,10 @@ function BriefingEditor({ questions, onChange }: {
                       value={q.text}
                       onChange={e => updateText(q.id, e.target.value)}
                       rows={2}
-                      className="flex-1 border border-black px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-black"
+                      className="flex-1 border  px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-black"
                       style={{ fontWeight: 300 }}
                     />
-                    <button type="button" onClick={() => remove(q.id)} className="text-black/40 hover:text-black p-1 flex-shrink-0" title="Remover pergunta">
+                    <button type="button" onClick={() => remove(q.id)} className="text-vmute hover:text-black p-1 flex-shrink-0" title="Remover pergunta">
                       <Trash2 size={13} />
                     </button>
                   </div>
@@ -1579,7 +1703,7 @@ function ProjectEditor({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={onCancel}>
+    <div className="fixed inset-0 bg-white flex items-center justify-center p-4 z-50" onClick={onCancel}>
       <div className="bg-white rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold" style={{ fontFamily: 'var(--font-serif)' }}>{p.name ? 'Editar projeto' : 'Novo projeto'}</h3>
@@ -1587,14 +1711,14 @@ function ProjectEditor({
         </div>
         <div className="space-y-3">
           <div>
-            <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Nome do projeto</label>
+            <label className="block text-[10px] uppercase tracking-wider text-stone-500 font-bold mb-1">Nome do projeto</label>
             <input value={p.name} onChange={e => set({ name: e.target.value })} placeholder="Ex.: Residência Paulo e Juliana"
-              className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
+              className="w-full v-card-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
           </div>
 
           {/* Cliente: puxa dos clientes já cadastrados na área de obras */}
           <div>
-            <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">
+            <label className="block text-[10px] uppercase tracking-wider text-stone-500 font-bold mb-1">
               Cliente {clients.length > 0 && <span className="text-stone-400 normal-case font-normal">({clients.length} cadastrado{clients.length > 1 ? 's' : ''})</span>}
             </label>
             {clients.length > 0 ? (
@@ -1605,7 +1729,7 @@ function ProjectEditor({
                     const c = clients.find(x => x.id === e.target.value);
                     set({ clientId: e.target.value, clientName: c?.name || '', obraId: '' });
                   }}
-                  className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                  className="w-full v-card-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
                 >
                   <option value="">Selecione um cliente cadastrado…</option>
                   {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -1621,7 +1745,7 @@ function ProjectEditor({
               <>
                 <input value={p.clientName} onChange={e => set({ clientName: e.target.value, clientId: '' })}
                   placeholder="Nome do cliente"
-                  className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
+                  className="w-full v-card-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
                 <p className="text-[10px] text-stone-400 mt-1">
                   Nenhum cliente do cadastro de obras foi carregado aqui. Digite o nome manualmente, ou verifique se há clientes cadastrados na área de Obras.
                 </p>
@@ -1631,7 +1755,7 @@ function ProjectEditor({
 
           {/* Obra / centro de custo: puxa das obras cadastradas (opcional) */}
           <div>
-            <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">
+            <label className="block text-[10px] uppercase tracking-wider text-stone-500 font-bold mb-1">
               Obra vinculada <span className="text-stone-400 normal-case font-normal">(opcional)</span>
             </label>
             <select
@@ -1652,7 +1776,7 @@ function ProjectEditor({
                 set(patch);
               }}
               disabled={obrasDisponiveis.length === 0}
-              className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black disabled:bg-stone-100 disabled:text-black/40"
+              className="w-full v-card-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black disabled:bg-stone-100 disabled:text-vmute"
             >
               <option value="">
                 {obrasDisponiveis.length === 0
@@ -1666,27 +1790,27 @@ function ProjectEditor({
             {onAddObra && p.clientId && (
               !criandoObra ? (
                 <button type="button" onClick={() => setCriandoObra(true)}
-                  className="mt-2 flex items-center gap-1.5 text-xs px-3 py-1.5 border-2 border-black hover:bg-black hover:text-white transition-colors" style={{ fontWeight: 600 }}>
+                  className="mt-2 flex items-center gap-1.5 text-xs px-3 py-1.5 v-card-border hover:bg-black hover:text-white transition-colors" style={{ fontWeight: 600 }}>
                   <Plus size={12} /> Criar nova obra para este cliente
                 </button>
               ) : (
-                <div className="mt-2 border-2 border-black p-3 space-y-2">
-                  <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold">Nome da nova obra</label>
+                <div className="mt-2 v-card-border p-3 space-y-2">
+                  <label className="block text-[10px] uppercase tracking-wider text-stone-500 font-bold">Nome da nova obra</label>
                   <input
                     value={novaObraNome}
                     onChange={e => setNovaObraNome(e.target.value)}
                     placeholder="Ex.: Residência Jardim Botânico"
                     autoFocus
-                    className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                    className="w-full v-card-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
                   />
                   <p className="text-[10px] text-stone-400">A obra será criada na área de Obras, vinculada a este cliente, e já ligada ao projeto.</p>
                   <div className="flex gap-2">
                     <button type="button" onClick={criarObra} disabled={!novaObraNome.trim() || salvandoObra}
-                      className="flex-1 bg-black text-white px-3 py-2 text-sm disabled:opacity-30 hover:bg-white hover:text-black border-2 border-black transition-colors flex items-center justify-center gap-1.5" style={{ fontWeight: 600 }}>
+                      className="flex-1 v-btn-solid px-3 py-2 text-sm disabled:opacity-30  v-card-border transition-colors flex items-center justify-center gap-1.5" style={{ fontWeight: 600 }}>
                       {salvandoObra ? <><Loader2 size={13} className="animate-spin" /> Criando…</> : <><CheckCircle2 size={13} /> Criar e vincular</>}
                     </button>
                     <button type="button" onClick={() => { setCriandoObra(false); setNovaObraNome(''); }}
-                      className="px-3 py-2 text-sm border-2 border-black hover:bg-stone-50 transition-colors" style={{ fontWeight: 600 }}>
+                      className="px-3 py-2 text-sm v-card-border hover:bg-white transition-colors" style={{ fontWeight: 600 }}>
                       Cancelar
                     </button>
                   </div>
@@ -1697,13 +1821,13 @@ function ProjectEditor({
           </div>
 
           {/* Premissas do estudo de conforto térmico */}
-          <div className="border-2 border-black p-3 space-y-3">
-            <p className="text-[10px] font-mono uppercase tracking-[0.12em] font-bold flex items-center gap-1.5">
+          <div className="v-card-border p-3 space-y-3">
+            <p className="text-[10px] uppercase tracking-[0.12em] font-bold flex items-center gap-1.5">
               <Sun size={12} /> Premissas do estudo térmico
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="sm:col-span-3">
-                <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Localização (Cidade, UF)</label>
+                <label className="block text-[10px] uppercase tracking-wider text-stone-500 font-bold mb-1">Localização (Cidade, UF)</label>
                 <input value={p.localizacao || ''} placeholder="Ex.: Campo Mourão, PR"
                   onChange={e => {
                     const loc = e.target.value;
@@ -1712,24 +1836,24 @@ function ProjectEditor({
                     if (c) { patch.latitude = c.lat; patch.longitude = c.lon; }
                     set(patch);
                   }}
-                  className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
+                  className="w-full v-card-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
               </div>
               <div>
-                <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Latitude</label>
+                <label className="block text-[10px] uppercase tracking-wider text-stone-500 font-bold mb-1">Latitude</label>
                 <input type="number" step="0.01" value={p.latitude ?? ''} placeholder="-24.04"
                   onChange={e => set({ latitude: e.target.value === '' ? undefined : Number(e.target.value) })}
-                  className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
+                  className="w-full v-card-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
               </div>
               <div>
-                <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Longitude</label>
+                <label className="block text-[10px] uppercase tracking-wider text-stone-500 font-bold mb-1">Longitude</label>
                 <input type="number" step="0.01" value={p.longitude ?? ''} placeholder="-52.38"
                   onChange={e => set({ longitude: e.target.value === '' ? undefined : Number(e.target.value) })}
-                  className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
+                  className="w-full v-card-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
               </div>
               <div>
-                <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Orientação frontal</label>
+                <label className="block text-[10px] uppercase tracking-wider text-stone-500 font-bold mb-1">Orientação frontal</label>
                 <select value={p.orientacao || 'N'} onChange={e => set({ orientacao: e.target.value })}
-                  className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black">
+                  className="w-full v-card-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black">
                   {['N', 'S', 'L', 'O', 'NE', 'SE', 'SO', 'NO'].map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
@@ -1739,27 +1863,27 @@ function ProjectEditor({
 
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Tipo</label>
+              <label className="block text-[10px] uppercase tracking-wider text-stone-500 font-bold mb-1">Tipo</label>
               <select value={p.type} onChange={e => set({ type: e.target.value })}
-                className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black">
+                className="w-full v-card-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black">
                 {['Residencial', 'Comercial', 'Reforma', 'Corporativo', 'Institucional', 'Outro'].map(t => <option key={t}>{t}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Área (m²)</label>
+              <label className="block text-[10px] uppercase tracking-wider text-stone-500 font-bold mb-1">Área (m²)</label>
               <input value={p.area} onChange={e => set({ area: e.target.value })}
-                className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
+                className="w-full v-card-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
             </div>
             <div>
-              <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Responsável</label>
+              <label className="block text-[10px] uppercase tracking-wider text-stone-500 font-bold mb-1">Responsável</label>
               <input value={p.responsible} onChange={e => set({ responsible: e.target.value })}
-                className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
+                className="w-full v-card-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
             </div>
           </div>
           <div>
-            <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Observações</label>
+            <label className="block text-[10px] uppercase tracking-wider text-stone-500 font-bold mb-1">Observações</label>
             <textarea value={p.notes} onChange={e => set({ notes: e.target.value })} rows={2}
-              className="w-full border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
+              className="w-full v-card-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
           </div>
 
           {/* Perguntas do briefing (editáveis) */}
@@ -1768,10 +1892,10 @@ function ProjectEditor({
             onChange={qs => set({ briefingQuestions: qs })}
           />
         </div>
-        <div className="flex items-center gap-2 mt-5 pt-4 border-t-2 border-black">
+        <div className="flex items-center gap-2 mt-5 pt-4 border-t">
           <button onClick={onSave} disabled={!p.name.trim()}
-            className="flex-1 bg-black text-white px-4 py-2.5 text-sm disabled:opacity-30 hover:bg-white hover:text-black border-2 border-black transition-colors" style={{ fontWeight: 700 }}>Salvar projeto</button>
-          {onDelete && <button onClick={onDelete} className="text-black hover:bg-black hover:text-white p-2.5 border-2 border-black transition-colors" title="Excluir projeto"><Trash2 size={16} /></button>}
+            className="flex-1 v-btn-solid px-4 py-2.5 text-sm disabled:opacity-30  v-card-border transition-colors" style={{ fontWeight: 700 }}>Salvar projeto</button>
+          {onDelete && <button onClick={onDelete} className="text-black hover:bg-black hover:text-white p-2.5 v-card-border transition-colors" title="Excluir projeto"><Trash2 size={16} /></button>}
         </div>
       </div>
     </div>
@@ -1802,7 +1926,7 @@ function ConfirmDialog({
       <div className="border-2 border-white w-full max-w-md" style={{ background: '#0a0a0a' }} onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-2.5 px-5 py-4 border-b-2 border-white">
           <AlertTriangle size={18} strokeWidth={2} />
-          <h3 className="text-lg" style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>{title}</h3>
+          <h3 className="text-lg" style={{ fontWeight: 700 }}>{title}</h3>
         </div>
         <div className="px-5 py-5">
           <p className="text-sm leading-relaxed" style={{ fontWeight: 300, color: 'rgba(255,255,255,0.85)' }}>{message}</p>

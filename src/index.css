@@ -655,153 +655,153 @@ div#root:nth-of-type(1) > div#login_container:nth-of-type(1) > div#root:nth-of-t
 
 
 /* ============================================================
-   AMBIENTE DE PROJETOS — CLAYMORPHISM (tema claro creme/taupe)
-   Cores: creme #FFF2E1 (fundo), taupe #A79277 (acento).
-   Superfícies "clay": cantos muito arredondados + sombra dupla
-   (externa escura + interna clara) para efeito de argila fofa.
+   AMBIENTE DE PROJETOS — TEMA VIOLETA (design v2 "Estúdio")
+   Glassmorphism claro: fundo lilás com gradientes, superfícies
+   brancas translúcidas, acento violeta (#6c4df6/#4f2fd4),
+   cantos arredondados e sombras roxas suaves.
+   Fonte: Plus Jakarta Sans.
    ============================================================ */
 
-.projeto-clay {
-  --clay-cream: #E8D5BC;         /* FUNDO mais escuro (amadeirado) para dar contraste */
-  --clay-taupe: #A79277;
-  --clay-taupe-dark: #7d6b54;
-  --clay-surface: #FFF6EA;       /* SUPERFÍCIE clara — salta à frente do fundo */
-  --clay-surface-2: #FFF2E1;
-  --clay-text: #4a3f30;          /* marrom escuro para texto principal */
-  --clay-text-soft: #6b5d47;     /* texto secundário (mais escuro = mais legível) */
-  background-color: var(--clay-cream);
-  color: var(--clay-text);
+.projeto-violet {
+  --v-accent: #6c4df6;
+  --v-accent-2: #4f2fd4;
+  --v-accent-grad: linear-gradient(140deg, #7d5bf8, #4f2fd4);
+  --v-bg: #efecfc;
+  --v-text: #1b1830;
+  --v-text-soft: #6b6785;
+  --v-text-mute: #a5a1bb;
+  --v-surface: #ffffff;
+  --v-surface-tint: #f7f5fe;
+  --v-border: rgba(108,77,246,0.08);
+  --v-shadow: 0 6px 24px rgba(70,50,150,0.08);
+  --v-shadow-sm: 0 3px 14px rgba(70,50,150,0.06);
+  --v-radius: 20px;
+  /* chips de estado */
+  --v-ok-bg: #e8f7ee;   --v-ok-fg: #12805a;
+  --v-warn-bg: #fff2dc; --v-warn-fg: #b06d05;
+  --v-mute-bg: #f0edfd; --v-mute-fg: #6b6785;
+  background:
+    radial-gradient(900px 500px at 12% 0%, #dcd6fb 0%, transparent 60%),
+    radial-gradient(800px 500px at 88% 10%, #e7dcfb 0%, transparent 55%),
+    linear-gradient(160deg, #f2effd, #eae6fb);
+  background-attachment: fixed;
+  color: var(--v-text);
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 }
 
-/* Texto: escapa da regra global cinza (#94A3B8 !important), usa marrom quente.
-   Precisa de !important para vencer a regra global de mesma especificidade. */
-.projeto-clay p,
-.projeto-clay span,
-.projeto-clay h1,
-.projeto-clay h2,
-.projeto-clay h3,
-.projeto-clay h4,
-.projeto-clay label,
-.projeto-clay td,
-.projeto-clay th,
-.projeto-clay li,
-.projeto-clay a,
-.projeto-clay small,
-.projeto-clay strong,
-.projeto-clay b,
-.projeto-clay div {
-  color: var(--clay-text) !important;
+/* Texto: sobrepõe a regra global cinza (#94A3B8 !important) */
+.projeto-violet p,
+.projeto-violet span,
+.projeto-violet h1,
+.projeto-violet h2,
+.projeto-violet h3,
+.projeto-violet h4,
+.projeto-violet label,
+.projeto-violet td,
+.projeto-violet th,
+.projeto-violet li,
+.projeto-violet a,
+.projeto-violet small,
+.projeto-violet strong,
+.projeto-violet b,
+.projeto-violet div {
+  color: var(--v-text);
 }
-/* Textos secundarios (classes utilitarias de opacidade) -> marrom suave legivel */
-.projeto-clay [class*="text-white/"],
-.projeto-clay [class*="text-black/"],
-.projeto-clay [class*="text-stone-"],
-.projeto-clay [class*="text-slate-"] { color: var(--clay-text-soft) !important; }
-/* Mas dentro de superficies coloridas e botoes taupe, o texto continua branco */
-.projeto-clay .clay-color,
-.projeto-clay .clay-color *,
-.projeto-clay .bg-black,
-.projeto-clay .bg-black *,
-.projeto-clay .clay-nav-active,
-.projeto-clay .clay-nav-active * { color: #fff !important; }
+.projeto-violet [class*="text-white/"],
+.projeto-violet [class*="text-black/"],
+.projeto-violet [class*="text-stone-"],
+.projeto-violet [class*="text-slate-"] { color: var(--v-text-soft) !important; }
 
-/* Sombra clay reutilizável */
-.projeto-clay .clay,
-.projeto-clay .bg-white,
-.projeto-clay .bg-black\/30,
-.projeto-clay .bg-black\/40 {
-  background: var(--clay-surface) !important;
-  border-radius: 24px !important;
-  border: none !important;
-  box-shadow:
-    -6px -6px 14px rgba(255,255,255,0.75),
-    8px 8px 20px rgba(124,107,84,0.28),
-    inset 2px 2px 4px rgba(255,255,255,0.5),
-    inset -2px -2px 6px rgba(124,107,84,0.10) !important;
-  backdrop-filter: none !important;
+/* Superfícies: cards claros translúcidos com sombra roxa */
+.projeto-violet .v-card {
+  background: var(--v-surface);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius);
+  box-shadow: var(--v-shadow);
 }
+.projeto-violet .v-glass {
+  background: rgba(255,255,255,0.72);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(108,77,246,0.10);
+  border-radius: 22px;
+  box-shadow: 0 8px 30px rgba(70,50,150,0.08);
+}
+.projeto-violet .v-tint { background: var(--v-surface-tint); border-radius: 14px; }
 
-/* Botões clay pretos → taupe puffy */
-.projeto-clay .bg-black {
-  background: var(--clay-taupe) !important;
-  color: #fff !important;
-  border-radius: 16px !important;
-  border: none !important;
-  box-shadow:
-    -3px -3px 8px rgba(255,255,255,0.5),
-    4px 4px 10px rgba(124,107,84,0.35) !important;
+/* Botão primário violeta */
+.projeto-violet .v-btn {
+  border: 0; cursor: pointer; font-family: inherit; font-weight: 700;
+  border-radius: 14px; background: var(--v-accent-grad); color: #fff !important;
+  box-shadow: 0 8px 22px rgba(108,77,246,0.35);
+  transition: transform .12s, box-shadow .12s;
 }
-.projeto-clay .bg-black * { color: #fff !important; }
-.projeto-clay .bg-black:hover {
-  box-shadow:
-    inset -2px -2px 6px rgba(255,255,255,0.25),
-    inset 3px 3px 8px rgba(124,107,84,0.4) !important;
+.projeto-violet .v-btn * { color: #fff !important; }
+.projeto-violet .v-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 26px rgba(108,77,246,0.45); }
+.projeto-violet .v-btn-ghost {
+  border: 0; cursor: pointer; font-family: inherit; font-weight: 600;
+  border-radius: 999px; background: #fff; color: var(--v-text) !important;
+  box-shadow: 0 2px 8px rgba(70,50,150,0.10);
 }
 
-/* Bordas viram contornos suaves ou somem (clay não usa borda dura) */
-.projeto-clay .border-2,
-.projeto-clay .border,
-.projeto-clay [class*="border-white"],
-.projeto-clay [class*="border-black"] {
-  border-color: transparent !important;
+/* Chips de estado */
+.projeto-violet .v-chip { font-weight: 700; border-radius: 999px; padding: 4px 10px; font-size: 10px; }
+.projeto-violet .v-chip-ok { background: var(--v-ok-bg); color: var(--v-ok-fg) !important; }
+.projeto-violet .v-chip-warn { background: var(--v-warn-bg); color: var(--v-warn-fg) !important; }
+.projeto-violet .v-chip-mute { background: var(--v-mute-bg); color: var(--v-mute-fg) !important; }
+
+/* Item de navegação ativo */
+.projeto-violet .v-nav-active {
+  background: #ece7fd !important;
+  color: var(--v-accent-2) !important;
+  border-radius: 12px;
+  font-weight: 700;
+}
+.projeto-violet .v-nav-active * { color: var(--v-accent-2) !important; }
+.projeto-violet .v-nav-item { color: #4a4663 !important; border-radius: 12px; }
+.projeto-violet .v-nav-item:hover { background: rgba(108,77,246,0.06) !important; }
+.projeto-violet .v-nav-mute { color: var(--v-text-mute) !important; }
+
+/* Inputs */
+.projeto-violet input,
+.projeto-violet textarea,
+.projeto-violet select {
+  background: #fff !important;
+  color: var(--v-text) !important;
+  border: 1px solid rgba(108,77,246,0.15) !important;
+  border-radius: 12px !important;
+}
+.projeto-violet input::placeholder,
+.projeto-violet textarea::placeholder { color: var(--v-text-mute) !important; }
+
+/* Barra de progresso */
+.projeto-violet .v-track { height: 8px; border-radius: 999px; background: #eeeafd; overflow: hidden; }
+.projeto-violet .v-fill { height: 100%; border-radius: 999px; background: var(--v-accent-grad); }
+
+/* Sidebar */
+.projeto-violet .v-sidebar {
+  background: rgba(255,255,255,0.72);
+  backdrop-filter: blur(14px);
+  border-right: 1px solid rgba(108,77,246,0.10);
+  box-shadow: 0 8px 30px rgba(70,50,150,0.08);
 }
 
-/* Inputs e textarea clay: afundados (inset) */
-.projeto-clay input,
-.projeto-clay textarea,
-.projeto-clay select {
-  background: var(--clay-cream) !important;
-  color: var(--clay-text) !important;
-  border-radius: 14px !important;
-  border: none !important;
-  box-shadow:
-    inset 3px 3px 7px rgba(124,107,84,0.22),
-    inset -3px -3px 7px rgba(255,255,255,0.7) !important;
-}
-.projeto-clay input::placeholder,
-.projeto-clay textarea::placeholder { color: var(--clay-text-soft) !important; opacity: 0.7; }
+/* Cartões coloridos (métricas do térmico) mantêm gradiente, ganham raio suave */
+.projeto-violet .v-metric { border-radius: 18px; color: #fff !important; box-shadow: 0 5px 20px rgba(70,50,150,0.18); }
+.projeto-violet .v-metric * { color: #fff !important; }
 
-/* Barra lateral: superfície clay creme */
-.projeto-clay .clay-sidebar {
-  background: var(--clay-cream) !important;
-  box-shadow: 6px 0 24px rgba(124,107,84,0.15) !important;
+.projeto-violet img { filter: none !important; }
+
+/* Responsividade: sidebar colapsa no mobile (controlada por classe no componente) */
+@media (max-width: 1023px) {
+  .projeto-violet .v-shell { grid-template-columns: 1fr !important; }
 }
 
-/* Item de menu ativo: pílula taupe afundada */
-.projeto-clay .clay-nav-active {
-  background: var(--clay-taupe) !important;
-  color: #fff !important;
-  border-radius: 14px !important;
-  box-shadow:
-    inset 2px 2px 5px rgba(124,107,84,0.5),
-    inset -2px -2px 5px rgba(255,255,255,0.2) !important;
-}
-.projeto-clay .clay-nav-active * { color: #fff !important; }
-
-/* Imagens sem filtro */
-.projeto-clay img { filter: none !important; }
-
-/* Barras de progresso e trilhos ficam suaves */
-.projeto-clay .bg-white\/15,
-.projeto-clay .bg-white\/20,
-.projeto-clay .bg-stone-200 {
-  background: rgba(124,107,84,0.18) !important;
-}
-
-/* Cards coloridos (métricas, gradientes) ganham cantos e sombra clay,
-   mantendo a cor viva por dentro */
-.projeto-clay .clay-color {
-  border-radius: 20px !important;
-  color: #fff !important;
-  box-shadow:
-    -4px -4px 10px rgba(255,255,255,0.6),
-    6px 6px 16px rgba(124,107,84,0.3) !important;
-}
-.projeto-clay .clay-color * { color: #fff !important; }
-
-/* texto suave utilitário */
-.projeto-clay .text-clay-soft { color: var(--clay-text-soft) !important; }
-
-/* faixas de gradiente (topo de relatórios/banners) mantêm cor */
-.projeto-clay .keep-gradient,
-.projeto-clay .keep-gradient * { }
+/* Utilitárias extras do tema violeta (usadas nas peças convertidas) */
+.projeto-violet .v-card-border { background: #fff; border: 1px solid var(--v-border); border-radius: 18px; box-shadow: var(--v-shadow); }
+.projeto-violet .v-btn-solid { background: var(--v-accent-grad) !important; color: #fff !important; border-radius: 12px; font-weight: 700; box-shadow: 0 6px 18px rgba(108,77,246,0.30); }
+.projeto-violet .v-btn-solid * { color: #fff !important; }
+.projeto-violet .text-vsoft, .projeto-violet .text-vsoft * { color: var(--v-text-soft) !important; }
+.projeto-violet .text-vmute, .projeto-violet .text-vmute * { color: var(--v-text-mute) !important; }
+.projeto-violet .v-track-bg { background: #eeeafd !important; }
+/* modais/overlays no tema claro */
+.projeto-violet .fixed.inset-0 { color: var(--v-text); }
