@@ -668,8 +668,8 @@ div#root:nth-of-type(1) > div#login_container:nth-of-type(1) > div#root:nth-of-t
   --v-accent-grad: linear-gradient(140deg, #7d5bf8, #4f2fd4);
   --v-bg: #efecfc;
   --v-text: #1b1830;
-  --v-text-soft: #6b6785;
-  --v-text-mute: #a5a1bb;
+  --v-text-soft: #5a5570;
+  --v-text-mute: #837f99;
   --v-surface: #ffffff;
   --v-surface-tint: #f7f5fe;
   --v-border: rgba(108,77,246,0.08);
@@ -705,7 +705,7 @@ div#root:nth-of-type(1) > div#login_container:nth-of-type(1) > div#root:nth-of-t
 .projeto-violet strong,
 .projeto-violet b,
 .projeto-violet div {
-  color: var(--v-text);
+  color: var(--v-text) !important;
 }
 .projeto-violet [class*="text-white/"],
 .projeto-violet [class*="text-black/"],
