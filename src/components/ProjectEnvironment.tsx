@@ -106,6 +106,16 @@ interface PhaseEvent {
   at: string;
   text?: string;
 }
+
+// Mensagem do mural de recados do projeto.
+interface MuralMessage {
+  id: string;
+  author: string;
+  role: string;      // papel de quem escreveu (admin/cliente/...)
+  fromAdmin: boolean; // para alinhar/estilizar o balão
+  at: string;
+  text: string;
+}
 interface ArchPhase {
   name: string;
   state: PhaseState;
@@ -137,6 +147,8 @@ interface ArchProject {
   briefingAnswers?: BriefingAnswer[];
   briefingDone?: boolean;
   briefingDoneAt?: string;
+  // Mural de recados do projeto (troca cliente ↔ arquiteto, não preso a fase)
+  mural?: MuralMessage[];
 }
 
 // Paleta MONOCROMÁTICA: preto absoluto (#000) e branco absoluto (#fff).
@@ -457,6 +469,31 @@ function ProjectShell({
   const isAdmin = isAdminReal && !previewClient;
   const [page, setPage] = useState<PageId>('inicio');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [searchFocus, setSearchFocus] = useState(false);
+  const [bellOpen, setBellOpen] = useState(false);
+
+  // ----- BUSCA: indexa etapas e arquivos do projeto atual -----
+  const searchIndex: { kind: 'etapa' | 'arquivo'; label: string; sub: string; page: PageId }[] = [
+    { kind: 'etapa', label: 'Início', sub: 'Visão geral', page: 'inicio' },
+    { kind: 'etapa', label: 'Conforto Térmico', sub: 'Estudo técnico', page: 'termico' },
+    { kind: 'etapa', label: 'Briefing de Premissas', sub: 'Programa do cliente', page: 'briefing' },
+    ...project.phases.map((ph, i) => ({ kind: 'etapa' as const, label: ph.name, sub: STATE_META[ph.state].label, page: `fase-${i}` as PageId })),
+    ...project.phases.flatMap((ph, i) => (ph.files || []).map(f => ({ kind: 'arquivo' as const, label: f.name, sub: `em ${ph.name}`, page: `fase-${i}` as PageId }))),
+  ];
+  const q = search.trim().toLowerCase();
+  const searchResults = q ? searchIndex.filter(it => it.label.toLowerCase().includes(q) || it.sub.toLowerCase().includes(q)).slice(0, 8) : [];
+
+  // ----- SINO: notificações calculadas dos dados -----
+  const notifications: { text: string; page: PageId; kind: 'warn' | 'ok' | 'info' }[] = [];
+  project.phases.forEach((ph, i) => {
+    if (ph.state === 'aguardando_aprovacao') notifications.push({ text: `${ph.name} aguarda ${isAdmin ? 'aprovação do cliente' : 'sua aprovação'}`, page: `fase-${i}`, kind: 'warn' });
+    if (ph.state === 'ajustes') notifications.push({ text: `${ph.name} está em ajustes`, page: `fase-${i}`, kind: 'warn' });
+  });
+  if (!project.briefingDone) notifications.push({ text: 'Briefing de premissas pendente', page: 'briefing', kind: 'info' });
+  const muralUnread = 0; // (poderia marcar não-lidas; deixamos simples)
+
+  const go = (p: PageId) => { setPage(p); setSearch(''); setSearchFocus(false); setBellOpen(false); setSidebarOpen(false); };
 
   const hasThermal = !!(project.localizacao && project.latitude != null && project.longitude != null);
 
@@ -465,6 +502,7 @@ function ProjectShell({
     { id: 'inicio', label: 'Início', Icon: Home },
     { id: 'termico', label: 'Conforto Térmico', Icon: Sun, locked: !hasThermal },
     { id: 'briefing', label: 'Briefing de Premissas', Icon: ClipboardList, badge: project.briefingDone ? '✓' : undefined },
+    { id: 'mural', label: 'Mural de Recados', Icon: MessageSquare, badge: (project.mural?.length || 0) > 0 ? String(project.mural!.length) : undefined },
     ...project.phases.map((ph, i) => ({
       id: `fase-${i}`, label: ph.name, Icon: phaseIcon(ph.state),
       locked: ph.state === 'bloqueada',
@@ -557,11 +595,67 @@ function ProjectShell({
         {/* topbar */}
         <div className="flex items-center gap-2.5">
           <button onClick={() => setSidebarOpen(true)} className="lg:hidden w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0" style={{ boxShadow: 'var(--v-shadow-sm)' }}><Menu size={18} /></button>
-          <div className="flex-1 flex items-center gap-2.5 rounded-full px-4 py-2.5" style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(108,77,246,0.10)', boxShadow: 'var(--v-shadow-sm)' }}>
-            <Search size={15} style={{ color: 'var(--v-text-mute)' }} />
-            <span className="text-[13px]" style={{ color: 'var(--v-text-mute)' }}>Buscar etapas, arquivos…</span>
+
+          {/* Busca funcional */}
+          <div className="flex-1 relative">
+            <div className="flex items-center gap-2.5 rounded-full px-4 py-2.5" style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid rgba(108,77,246,0.12)', boxShadow: 'var(--v-shadow-sm)' }}>
+              <Search size={15} style={{ color: 'var(--v-text-mute)' }} />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                onFocus={() => setSearchFocus(true)}
+                onBlur={() => setTimeout(() => setSearchFocus(false), 150)}
+                placeholder="Buscar etapas, arquivos…"
+                className="flex-1 bg-transparent text-[13px] outline-none border-0"
+                style={{ boxShadow: 'none', padding: 0 }}
+              />
+              {search && <button onMouseDown={() => setSearch('')} className="text-[16px] leading-none" style={{ color: 'var(--v-text-mute)' }}>×</button>}
+            </div>
+            {/* Dropdown de resultados */}
+            {searchFocus && q && (
+              <div className="absolute left-0 right-0 top-full mt-2 z-40 v-card p-2 max-h-80 overflow-y-auto">
+                {searchResults.length === 0 ? (
+                  <p className="text-[12px] px-3 py-2" style={{ color: 'var(--v-text-mute)' }}>Nada encontrado para "{search}".</p>
+                ) : searchResults.map((it, i) => (
+                  <button key={i} onMouseDown={() => go(it.page)} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-black/5 text-left">
+                    {it.kind === 'arquivo' ? <FileText size={14} style={{ color: 'var(--v-accent-2)' }} /> : <ChevronRight size={14} style={{ color: 'var(--v-accent-2)' }} />}
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-[13px] truncate" style={{ fontWeight: 600 }}>{it.label}</span>
+                      <span className="block text-[11px] truncate" style={{ color: 'var(--v-text-mute)' }}>{it.sub}</span>
+                    </span>
+                    <span className="text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-full" style={{ background: '#f0edfd', color: 'var(--v-text-soft)', fontWeight: 700 }}>{it.kind}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          <span className="w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0" style={{ boxShadow: 'var(--v-shadow-sm)' }}><Bell size={17} style={{ color: 'var(--v-text-soft)' }} /></span>
+
+          {/* Sino de notificações */}
+          <div className="relative flex-shrink-0">
+            <button onClick={() => setBellOpen(v => !v)} className="w-10 h-10 rounded-full bg-white flex items-center justify-center relative" style={{ boxShadow: 'var(--v-shadow-sm)' }}>
+              <Bell size={17} style={{ color: 'var(--v-text-soft)' }} />
+              {notifications.length > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full flex items-center justify-center text-[9px] text-white" style={{ background: '#ec6b8f', fontWeight: 800 }}>{notifications.length}</span>
+              )}
+            </button>
+            {bellOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setBellOpen(false)} />
+                <div className="absolute right-0 top-full mt-2 z-40 w-72 v-card p-2">
+                  <p className="text-[10px] uppercase tracking-[0.12em] px-3 py-1.5" style={{ color: 'var(--v-text-mute)', fontWeight: 700 }}>Notificações</p>
+                  {notifications.length === 0 ? (
+                    <p className="text-[12px] px-3 py-3" style={{ color: 'var(--v-text-mute)' }}>Tudo em dia. Nenhuma pendência.</p>
+                  ) : notifications.map((n, i) => (
+                    <button key={i} onClick={() => go(n.page)} className="w-full flex items-start gap-2.5 px-3 py-2.5 rounded-xl hover:bg-black/5 text-left">
+                      <span className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style={{ background: n.kind === 'warn' ? '#f0a83c' : n.kind === 'ok' ? '#3fbf82' : '#7d5bf8' }} />
+                      <span className="text-[13px] leading-snug">{n.text}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
           <span className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white text-[13px]" style={{ background: 'var(--v-accent-grad)', fontWeight: 700, boxShadow: '0 6px 18px rgba(108,77,246,0.35)' }}>{initials}</span>
         </div>
 
@@ -588,6 +682,7 @@ function ProjectPage({ page, project, isAdmin, userName, role, onPersist, onNavi
   if (page === 'inicio') return <PageInicio project={project} isAdmin={isAdmin} userName={userName} onNavigate={onNavigate} />;
   if (page === 'termico') return <PageTermico project={project} />;
   if (page === 'briefing') return <PageBriefing project={project} isAdmin={isAdmin} userName={userName} role={role} onPersist={onPersist} />;
+  if (page === 'mural') return <PageMural project={project} isAdmin={isAdmin} userName={userName} role={role} onPersist={onPersist} />;
   if (page.startsWith('fase-')) {
     const idx = parseInt(page.split('-')[1], 10);
     return <PageFase project={project} idx={idx} isAdmin={isAdmin} userName={userName} role={role} onPersist={onPersist} />;
@@ -785,7 +880,7 @@ function PageInicio({ project, isAdmin, userName, onNavigate }: {
 
           {/* Campo escreva ao arquiteto (atalho para a fase atual) */}
           <button
-            onClick={() => faseAtual && onNavigate(`fase-${phases.indexOf(faseAtual)}`)}
+            onClick={() => onNavigate('mural')}
             className="mt-auto rounded-2xl px-4 py-3.5 flex items-center justify-between gap-2.5 text-left"
             style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(108,77,246,0.12)', boxShadow: 'var(--v-shadow-sm)' }}>
             <span className="text-[13px]" style={{ color: 'var(--v-text-mute)' }}>{isAdmin ? 'Comentar com o cliente…' : 'Escreva ao arquiteto…'}</span>
@@ -945,7 +1040,91 @@ function PageHeader({ eyebrow, title, subtitle }: { eyebrow: string; title: stri
     </div>
   );
 }
-// === PÁGINA: Dashboard de Conforto Térmico ===
+// === PÁGINA: Mural de Recados (troca cliente ↔ arquiteto) ===
+function PageMural({ project, isAdmin, userName, role, onPersist }: {
+  project: ArchProject; isAdmin: boolean; userName?: string; role: string;
+  onPersist: (p: ArchProject) => Promise<any> | void;
+}) {
+  const [texto, setTexto] = useState('');
+  const mural = project.mural || [];
+
+  const enviar = () => {
+    const t = texto.trim();
+    if (!t) return;
+    const msg: MuralMessage = {
+      id: uid('m'), author: userName || (isAdmin ? 'Arquiteto' : 'Cliente'), role,
+      fromAdmin: isAdmin, at: new Date().toISOString(), text: t,
+    };
+    onPersist({ ...project, mural: [...mural, msg] });
+    setTexto('');
+  };
+
+  const fmtQuando = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <PageHeader eyebrow="Comunicação" title="Mural de Recados" subtitle="Converse com o arquiteto ao longo do projeto" />
+
+      <div className="v-card p-5 flex flex-col gap-4" style={{ minHeight: '50vh' }}>
+        {/* Mensagens */}
+        <div className="flex-1 flex flex-col gap-3">
+          {mural.length === 0 ? (
+            <div className="flex flex-col items-center justify-center text-center py-12">
+              <MessageSquare size={32} style={{ color: 'var(--v-text-mute)' }} strokeWidth={1.5} />
+              <p className="text-[13px] mt-3" style={{ color: 'var(--v-text-soft)' }}>Nenhum recado ainda. Comece a conversa!</p>
+            </div>
+          ) : mural.map(m => {
+            // Alinha à direita quem está na mesma "posição" do usuário atual.
+            const mine = m.fromAdmin === isAdmin;
+            return (
+              <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                <div className="max-w-[75%] flex flex-col gap-1">
+                  <div className="flex items-center gap-2" style={{ flexDirection: mine ? 'row-reverse' : 'row' }}>
+                    <span className="text-[11px]" style={{ fontWeight: 700 }}>{m.author}</span>
+                    <span className="text-[10px]" style={{ color: 'var(--v-text-mute)' }}>{fmtQuando(m.at)}</span>
+                    <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ background: m.fromAdmin ? '#ece7fd' : '#e8f7ee', color: m.fromAdmin ? 'var(--v-accent-2)' : '#12805a', fontWeight: 700 }}>
+                      {m.fromAdmin ? 'Arquiteto' : 'Cliente'}
+                    </span>
+                  </div>
+                  <div className="px-4 py-2.5 text-[13px] leading-relaxed whitespace-pre-wrap"
+                    style={{
+                      background: mine ? 'var(--v-accent-grad)' : '#f4f1fe',
+                      color: mine ? '#fff' : 'var(--v-text)',
+                      borderRadius: mine ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                    }}>
+                    {m.text}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Campo de envio */}
+        <div className="flex items-end gap-2 pt-2" style={{ borderTop: '1px solid var(--v-border)' }}>
+          <textarea
+            value={texto}
+            onChange={e => setTexto(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); enviar(); } }}
+            rows={2}
+            placeholder={isAdmin ? 'Escreva um recado ao cliente…' : 'Escreva ao arquiteto…'}
+            className="flex-1 px-3 py-2.5 text-[13px] resize-none"
+          />
+          <button onClick={enviar} disabled={!texto.trim()}
+            className="v-btn flex items-center gap-1.5 px-4 py-2.5 text-[13px] disabled:opacity-40" style={{ fontWeight: 700 }}>
+            <Send size={14} /> Enviar
+          </button>
+        </div>
+        <p className="text-[10px] -mt-2" style={{ color: 'var(--v-text-mute)' }}>Dica: Ctrl+Enter envia.</p>
+      </div>
+    </div>
+  );
+}
+
+
 
 function PageTermico({ project }: { project: ArchProject }) {
   const hasLocation = !!(project.localizacao && project.latitude != null && project.longitude != null);
