@@ -714,7 +714,7 @@ div#root:nth-of-type(1) > div#login_container:nth-of-type(1) > div#root:nth-of-t
 
 /* Superfícies: cards claros translúcidos com sombra roxa */
 .projeto-violet .v-card {
-  background: var(--v-surface);
+  background: #ffffff !important;
   border: 1px solid var(--v-border);
   border-radius: var(--v-radius);
   box-shadow: var(--v-shadow);
@@ -731,7 +731,7 @@ div#root:nth-of-type(1) > div#login_container:nth-of-type(1) > div#root:nth-of-t
 /* Botão primário violeta */
 .projeto-violet .v-btn {
   border: 0; cursor: pointer; font-family: inherit; font-weight: 700;
-  border-radius: 14px; background: var(--v-accent-grad); color: #fff !important;
+  border-radius: 14px; background: linear-gradient(140deg, #7d5bf8, #4f2fd4) !important; color: #fff !important;
   box-shadow: 0 8px 22px rgba(108,77,246,0.35);
   transition: transform .12s, box-shadow .12s;
 }
@@ -774,8 +774,8 @@ div#root:nth-of-type(1) > div#login_container:nth-of-type(1) > div#root:nth-of-t
 .projeto-violet textarea::placeholder { color: var(--v-text-mute) !important; }
 
 /* Barra de progresso */
-.projeto-violet .v-track { height: 8px; border-radius: 999px; background: #eeeafd; overflow: hidden; }
-.projeto-violet .v-fill { height: 100%; border-radius: 999px; background: var(--v-accent-grad); }
+.projeto-violet .v-track { height: 8px; border-radius: 999px; background: #e6e1fb !important; overflow: hidden; }
+.projeto-violet .v-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #7d5bf8, #4f2fd4) !important; }
 
 /* Sidebar */
 .projeto-violet .v-sidebar {
@@ -797,11 +797,18 @@ div#root:nth-of-type(1) > div#login_container:nth-of-type(1) > div#root:nth-of-t
 }
 
 /* Utilitárias extras do tema violeta (usadas nas peças convertidas) */
-.projeto-violet .v-card-border { background: #fff; border: 1px solid var(--v-border); border-radius: 18px; box-shadow: var(--v-shadow); }
-.projeto-violet .v-btn-solid { background: var(--v-accent-grad) !important; color: #fff !important; border-radius: 12px; font-weight: 700; box-shadow: 0 6px 18px rgba(108,77,246,0.30); }
+.projeto-violet .v-card-border { background: #fff !important; border: 1px solid var(--v-border); border-radius: 18px; box-shadow: var(--v-shadow); }
+.projeto-violet .v-btn-solid { background: linear-gradient(140deg, #7d5bf8, #4f2fd4) !important; color: #fff !important; border-radius: 12px; font-weight: 700; box-shadow: 0 6px 18px rgba(108,77,246,0.30); }
 .projeto-violet .v-btn-solid * { color: #fff !important; }
 .projeto-violet .text-vsoft, .projeto-violet .text-vsoft * { color: var(--v-text-soft) !important; }
 .projeto-violet .text-vmute, .projeto-violet .text-vmute * { color: var(--v-text-mute) !important; }
 .projeto-violet .v-track-bg { background: #eeeafd !important; }
 /* modais/overlays no tema claro */
 .projeto-violet .fixed.inset-0 { color: var(--v-text); }
+
+/* Gradiente violeta forçado (para elementos onde a variável inline pode não resolver) */
+.projeto-violet .v-grad { background: linear-gradient(140deg, #7d5bf8, #4f2fd4) !important; color: #fff !important; }
+.projeto-violet .v-grad * { color: #fff !important; }
+
+/* Força bg-white e superfícies claras no tema violeta */
+.projeto-violet .bg-white { background: #ffffff !important; }

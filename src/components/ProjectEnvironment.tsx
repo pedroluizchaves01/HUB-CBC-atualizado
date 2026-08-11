@@ -348,7 +348,7 @@ export default function ProjectEnvironment({
       <header className="sticky top-0 z-20 v-glass rounded-none" style={{ borderRadius: 0 }}>
         <div className="max-w-6xl mx-auto px-5 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="w-10 h-10 rounded-[13px] flex items-center justify-center text-white" style={{ background: 'var(--v-accent-grad)', fontWeight: 800 }}>C</span>
+            <span className="v-grad w-10 h-10 rounded-[13px] flex items-center justify-center text-white" style={{ fontWeight: 800 }}>C</span>
             <div>
               <p className="text-[10px] uppercase tracking-[0.22em]" style={{ color: 'var(--v-text-mute)', fontWeight: 700 }}>Chaves Brites Correa</p>
               <h1 className="text-lg" style={{ fontWeight: 800 }}>Estúdio de Projetos</h1>
@@ -537,7 +537,7 @@ function ProjectShell({
       } flex flex-col p-3.5`}>
         {/* logo */}
         <div className="flex items-center gap-2.5 p-2.5 bg-white rounded-2xl" style={{ boxShadow: '0 3px 12px rgba(70,50,150,0.08)' }}>
-          <span className="w-8 h-8 rounded-[11px] flex items-center justify-center text-white text-sm" style={{ background: 'var(--v-accent-grad)', fontWeight: 800 }}>C</span>
+          <span className="v-grad w-8 h-8 rounded-[11px] flex items-center justify-center text-white text-sm" style={{ fontWeight: 800 }}>C</span>
           <span className="flex flex-col leading-tight min-w-0">
             <b className="text-[13px]" style={{ fontWeight: 700 }}>Estúdio</b>
             <span className="text-[10px] truncate" style={{ color: 'var(--v-text-mute)' }}>Chaves Brites Correa</span>
@@ -656,7 +656,7 @@ function ProjectShell({
             )}
           </div>
 
-          <span className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white text-[13px]" style={{ background: 'var(--v-accent-grad)', fontWeight: 700, boxShadow: '0 6px 18px rgba(108,77,246,0.35)' }}>{initials}</span>
+          <span className="v-grad w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white text-[13px]" style={{ fontWeight: 700, boxShadow: '0 6px 18px rgba(108,77,246,0.35)' }}>{initials}</span>
         </div>
 
         {/* badge "vendo como cliente" */}
@@ -884,7 +884,7 @@ function PageInicio({ project, isAdmin, userName, onNavigate }: {
             className="mt-auto rounded-2xl px-4 py-3.5 flex items-center justify-between gap-2.5 text-left"
             style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(108,77,246,0.12)', boxShadow: 'var(--v-shadow-sm)' }}>
             <span className="text-[13px]" style={{ color: 'var(--v-text-mute)' }}>{isAdmin ? 'Comentar com o cliente…' : 'Escreva ao arquiteto…'}</span>
-            <span className="w-9 h-9 flex-shrink-0 rounded-xl flex items-center justify-center" style={{ background: 'var(--v-accent-grad)' }}>
+            <span className="v-grad w-9 h-9 flex-shrink-0 rounded-xl flex items-center justify-center">
               <Send size={15} className="text-white" />
             </span>
           </button>
@@ -1315,7 +1315,7 @@ const BRIEFING_GROUP_STYLE: Record<string, { Icon: React.ComponentType<any>; col
   'Observações livres': { Icon: Sparkles, color: '#E64980' },
 };
 function groupStyle(g: string) {
-  return BRIEFING_GROUP_STYLE[g] || { Icon: ClipboardList, color: '#adb5bd' };
+  return BRIEFING_GROUP_STYLE[g] || { Icon: ClipboardList, color: '#7d5bf8' };
 }
 
 function BriefingCard({ project, isAdmin, onSaveAnswers, onFinish }: {
@@ -1437,8 +1437,8 @@ function BriefingCard({ project, isAdmin, onSaveAnswers, onFinish }: {
           Quanto mais detalhes, melhor o projeto. Você pode salvar e continuar depois.
         </p>
         <div className="flex items-center gap-3 mt-3">
-          <div className="flex-1 h-1.5 bg-white/15 relative rounded-full overflow-hidden">
-            <div className="absolute left-0 top-0 h-1.5 transition-all rounded-full" style={{ width: `${pct}%`, background: 'linear-gradient(90deg,#0CA678,#1971C2)' }} />
+          <div className="flex-1 h-1.5 v-track relative rounded-full overflow-hidden">
+            <div className="absolute left-0 top-0 h-1.5 transition-all rounded-full v-fill" style={{ width: `${pct}%` }} />
           </div>
           <span className="text-[11px] font-mono" style={{ fontWeight: 600 }}>{respondidas}/{total}</span>
         </div>
@@ -1457,7 +1457,7 @@ function BriefingCard({ project, isAdmin, onSaveAnswers, onFinish }: {
                     onChange={e => setDraft(d => ({ ...d, [q.id]: e.target.value }))}
                     rows={2}
                     placeholder="Sua resposta..."
-                    className="w-full border border-white/25 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-white/50 placeholder:text-vmute text-white"
+                    className="w-full px-3 py-2 text-sm focus:outline-none placeholder:text-vmute"
                     style={{ fontWeight: 300 }}
                   />
                 </div>
@@ -1470,7 +1470,7 @@ function BriefingCard({ project, isAdmin, onSaveAnswers, onFinish }: {
       <div className="flex flex-col sm:flex-row items-stretch gap-2 p-5 border-t">
         <button
           onClick={() => onSaveAnswers(toAnswers())}
-          className="flex items-center justify-center gap-1.5  px-4 py-2.5 text-sm hover:bg-black/5 transition-colors"
+          className="v-btn-ghost flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm"
           style={{ fontWeight: 600 }}>
           <Send size={14} /> Salvar rascunho
         </button>
@@ -1482,8 +1482,8 @@ function BriefingCard({ project, isAdmin, onSaveAnswers, onFinish }: {
             onFinish(toAnswers());
             setOpen(false);
           }}
-          className="flex-1 flex items-center justify-center gap-1.5 text-white px-4 py-2.5 text-sm transition-opacity hover:opacity-90 "
-          style={{ fontWeight: 700, background: 'var(--v-accent-grad)' }}>
+          className="v-grad flex-1 flex items-center justify-center gap-1.5 text-white px-4 py-2.5 text-sm transition-opacity hover:opacity-90 rounded-xl"
+          style={{ fontWeight: 700 }}>
           <CheckCircle2 size={15} /> Concluir briefing e enviar
         </button>
       </div>
