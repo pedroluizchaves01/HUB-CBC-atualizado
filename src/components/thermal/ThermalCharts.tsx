@@ -30,7 +30,7 @@ export function WindRose({ predominante, size = 200 }: { predominante: string; s
     <svg viewBox={`0 0 ${size} ${size}`} width="100%" height="100%">
       {/* círculos concêntricos */}
       {[r, r * 0.66, r * 0.33].map((rr, i) => (
-        <circle key={i} cx={cx} cy={cy} r={rr} fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
+        <circle key={i} cx={cx} cy={cy} r={rr} fill="none" stroke="rgba(27,24,48,0.12)" strokeWidth="1" />
       ))}
       {/* raios e labels */}
       {dirs.map(d => {
@@ -40,19 +40,19 @@ export function WindRose({ predominante, size = 200 }: { predominante: string; s
         const isCardinal = d.label.length === 1;
         return (
           <g key={d.label}>
-            <line x1={cx} y1={cy} x2={p.x} y2={p.y} stroke={on ? AZUL : 'rgba(255,255,255,0.18)'} strokeWidth={on ? 3 : 1} />
+            <line x1={cx} y1={cy} x2={p.x} y2={p.y} stroke={on ? AZUL : 'rgba(27,24,48,0.15)'} strokeWidth={on ? 3 : 1} />
             {on && (
               <polygon
                 points={`${polar(d.ang, r).x},${polar(d.ang, r).y} ${polar(d.ang - 8, r * 0.7).x},${polar(d.ang - 8, r * 0.7).y} ${polar(d.ang + 8, r * 0.7).x},${polar(d.ang + 8, r * 0.7).y}`}
                 fill={AZUL} opacity="0.85"
               />
             )}
-            <text x={lp.x} y={lp.y} fill={on ? '#fff' : 'rgba(255,255,255,0.5)'} fontSize={isCardinal ? 12 : 9}
+            <text x={lp.x} y={lp.y} fill={on ? '#1b1830' : '#6b6785'} fontSize={isCardinal ? 12 : 9}
               fontWeight={on ? 700 : 400} textAnchor="middle" dominantBaseline="middle" fontFamily="var(--font-mono)">{d.label}</text>
           </g>
         );
       })}
-      <circle cx={cx} cy={cy} r="3" fill="#fff" />
+      <circle cx={cx} cy={cy} r="3" fill="#1b1830" />
     </svg>
   );
 }
@@ -73,10 +73,10 @@ export function SolarChart({ latitude, size = 260 }: { latitude: number; size?: 
   return (
     <svg viewBox={`0 0 ${w} ${h + 8}`} width="100%" height="100%">
       {/* linha do horizonte */}
-      <line x1="8" y1={baseY} x2={w - 8} y2={baseY} stroke="rgba(255,255,255,0.3)" strokeWidth="1.5" />
+      <line x1="8" y1={baseY} x2={w - 8} y2={baseY} stroke="rgba(27,24,48,0.20)" strokeWidth="1.5" />
       {/* leste / oeste */}
-      <text x="10" y={baseY + 14} fill="rgba(255,255,255,0.5)" fontSize="9" fontFamily="var(--font-mono)">{sul ? 'L' : 'L'}</text>
-      <text x={w - 18} y={baseY + 14} fill="rgba(255,255,255,0.5)" fontSize="9" fontFamily="var(--font-mono)">O</text>
+      <text x="10" y={baseY + 14} fill="#6b6785" fontSize="9" fontFamily="var(--font-mono)">{sul ? 'L' : 'L'}</text>
+      <text x={w - 18} y={baseY + 14} fill="#6b6785" fontSize="9" fontFamily="var(--font-mono)">O</text>
       {/* arcos solares */}
       {arc(0.92, AMBAR)}
       {arc(0.52, AZUL, '5 4')}
@@ -86,7 +86,7 @@ export function SolarChart({ latitude, size = 260 }: { latitude: number; size?: 
       {/* legenda */}
       <text x={cx} y={baseY - r * 0.92 - 12} fill={AMBAR} fontSize="9" fontWeight="700" textAnchor="middle" fontFamily="var(--font-mono)">VERÃO</text>
       <text x={cx + r * 0.5} y={baseY - r * 0.52 + 4} fill={AZUL} fontSize="9" fontWeight="700" textAnchor="middle" fontFamily="var(--font-mono)">INVERNO</text>
-      <text x={cx} y={baseY + 14} fill="rgba(255,255,255,0.4)" fontSize="8" textAnchor="middle" fontFamily="var(--font-mono)">
+      <text x={cx} y={baseY + 14} fill="#837f99" fontSize="8" textAnchor="middle" fontFamily="var(--font-mono)">
         {sul ? 'Sol predominante ao NORTE' : 'Sol predominante ao SUL'}
       </text>
     </svg>
@@ -115,7 +115,7 @@ export function TempBars({ media, max, min, height = 150 }: { media: number; max
         return <rect key={i} x={i * w + 1} y={90 - bh} width={w - 2} height={bh} fill={cor} opacity="0.85" rx="0.6" />;
       })}
       {meses.map((m, i) => (
-        <text key={i} x={i * w + w / 2} y={98} fill="rgba(255,255,255,0.45)" fontSize="4" textAnchor="middle" fontFamily="var(--font-mono)">{m}</text>
+        <text key={i} x={i * w + w / 2} y={98} fill="#837f99" fontSize="4" textAnchor="middle" fontFamily="var(--font-mono)">{m}</text>
       ))}
     </svg>
   );
@@ -142,11 +142,11 @@ export function ComfortBar({ media }: { media: number }) {
       </defs>
       <rect x="0" y="5" width="100" height="6" rx="3" fill="url(#comfortGrad)" opacity="0.5" />
       {/* zona de conforto */}
-      <rect x={confIni} y="4" width={confFim - confIni} height="8" rx="2" fill="none" stroke="#fff" strokeWidth="0.7" strokeDasharray="1.5 1" />
+      <rect x={confIni} y="4" width={confFim - confIni} height="8" rx="2" fill="none" stroke="#1b1830" strokeWidth="0.7" strokeDasharray="1.5 1" />
       {/* marcador da média */}
-      <polygon points={`${pos},1 ${pos - 2.5},5 ${pos + 2.5},5`} fill="#fff" />
-      <line x1={pos} y1="4" x2={pos} y2="12" stroke="#fff" strokeWidth="1" />
-      <text x={pos} y="15.5" fill="#fff" fontSize="3.6" fontWeight="700" textAnchor="middle" fontFamily="var(--font-mono)">{media}°C</text>
+      <polygon points={`${pos},1 ${pos - 2.5},5 ${pos + 2.5},5`} fill="#1b1830" />
+      <line x1={pos} y1="4" x2={pos} y2="12" stroke="#1b1830" strokeWidth="1" />
+      <text x={pos} y="15.5" fill="#1b1830" fontSize="3.6" fontWeight="700" textAnchor="middle" fontFamily="var(--font-mono)">{media}°C</text>
     </svg>
   );
 }
@@ -160,11 +160,11 @@ export function RadialGauge({ value, label, color = VERDE, size = 110 }: { value
   const dash = (value / 100) * circ;
   return (
     <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size}>
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="8" />
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(27,24,48,0.10)" strokeWidth="8" />
       <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth="8" strokeLinecap="round"
         strokeDasharray={`${dash} ${circ}`} transform={`rotate(-90 ${cx} ${cy})`} />
-      <text x={cx} y={cy - 2} fill="#fff" fontSize="18" fontWeight="800" textAnchor="middle" dominantBaseline="middle" fontFamily="var(--font-serif)">{value}%</text>
-      <text x={cx} y={cy + 14} fill="rgba(255,255,255,0.5)" fontSize="7" textAnchor="middle" fontFamily="var(--font-mono)" letterSpacing="0.1em">{label}</text>
+      <text x={cx} y={cy - 2} fill="#1b1830" fontSize="18" fontWeight="800" textAnchor="middle" dominantBaseline="middle" fontFamily="var(--font-serif)">{value}%</text>
+      <text x={cx} y={cy + 14} fill="#6b6785" fontSize="7" textAnchor="middle" fontFamily="var(--font-mono)" letterSpacing="0.1em">{label}</text>
     </svg>
   );
 }
