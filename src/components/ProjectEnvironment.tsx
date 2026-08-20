@@ -21,7 +21,7 @@ import {
   Sun, Wind, Thermometer, Droplets, Compass as CompassIcon, ClipboardList,
   Home, Menu, BookOpen, Leaf, Building2,
   MapPin, Palette, Users, Wallet, Sparkles,
-  Search, Bell, MessageSquare,
+  Search, Bell, MessageSquare, SlidersHorizontal, Calendar, Check, XCircle, RotateCcw,
 } from 'lucide-react';
 import { subscribeCollection, saveDoc, removeDoc } from '../lib/firebaseDb';
 import { PROJECT_BG } from '../lib/projectBackground';
@@ -32,6 +32,7 @@ import { NORMAS_TECNICAS, REFERENCIAS, comentarioTecnico, comentarioOrientacao }
 import { WindRose, SolarChart, TempBars, ComfortBar } from './thermal/ThermalCharts';
 import { DEFAULT_BRIEFING, BRIEFING_GROUPS, type BriefingQuestion, type BriefingAnswer } from '../lib/briefingTemplate';
 import { openBriefingReport } from '../lib/briefingReportHtml';
+import { CATALOGO_ETAPAS, montarEtapas, type PhaseTemplate, type ServicoId } from '../lib/phaseTemplates';
 
 interface Props {
   role: string;
@@ -83,24 +84,104 @@ const PHASE_TEMPLATE = [
   'Detalhamento e Complementares',
 ];
 
+// Máximo de rodadas de alteração que o cliente pode pedir por etapa.
+const MAX_RODADAS = 3;
+// Prazo padrão (dias) para o cliente responder antes do auto-aceite.
+const PRAZO_RESPOSTA_PADRAO = 5;
+
+// Soma dias a uma data ISO e devolve ISO (só a parte da data).
+function addDias(isoOuData: string | Date, dias: number): string {
+  const d = new Date(isoOuData);
+  d.setDate(d.getDate() + dias);
+  return d.toISOString();
+}
+// Soma semanas.
+function addSemanas(isoOuData: string | Date, semanas: number): string {
+  return addDias(isoOuData, semanas * 7);
+}
+// Formata ISO → dd/mm/aaaa (ou '—').
+function fmtDataBR(iso?: string): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('pt-BR');
+}
+
+// Recalcula as datas previstas encadeando as etapas a partir da data-base.
+// Etapas 'paralela' começam junto com a etapa anterior (não empurram o cronograma).
+// Mantém datas já ajustadas manualmente se manterAjustes=true e a etapa tiver data.
+function recalcularCronograma(phases: ArchPhase[], dataBase?: string): ArchPhase[] {
+  if (!dataBase) return phases;
+  let cursor = new Date(dataBase);
+  let inicioAnterior = new Date(dataBase);
+  return phases.map((ph) => {
+    const semanas = ph.semanas ?? 1;
+    let inicio: Date;
+    if (ph.paralela) {
+      inicio = new Date(inicioAnterior); // começa junto da anterior
+    } else {
+      inicio = new Date(cursor);
+    }
+    const fim = new Date(addSemanas(inicio, semanas));
+    // Avança o cursor só para etapas não-paralelas.
+    if (!ph.paralela) {
+      inicioAnterior = new Date(inicio);
+      cursor = new Date(fim);
+    } else {
+      // paralela pode estender o fim geral se durar mais que a sequencial
+      if (fim > cursor) cursor = new Date(fim);
+    }
+    return { ...ph, inicioPrevisto: inicio.toISOString(), fimPrevisto: fim.toISOString() };
+  });
+}
+
+// Gera a lista de ArchPhase a partir do escopo, preservando o progresso das
+// etapas que já existiam (por 'key'): estado, arquivos, eventos, datas ajustadas.
+function gerarFases(opts: { servicos: ServicoId[]; opcionaisAtivas: string[]; anteriores?: ArchPhase[] }): ArchPhase[] {
+  const templates = montarEtapas({ servicos: opts.servicos, opcionaisAtivas: opts.opcionaisAtivas });
+  const antesPorKey = new Map((opts.anteriores || []).map(p => [p.key || p.name, p]));
+  return templates.map((t: PhaseTemplate, i) => {
+    const prev = antesPorKey.get(t.key);
+    return {
+      name: t.name,
+      key: t.key,
+      servico: t.servico,
+      entregaveis: t.entregaveis,
+      pagamento: t.pagamento,
+      paralela: t.paralela,
+      semanas: t.semanas,
+      state: prev?.state ?? (i === 0 ? 'em_elaboracao' : 'bloqueada'),
+      files: prev?.files ?? [],
+      events: prev?.events ?? [],
+      approvedBy: prev?.approvedBy,
+      approvedAt: prev?.approvedAt,
+      rodadasUsadas: prev?.rodadasUsadas ?? 0,
+      enviadoEm: prev?.enviadoEm,
+      prazoRespostaAte: prev?.prazoRespostaAte,
+      inicioPrevisto: prev?.inicioPrevisto,
+      fimPrevisto: prev?.fimPrevisto,
+    };
+  });
+}
+
 type PhaseState = 'bloqueada' | 'em_elaboracao' | 'aguardando_aprovacao' | 'ajustes' | 'aprovada';
 
+// Ciclo de aprovação: cada envio abre uma "rodada". O cliente aprova ou pede
+// alteração (máx. 3 rodadas de alteração). Se não responder até prazoResposta,
+// a entrega é aceita automaticamente.
 interface ArchFile {
   id: string;
   name: string;
   type: string;
   uploadedAt: string;
-  // Storage: arquivos vão para o Telegram (fileId/url). base64 fica só como
-  // miniatura leve de imagens (preview rápido) — nunca o arquivo pesado.
   storage?: 'telegram' | 'inline';
-  fileId?: string;      // id no Telegram (quando storage='telegram')
-  url?: string;         // caminho do proxy para visualizar/baixar
-  size?: number;        // tamanho em bytes do arquivo original
-  base64?: string;      // miniatura (imagens) ou conteúdo (legado/inline)
+  fileId?: string;
+  url?: string;
+  size?: number;
+  base64?: string;
 }
 interface PhaseEvent {
   id: string;
-  kind: 'envio' | 'aprovacao' | 'ajuste' | 'comentario';
+  kind: 'envio' | 'aprovacao' | 'ajuste' | 'comentario' | 'auto_aceite';
   author: string;
   role: string;
   at: string;
@@ -123,6 +204,19 @@ interface ArchPhase {
   events: PhaseEvent[];
   approvedBy?: string;
   approvedAt?: string;
+  // --- Novos campos do escopo ---
+  key?: string;              // chave do catálogo (estudo_preliminar, anteprojeto, …)
+  servico?: 'arquitetonico' | 'interiores';
+  entregaveis?: string[];    // itens "Você recebe"
+  pagamento?: string;        // texto informativo de pagamento
+  paralela?: boolean;        // roda em paralelo (não empurra o cronograma)
+  semanas?: number;          // duração em semanas
+  inicioPrevisto?: string;   // ISO date — calculado/encadeado, ajustável
+  fimPrevisto?: string;      // ISO date — inicio + semanas
+  // Ciclo de aprovação
+  rodadasUsadas?: number;    // quantas rodadas de alteração o cliente já pediu
+  enviadoEm?: string;        // ISO — quando a entrega atual foi enviada p/ aprovação
+  prazoRespostaAte?: string; // ISO — auto-aceite após esta data
 }
 interface ArchProject {
   id: string;
@@ -149,6 +243,12 @@ interface ArchProject {
   briefingDoneAt?: string;
   // Mural de recados do projeto (troca cliente ↔ arquiteto, não preso a fase)
   mural?: MuralMessage[];
+  // --- Escopo contratado e prazos ---
+  servicos?: ('arquitetonico' | 'interiores')[];  // serviços contratados
+  opcionaisAtivas?: string[];                       // keys de etapas opcionais ligadas
+  dataBaseInicio?: string;    // ISO date — dia em que a contagem começa
+  prazoRespostaDias?: number; // dias para o cliente responder antes do auto-aceite
+  escopoConfigurado?: boolean; // o arquiteto já montou o escopo?
 }
 
 // Paleta MONOCROMÁTICA: preto absoluto (#000) e branco absoluto (#fff).
@@ -274,14 +374,20 @@ export default function ProjectEnvironment({
     return Math.round(((done + partial) / p.phases.length) * 100);
   };
 
-  const newProject = (): ArchProject => ({
-    id: uid(), name: '', clientName: '', clientId: '', type: 'Residencial', area: '', responsible: '',
-    status: 'ativo',
-    phases: PHASE_TEMPLATE.map((name) => ({ name, state: 'bloqueada' as PhaseState, files: [], events: [] })),
-    createdAt: new Date().toISOString(), notes: '',
-    briefingQuestions: DEFAULT_BRIEFING.map(q => ({ ...q })),
-    briefingAnswers: [], briefingDone: false,
-  });
+  const newProject = (): ArchProject => {
+    const servicos: ServicoId[] = ['arquitetonico'];
+    const opcionaisAtivas: string[] = [];
+    return {
+      id: uid(), name: '', clientName: '', clientId: '', type: 'Residencial', area: '', responsible: '',
+      status: 'ativo',
+      servicos, opcionaisAtivas, escopoConfigurado: false,
+      prazoRespostaDias: PRAZO_RESPOSTA_PADRAO,
+      phases: gerarFases({ servicos, opcionaisAtivas }),
+      createdAt: new Date().toISOString(), notes: '',
+      briefingQuestions: DEFAULT_BRIEFING.map(q => ({ ...q })),
+      briefingAnswers: [], briefingDone: false,
+    };
+  };
 
   const persist = (p: ArchProject) => {
     try {
@@ -532,6 +638,7 @@ function ProjectShell({
   // Itens do menu lateral.
   const navItems: { id: PageId; label: string; Icon: React.ComponentType<any>; badge?: string; locked?: boolean }[] = [
     { id: 'inicio', label: 'Início', Icon: Home },
+    ...(isAdmin ? [{ id: 'escopo' as PageId, label: 'Escopo & Prazos', Icon: SlidersHorizontal, badge: project.escopoConfigurado ? undefined : '!' }] : []),
     { id: 'termico', label: 'Conforto Térmico', Icon: Sun, locked: !hasThermal },
     { id: 'briefing', label: 'Briefing de Premissas', Icon: ClipboardList, badge: project.briefingDone ? '✓' : undefined },
     { id: 'mural', label: 'Mural de Recados', Icon: MessageSquare, badge: (project.mural?.length || 0) > 0 ? String(project.mural!.length) : undefined },
@@ -712,6 +819,7 @@ function ProjectPage({ page, project, isAdmin, userName, role, onPersist, onNavi
   onPersist: (p: ArchProject) => Promise<any> | void; onNavigate: (p: PageId) => void;
 }) {
   if (page === 'inicio') return <PageInicio project={project} isAdmin={isAdmin} userName={userName} onNavigate={onNavigate} />;
+  if (page === 'escopo') return <PageEscopo project={project} isAdmin={isAdmin} onPersist={onPersist} />;
   if (page === 'termico') return <PageTermico project={project} />;
   if (page === 'briefing') return <PageBriefing project={project} isAdmin={isAdmin} userName={userName} role={role} onPersist={onPersist} />;
   if (page === 'mural') return <PageMural project={project} isAdmin={isAdmin} userName={userName} role={role} onPersist={onPersist} />;
@@ -993,18 +1101,50 @@ function PageFase({ project, idx, isAdmin, userName, role, onPersist }: {
     if (parsed.length) update(project.phases.map((ph, i) => i === idx ? { ...ph, files: [...ph.files, ...parsed] } : ph));
   };
   const removeFile = (fileId: string) => update(project.phases.map((ph, i) => i === idx ? { ...ph, files: ph.files.filter(f => f.id !== fileId) } : ph));
-  const sendForApproval = () => { let ph = withEvent({ kind: 'envio', text: 'Entrega enviada para aprovação.' }); ph = ph.map((p, i) => i === idx ? { ...p, state: 'aguardando_aprovacao' as PhaseState } : p); update(ph); };
-  const approve = () => {
-    let ph = withEvent({ kind: 'aprovacao', text: 'Etapa aprovada pelo cliente.' });
+  const prazoDias = project.prazoRespostaDias ?? PRAZO_RESPOSTA_PADRAO;
+  const sendForApproval = () => {
+    const agora = new Date();
+    const prazoAte = addDias(agora, prazoDias);
+    let ph = withEvent({ kind: 'envio', text: `Entrega enviada para aprovação. Prazo de resposta: ${prazoDias} dias (até ${fmtDataBR(prazoAte)}).` });
+    ph = ph.map((p, i) => i === idx ? {
+      ...p, state: 'aguardando_aprovacao' as PhaseState,
+      enviadoEm: agora.toISOString(), prazoRespostaAte: prazoAte,
+    } : p);
+    update(ph);
+  };
+  // Aprovação: encadeia a próxima etapa e recalcula datas a partir da data-base.
+  const doApprove = (texto: string, kind: PhaseEvent['kind']) => {
+    let ph = withEvent({ kind, text: texto });
     ph = ph.map((p, i) => {
-      if (i === idx) return { ...p, state: 'aprovada' as PhaseState, approvedBy: userName, approvedAt: new Date().toISOString() };
+      if (i === idx) return { ...p, state: 'aprovada' as PhaseState, approvedBy: userName || (kind === 'auto_aceite' ? 'Sistema (auto-aceite)' : ''), approvedAt: new Date().toISOString() };
       if (i === idx + 1 && p.state === 'bloqueada') return { ...p, state: 'em_elaboracao' as PhaseState };
       return p;
     });
+    ph = recalcularCronograma(ph, project.dataBaseInicio);
     update(ph);
   };
-  const requestChanges = (motivo: string) => { let ph = withEvent({ kind: 'ajuste', text: motivo }); ph = ph.map((p, i) => i === idx ? { ...p, state: 'ajustes' as PhaseState } : p); update(ph); };
+  const approve = () => doApprove('Etapa aprovada pelo cliente.', 'aprovacao');
+  const rodadasUsadas = phase.rodadasUsadas ?? 0;
+  const rodadasRestantes = MAX_RODADAS - rodadasUsadas;
+  const requestChanges = (motivo: string) => {
+    if (rodadasRestantes <= 0) return;
+    const nova = rodadasUsadas + 1;
+    let ph = withEvent({ kind: 'ajuste', text: `Rodada ${nova}/${MAX_RODADAS} — ${motivo}` });
+    ph = ph.map((p, i) => i === idx ? { ...p, state: 'ajustes' as PhaseState, rodadasUsadas: nova, enviadoEm: undefined, prazoRespostaAte: undefined } : p);
+    update(ph);
+  };
   const addComment = (text: string) => update(withEvent({ kind: 'comentario', text }));
+
+  // Auto-aceite: se a entrega está aguardando e o prazo de resposta venceu, aceita.
+  // A verificação roda ao abrir a fase (não há cron no backend).
+  useEffect(() => {
+    if (phase.state === 'aguardando_aprovacao' && phase.prazoRespostaAte) {
+      if (new Date() > new Date(phase.prazoRespostaAte)) {
+        doApprove(`Aceite automático: o prazo de resposta (${prazoDias} dias) venceu sem manifestação do cliente.`, 'auto_aceite');
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase.state, phase.prazoRespostaAte]);
 
   const stateStyle: Record<PhaseState, { grad: string; label: string; Icon: React.ComponentType<any> }> = {
     bloqueada: { grad: 'linear-gradient(135deg,#495057,#343a40)', label: 'Aguardando etapa anterior', Icon: Lock },
@@ -1057,6 +1197,7 @@ function PageFase({ project, idx, isAdmin, userName, role, onPersist }: {
         userName={userName || ''} isOpen locked={phase.state === 'bloqueada'} onToggle={() => {}}
         onAddFiles={addFiles} onRemoveFile={removeFile} onAddComment={addComment}
         onApprove={approve} onRequestChanges={requestChanges} onSendForApproval={sendForApproval}
+        rodadasRestantes={rodadasRestantes} maxRodadas={MAX_RODADAS}
       />
     </div>
   );
@@ -1072,7 +1213,166 @@ function PageHeader({ eyebrow, title, subtitle }: { eyebrow: string; title: stri
     </div>
   );
 }
-// === PÁGINA: Mural de Recados (troca cliente ↔ arquiteto) ===
+// === PÁGINA: Escopo & Prazos (somente arquiteto) ===
+function PageEscopo({ project, isAdmin, onPersist }: {
+  project: ArchProject; isAdmin: boolean; onPersist: (p: ArchProject) => Promise<any> | void;
+}) {
+  const servicos = project.servicos || ['arquitetonico'];
+  const opcionais = project.opcionaisAtivas || [];
+  const [dataBase, setDataBase] = useState(project.dataBaseInicio ? project.dataBaseInicio.split('T')[0] : '');
+  const [prazoResp, setPrazoResp] = useState(project.prazoRespostaDias ?? PRAZO_RESPOSTA_PADRAO);
+
+  if (!isAdmin) {
+    return <div className="v-card p-8 text-center"><p style={{ color: 'var(--v-text-soft)' }}>Esta área é gerenciada pelo seu arquiteto.</p></div>;
+  }
+
+  const toggleServico = (s: ServicoId) => {
+    const novo = servicos.includes(s) ? servicos.filter(x => x !== s) : [...servicos, s];
+    if (novo.length === 0) return; // ao menos um serviço
+    aplicar({ servicos: novo });
+  };
+  const toggleOpcional = (key: string) => {
+    const novo = opcionais.includes(key) ? opcionais.filter(k => k !== key) : [...opcionais, key];
+    aplicar({ opcionaisAtivas: novo });
+  };
+
+  // Recria as fases com o novo escopo (preservando progresso) e recalcula datas.
+  const aplicar = (patch: Partial<ArchProject>) => {
+    const novoServicos = (patch.servicos ?? servicos) as ServicoId[];
+    const novoOpc = (patch.opcionaisAtivas ?? opcionais) as string[];
+    let phases = gerarFases({ servicos: novoServicos, opcionaisAtivas: novoOpc, anteriores: project.phases });
+    phases = recalcularCronograma(phases, project.dataBaseInicio);
+    onPersist({ ...project, ...patch, servicos: novoServicos, opcionaisAtivas: novoOpc, phases });
+  };
+
+  const salvarPrazos = () => {
+    const base = dataBase ? new Date(dataBase).toISOString() : project.dataBaseInicio;
+    let phases = recalcularCronograma(project.phases, base);
+    onPersist({ ...project, dataBaseInicio: base, prazoRespostaDias: prazoResp, phases, escopoConfigurado: true });
+  };
+
+  // Etapas opcionais disponíveis nos serviços contratados.
+  const opcionaisDisponiveis = CATALOGO_ETAPAS.filter(t => t.opcional && servicos.includes(t.servico));
+  const etapasAtivas = montarEtapas({ servicos, opcionaisAtivas: opcionais });
+  const totalSemanas = etapasAtivas.filter(e => !e.paralela).reduce((a, e) => a + e.semanas, 0);
+
+  const SERVICO_META: Record<ServicoId, { nome: string; desc: string }> = {
+    arquitetonico: { nome: 'Projeto Arquitetônico', desc: 'Estudo, anteprojeto, detalhamento e complementares.' },
+    interiores: { nome: 'Projeto de Interiores', desc: 'Concepção 3D dos ambientes e cadernos.' },
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <PageHeader eyebrow="Configuração do arquiteto" title="Escopo & Prazos" subtitle="Defina os serviços contratados, as etapas e o cronograma" />
+
+      {!project.escopoConfigurado && (
+        <div className="rounded-2xl p-4" style={{ background: '#fff8ec', border: '1px solid #f6dfb5' }}>
+          <span className="flex items-center gap-1.5 text-[12px]" style={{ color: '#b06d05', fontWeight: 800 }}>
+            <AlertTriangle size={14} /> Escopo ainda não confirmado
+          </span>
+          <span className="text-[12px] block mt-1" style={{ color: '#7a6a4d' }}>
+            Ajuste os serviços e prazos abaixo e clique em "Salvar cronograma" para liberar as etapas ao cliente.
+          </span>
+        </div>
+      )}
+
+      {/* Serviços contratados */}
+      <div className="v-card p-6">
+        <b className="text-[15px]" style={{ fontWeight: 800 }}>Serviços contratados</b>
+        <p className="text-[12px] mb-4" style={{ color: 'var(--v-text-soft)' }}>Marque o que o cliente contratou. As etapas correspondentes aparecerão para ele.</p>
+        <div className="grid sm:grid-cols-2 gap-3">
+          {(['arquitetonico', 'interiores'] as ServicoId[]).map(s => {
+            const on = servicos.includes(s);
+            return (
+              <button key={s} onClick={() => toggleServico(s)}
+                className="text-left rounded-2xl p-4 transition-all"
+                style={{ border: on ? '2px solid var(--v-accent)' : '1px solid var(--v-border)', background: on ? '#f4f1fe' : '#fff' }}>
+                <div className="flex items-center justify-between">
+                  <b className="text-[14px]" style={{ fontWeight: 700, color: on ? 'var(--v-accent-2)' : 'var(--v-text)' }}>{SERVICO_META[s].nome}</b>
+                  <span className="w-5 h-5 rounded-full flex items-center justify-center" style={{ background: on ? 'var(--v-accent)' : '#e6e1fb' }}>
+                    {on && <Check size={13} className="text-white" />}
+                  </span>
+                </div>
+                <span className="text-[12px] block mt-1" style={{ color: 'var(--v-text-soft)' }}>{SERVICO_META[s].desc}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Etapas opcionais */}
+      {opcionaisDisponiveis.length > 0 && (
+        <div className="v-card p-6">
+          <b className="text-[15px]" style={{ fontWeight: 800 }}>Etapas opcionais</b>
+          <p className="text-[12px] mb-4" style={{ color: 'var(--v-text-soft)' }}>Ligue as etapas extras que fazem parte deste contrato.</p>
+          <div className="flex flex-col gap-2">
+            {opcionaisDisponiveis.map(t => {
+              const on = opcionais.includes(t.key);
+              return (
+                <button key={t.key} onClick={() => toggleOpcional(t.key)}
+                  className="flex items-center gap-3 text-left rounded-xl p-3 transition-all"
+                  style={{ background: on ? '#f4f1fe' : 'var(--v-surface-tint)' }}>
+                  <span className="w-9 h-5 rounded-full flex-shrink-0 relative transition-all" style={{ background: on ? 'var(--v-accent)' : '#cfc9ee' }}>
+                    <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all" style={{ left: on ? '18px' : '2px' }} />
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[13px]" style={{ fontWeight: 600 }}>{t.name}</span>
+                    <span className="block text-[11px]" style={{ color: 'var(--v-text-mute)' }}>{t.semanas} semana{t.semanas > 1 ? 's' : ''}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Prazos */}
+      <div className="v-card p-6">
+        <b className="text-[15px]" style={{ fontWeight: 800 }}>Cronograma e prazos</b>
+        <p className="text-[12px] mb-4" style={{ color: 'var(--v-text-soft)' }}>
+          A contagem começa na data-base e cada etapa encadeia pela sua duração. Total: <b style={{ fontWeight: 700 }}>{totalSemanas} semanas</b> de trabalho.
+        </p>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-[11px] uppercase tracking-wider mb-1" style={{ color: 'var(--v-text-soft)', fontWeight: 700 }}>Data de início da contagem</label>
+            <input type="date" value={dataBase} onChange={e => setDataBase(e.target.value)}
+              className="w-full px-3 py-2.5 text-sm" />
+          </div>
+          <div>
+            <label className="block text-[11px] uppercase tracking-wider mb-1" style={{ color: 'var(--v-text-soft)', fontWeight: 700 }}>Prazo de resposta do cliente (dias)</label>
+            <input type="number" min={1} max={30} value={prazoResp} onChange={e => setPrazoResp(Number(e.target.value))}
+              className="w-full px-3 py-2.5 text-sm" />
+            <p className="text-[10px] mt-1" style={{ color: 'var(--v-text-mute)' }}>Após esse prazo sem resposta, a entrega é aceita automaticamente.</p>
+          </div>
+        </div>
+        <button onClick={salvarPrazos} className="v-btn mt-4 px-5 py-2.5 text-[13px] flex items-center gap-2">
+          <Calendar size={15} /> Salvar cronograma e liberar etapas
+        </button>
+      </div>
+
+      {/* Prévia do cronograma */}
+      <div className="v-card p-6">
+        <b className="text-[15px]" style={{ fontWeight: 800 }}>Prévia das etapas</b>
+        <div className="mt-3 flex flex-col gap-1.5">
+          {project.phases.map((ph, i) => (
+            <div key={i} className="grid grid-cols-[1fr_auto] items-center gap-3 py-2" style={{ borderBottom: i < project.phases.length - 1 ? '1px solid var(--v-border)' : 'none' }}>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-[10px] w-6 flex-shrink-0" style={{ color: 'var(--v-text-mute)', fontWeight: 700 }}>{String(i).padStart(2, '0')}</span>
+                <span className="text-[13px] truncate" style={{ fontWeight: 600 }}>{ph.name}</span>
+                {ph.paralela && <span className="v-chip v-chip-mute flex-shrink-0">paralela</span>}
+              </div>
+              <span className="text-[11px] text-right whitespace-nowrap" style={{ color: 'var(--v-text-soft)' }}>
+                {ph.semanas}sem · {ph.inicioPrevisto ? `${fmtDataBR(ph.inicioPrevisto)} → ${fmtDataBR(ph.fimPrevisto)}` : 'defina a data-base'}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function PageMural({ project, isAdmin, userName, role, onPersist }: {
   project: ArchProject; isAdmin: boolean; userName?: string; role: string;
   onPersist: (p: ArchProject) => Promise<any> | void;
@@ -1527,11 +1827,13 @@ function PhaseCard({
   phase, index, total, isAdmin, isOpen, onToggle,
   onSendForApproval, onApprove, onRequestChanges,
   onAddFiles, onRemoveFile, onAddComment,
+  rodadasRestantes = 3, maxRodadas = 3,
 }: {
   phase: ArchPhase; index: number; total: number; isAdmin: boolean; isOpen: boolean;
   onToggle: () => void;
   onSendForApproval: () => void; onApprove: () => void; onRequestChanges: (m: string) => void;
   onAddFiles: (files: FileList, onStatus?: (msg: string | null) => void) => void; onRemoveFile: (id: string) => void; onAddComment: (t: string) => void;
+  rodadasRestantes?: number; maxRodadas?: number;
 }) {
   const meta = STATE_META[phase.state];
   const Icon = meta.Icon;
@@ -1581,6 +1883,37 @@ function PhaseCard({
 
         {isOpen && !locked && (
           <div className="px-4 pb-4 border-t  pt-4 space-y-4">
+            {/* Prazo previsto + entregáveis da etapa (do escopo) */}
+            {(phase.inicioPrevisto || (phase.entregaveis && phase.entregaveis.length > 0)) && (
+              <div className="v-tint p-4">
+                {phase.inicioPrevisto && (
+                  <div className="flex items-center gap-2 mb-2 text-[12px]" style={{ color: 'var(--v-text-soft)', fontWeight: 600 }}>
+                    <Calendar size={13} />
+                    Previsão: {fmtDataBR(phase.inicioPrevisto)} → {fmtDataBR(phase.fimPrevisto)}
+                    {phase.semanas ? ` · ${phase.semanas} semana${phase.semanas > 1 ? 's' : ''}` : ''}
+                    {phase.paralela && <span className="v-chip v-chip-mute">em paralelo</span>}
+                  </div>
+                )}
+                {phase.entregaveis && phase.entregaveis.length > 0 && (
+                  <>
+                    <p className="text-[10px] uppercase tracking-[0.12em] mb-1.5" style={{ color: 'var(--v-text-mute)', fontWeight: 700 }}>Você recebe</p>
+                    <ul className="flex flex-col gap-1">
+                      {phase.entregaveis.map((e, i) => (
+                        <li key={i} className="flex items-start gap-2 text-[12px]" style={{ color: 'var(--v-text-soft)' }}>
+                          <Check size={13} style={{ color: 'var(--v-accent)', marginTop: 2, flexShrink: 0 }} />
+                          <span>{e}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+                {phase.pagamento && (
+                  <p className="text-[11px] mt-2 pt-2" style={{ color: 'var(--v-text-mute)', borderTop: '1px solid var(--v-border)' }}>
+                    <b style={{ fontWeight: 700, color: 'var(--v-text-soft)' }}>Pagamento:</b> {phase.pagamento}
+                  </p>
+                )}
+              </div>
+            )}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <p className="text-[10px] uppercase tracking-[0.12em] text-black font-bold">Arquivos desta etapa</p>
@@ -1614,30 +1947,55 @@ function PhaseCard({
             {!isAdmin && phase.state === 'aguardando_aprovacao' && (
               <div className="v-card-border p-4">
                 <p className="text-sm mb-1" style={{ fontWeight: 700 }}>Esta etapa aguarda sua aprovação</p>
-                <p className="text-xs text-vsoft mb-3" style={{ fontWeight: 300 }}>Revise os arquivos acima. Ao aprovar, a próxima etapa é liberada.</p>
+                {/* Prazo de resposta / auto-aceite */}
+                {phase.prazoRespostaAte && (() => {
+                  const restaMs = new Date(phase.prazoRespostaAte).getTime() - Date.now();
+                  const restaDias = Math.ceil(restaMs / 86400000);
+                  const urgente = restaDias <= 2;
+                  return (
+                    <div className="flex items-center gap-1.5 mb-2 text-[12px]" style={{ color: urgente ? '#b06d05' : 'var(--v-text-soft)', fontWeight: 600 }}>
+                      <Clock size={13} />
+                      {restaDias > 0
+                        ? `Você tem ${restaDias} dia${restaDias !== 1 ? 's' : ''} para responder (até ${fmtDataBR(phase.prazoRespostaAte)}). Sem resposta, é aceito automaticamente.`
+                        : 'Prazo encerrado — será aceito automaticamente.'}
+                    </div>
+                  );
+                })()}
+                <p className="text-xs text-vsoft mb-3">Revise os arquivos acima. Ao aprovar, a próxima etapa é liberada.</p>
+                {rodadasRestantes > 0 && (
+                  <p className="text-[11px] mb-2" style={{ color: 'var(--v-text-mute)' }}>
+                    Você pode pedir alterações em até <b style={{ fontWeight: 700 }}>{rodadasRestantes}</b> rodada{rodadasRestantes !== 1 ? 's' : ''} (de {maxRodadas}).
+                  </p>
+                )}
                 {!askChanges ? (
                   <div className="flex flex-col sm:flex-row gap-2">
                     <button onClick={onApprove}
-                      className="flex items-center justify-center gap-1.5 v-btn-solid px-4 py-2.5 text-sm  v-card-border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2" style={{ fontWeight: 700 }}>
+                      className="flex items-center justify-center gap-1.5 v-btn-solid px-4 py-2.5 text-sm transition-colors" style={{ fontWeight: 700 }}>
                       <ThumbsUp size={15} /> Aprovar etapa
                     </button>
-                    <button onClick={() => setAskChanges(true)}
-                      className="flex items-center justify-center gap-1.5 bg-white v-card-border text-black px-4 py-2.5 text-sm hover:bg-black hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2" style={{ fontWeight: 600 }}>
-                      <MessageSquare size={15} /> Solicitar ajustes
-                    </button>
+                    {rodadasRestantes > 0 ? (
+                      <button onClick={() => setAskChanges(true)}
+                        className="flex items-center justify-center gap-1.5 bg-white v-card-border px-4 py-2.5 text-sm transition-colors" style={{ fontWeight: 600 }}>
+                        <RotateCcw size={15} /> Solicitar ajustes ({rodadasRestantes})
+                      </button>
+                    ) : (
+                      <span className="flex items-center justify-center gap-1.5 px-4 py-2.5 text-[12px] rounded-xl" style={{ background: '#f0edfd', color: 'var(--v-text-mute)', fontWeight: 600 }}>
+                        <AlertTriangle size={13} /> Limite de {maxRodadas} rodadas atingido
+                      </span>
+                    )}
                   </div>
                 ) : (
                   <div>
                     <textarea value={motivo} onChange={e => setMotivo(e.target.value)} rows={2}
                       placeholder="Descreva o que precisa ser ajustado..."
-                      className="w-full v-card-border px-3 py-2 text-sm text-black placeholder:text-vmute focus:outline-none focus:ring-2 focus:ring-black mb-2" style={{ fontWeight: 300 }} />
+                      className="w-full v-card-border px-3 py-2 text-sm placeholder:text-vmute focus:outline-none mb-2" />
                     <div className="flex flex-col sm:flex-row gap-2">
                       <button onClick={() => { if (motivo.trim()) { onRequestChanges(motivo.trim()); setMotivo(''); setAskChanges(false); } }}
                         disabled={!motivo.trim()}
-                        className="flex items-center justify-center gap-1.5 v-btn-solid px-4 py-2.5 text-sm disabled:opacity-30 disabled:cursor-not-allowed  v-card-border transition-colors" style={{ fontWeight: 700 }}>
-                        <Send size={14} /> Enviar solicitação
+                        className="flex items-center justify-center gap-1.5 v-btn-solid px-4 py-2.5 text-sm disabled:opacity-30 disabled:cursor-not-allowed transition-colors" style={{ fontWeight: 700 }}>
+                        <Send size={14} /> Enviar solicitação (rodada {maxRodadas - rodadasRestantes + 1}/{maxRodadas})
                       </button>
-                      <button onClick={() => { setAskChanges(false); setMotivo(''); }} className="text-sm text-vsoft hover:text-black px-3 py-2.5" style={{ fontWeight: 600 }}>Cancelar</button>
+                      <button onClick={() => { setAskChanges(false); setMotivo(''); }} className="text-sm text-vsoft px-3 py-2.5" style={{ fontWeight: 600 }}>Cancelar</button>
                     </div>
                   </div>
                 )}
