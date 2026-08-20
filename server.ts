@@ -60,12 +60,30 @@ app.use(helmet({
 app.use(cookieParser());
 
 // Increase limit to handle PDF/Excel base64 uploads
-app.use(express.json({ limit: "1mb" }));
-app.use(express.urlencoded({ limit: "1mb", extended: true }));
-// Middleware dedicado para rotas que recebem base64 de arquivos (PDF/foto/planilha).
+// Parsers dedicados para rotas que recebem base64 de arquivos (PDF/foto/planilha).
 const largeJson = express.json({ limit: "25mb" });
 // Parser para uploads de arquivos ao Telegram: um PDF de 50MB vira ~67MB em base64.
 const fileUploadJson = express.json({ limit: "70mb" });
+
+// IMPORTANTE: o parser JSON global tem limite pequeno (1MB) para a maioria das rotas,
+// MAS precisa ignorar as rotas que recebem arquivos grandes — senão ele parseia o
+// corpo primeiro e rejeita com 413 (Payload Too Large) ANTES de a rota aplicar o
+// parser de 70MB. Essas rotas usam seu próprio parser (fileUploadJson/largeJson).
+const ROTAS_ARQUIVO_GRANDE = [
+  '/api/telegram/upload',
+  '/api/data/', // PUT de projetos pode conter referências e miniaturas
+  '/api/planning/',
+  '/api/acompanhamento/',
+  '/api/quotations/',
+  '/api/office/',
+];
+const jsonPequeno = express.json({ limit: "1mb" });
+app.use((req, res, next) => {
+  // Se a rota é de arquivo grande, deixa o parser dedicado dela cuidar do corpo.
+  if (ROTAS_ARQUIVO_GRANDE.some(p => req.path.startsWith(p))) return next();
+  return jsonPequeno(req, res, next);
+});
+app.use(express.urlencoded({ limit: "1mb", extended: true }));
 
 // Rate limits: um geral para toda a API e um mais rígido para login (anti brute-force).
 // IMPORTANTE: a chave do limite é o USUÁRIO da sessão (quando autenticado), não o IP.
