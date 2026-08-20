@@ -396,12 +396,12 @@ export default function ProjectEnvironment({
     let doc = p;
     let bytes = tamanho(doc);
 
-    // Se passou do limite, enxuga: remove as miniaturas base64 (só preview visual;
-    // o arquivo real continua no Telegram via fileId/url). Isso NÃO perde arquivos.
+    // Passo 1: se passou do limite, remove TODAS as miniaturas base64 de arquivos
+    // que já estão no Telegram (só preview visual; o arquivo real permanece).
     if (bytes > LIMITE) {
       doc = {
-        ...p,
-        phases: p.phases.map(ph => ({
+        ...doc,
+        phases: doc.phases.map(ph => ({
           ...ph,
           files: ph.files.map(f =>
             f.storage === 'telegram' && f.base64 ? { ...f, base64: undefined } : f
@@ -411,12 +411,14 @@ export default function ProjectEnvironment({
       bytes = tamanho(doc);
     }
 
-    // Se ainda passou, é porque há arquivos guardados inline (legado) ou peso real.
+    // Passo 2: se AINDA passou, o peso está em arquivos inline legados (o conteúdo
+    // inteiro embutido). Não dá para descartar sem perder o arquivo — orienta o
+    // reparo automático (Escopo → Saúde do projeto → Reparar armazenamento).
     if (bytes > LIMITE) {
       const inlineFiles = doc.phases.flatMap(ph => ph.files.filter(f => f.storage !== 'telegram' && f.base64));
       const msg = inlineFiles.length > 0
-        ? `Este projeto tem ${inlineFiles.length} arquivo(s) salvos de forma antiga (embutidos), somando ${(bytes / 1024 / 1024).toFixed(0)}MB. Remova-os pelo lixeira e reenvie pelo botão "Enviar arquivo" (que usa o armazenamento externo).`
-        : `Este projeto está muito grande para salvar (${(bytes / 1024 / 1024).toFixed(0)}MB). Remova arquivos antigos e reenvie pelo botão de arquivo.`;
+        ? `Não foi possível salvar: o projeto tem ${inlineFiles.length} arquivo(s) antigos embutidos (${(bytes / 1024 / 1024).toFixed(0)}MB). Vá em "Escopo & Prazos" → "Saúde do projeto" → "Reparar armazenamento" para migrá-los automaticamente e liberar espaço.`
+        : `Este projeto está muito grande para salvar (${(bytes / 1024 / 1024).toFixed(0)}MB). Vá em "Escopo & Prazos" → "Saúde do projeto" para liberar espaço.`;
       alert(msg);
       return Promise.resolve();
     }
@@ -1287,6 +1289,8 @@ function PageEscopo({ project, isAdmin, onPersist }: {
     ph.files.filter(f => f.storage !== 'telegram' && f.base64).map(f => ({ ...f, faseIdx: i, faseNome: ph.name }))
   );
   const totalMiniaturas = project.phases.reduce((a, ph) => a + ph.files.filter(f => f.base64).length, 0);
+  const totalArquivos = project.phases.reduce((a, ph) => a + ph.files.length, 0);
+  const totalTelegram = project.phases.reduce((a, ph) => a + ph.files.filter(f => f.storage === 'telegram').length, 0);
   const pesoAlto = tamanhoMB > 40;
 
   // Remove as miniaturas base64 de todos os arquivos (mantém o arquivo no Telegram).
@@ -1296,6 +1300,50 @@ function PageEscopo({ project, isAdmin, onPersist }: {
       files: ph.files.map(f => f.storage === 'telegram' ? { ...f, base64: undefined } : f),
     }));
     onPersist({ ...project, phases });
+  };
+
+  // Repara o armazenamento: migra arquivos inline (base64 no documento) para o
+  // Telegram, trocando o conteúdo pesado por uma referência leve (fileId/url).
+  // Resolve projetos que ficaram grandes demais para salvar.
+  const [reparando, setReparando] = useState(false);
+  const [reparoMsg, setReparoMsg] = useState<string | null>(null);
+  const repararArmazenamento = async () => {
+    if (reparando) return;
+    setReparando(true);
+    try {
+      const novasPhases = [...project.phases];
+      let migrados = 0, falhas = 0;
+      for (let i = 0; i < novasPhases.length; i++) {
+        const ph = novasPhases[i];
+        const novosFiles = [];
+        for (const f of ph.files) {
+          const ehInline = f.storage !== 'telegram' && f.base64;
+          if (ehInline) {
+            try {
+              setReparoMsg(`Migrando ${f.name}…`);
+              const sent = await sendTelegramDocument(f.base64 as string, f.name, f.type || 'application/octet-stream');
+              novosFiles.push({ ...f, storage: 'telegram' as const, fileId: sent.fileId, url: sent.url, base64: undefined });
+              migrados++;
+            } catch {
+              novosFiles.push(f); // mantém como está se a migração falhar
+              falhas++;
+            }
+          } else {
+            // remove miniatura pesada de arquivos já no telegram
+            novosFiles.push(f.storage === 'telegram' ? { ...f, base64: undefined } : f);
+          }
+        }
+        novasPhases[i] = { ...ph, files: novosFiles };
+      }
+      setReparoMsg(null);
+      await onPersist({ ...project, phases: novasPhases });
+      alert(`Reparo concluído: ${migrados} arquivo(s) migrado(s) para o armazenamento externo${falhas ? `, ${falhas} não puderam ser migrados` : ''}. O projeto ficou mais leve.`);
+    } catch (e: any) {
+      alert(`Falha no reparo: ${e?.message || 'erro'}.`);
+    } finally {
+      setReparando(false);
+      setReparoMsg(null);
+    }
   };
 
   const SERVICO_META: Record<ServicoId, { nome: string; desc: string }> = {
@@ -1399,7 +1447,7 @@ function PageEscopo({ project, isAdmin, onPersist }: {
             <b className="text-[15px]" style={{ fontWeight: 800 }}>Saúde do projeto</b>
             <p className="text-[12px] mt-0.5" style={{ color: 'var(--v-text-soft)' }}>
               Tamanho do registro: <b style={{ fontWeight: 700, color: pesoAlto ? '#b06d05' : 'var(--v-text)' }}>{tamanhoMB.toFixed(1)} MB</b>
-              {' '}de 70 MB · {totalMiniaturas} miniatura{totalMiniaturas !== 1 ? 's' : ''}
+              {' '}de 70 MB · {totalArquivos} arquivo{totalArquivos !== 1 ? 's' : ''} ({totalTelegram} no armazenamento externo, {arquivosInline.length} embutido{arquivosInline.length !== 1 ? 's' : ''})
             </p>
           </div>
           {totalMiniaturas > 0 && (
@@ -1421,13 +1469,18 @@ function PageEscopo({ project, isAdmin, onPersist }: {
               <AlertTriangle size={13} /> {arquivosInline.length} arquivo(s) no formato antigo (embutido)
             </span>
             <p className="text-[11px] mt-1" style={{ color: '#a33b57' }}>
-              Estes ocupam muito espaço. Abra a etapa, remova-os pela lixeira e reenvie pelo botão "Enviar arquivo":
+              Estes ocupam muito espaço no projeto. Clique abaixo para migrá-los ao armazenamento externo automaticamente — nenhum arquivo é perdido.
             </p>
-            <ul className="mt-1.5 flex flex-col gap-0.5">
+            <ul className="mt-1.5 flex flex-col gap-0.5 mb-2">
               {arquivosInline.slice(0, 6).map(f => (
                 <li key={f.id} className="text-[11px]" style={{ color: '#a33b57' }}>• {f.name} <span style={{ opacity: 0.7 }}>(em {f.faseNome})</span></li>
               ))}
+              {arquivosInline.length > 6 && <li className="text-[11px]" style={{ color: '#a33b57', opacity: 0.7 }}>…e mais {arquivosInline.length - 6}</li>}
             </ul>
+            <button onClick={repararArmazenamento} disabled={reparando}
+              className="v-btn px-4 py-2 text-[12px] flex items-center gap-1.5 disabled:opacity-50">
+              {reparando ? <><Loader2 size={13} className="animate-spin" /> {reparoMsg || 'Reparando…'}</> : <><Upload size={13} /> Reparar armazenamento agora</>}
+            </button>
           </div>
         )}
       </div>
