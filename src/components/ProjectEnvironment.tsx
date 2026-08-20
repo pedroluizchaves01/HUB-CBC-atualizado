@@ -390,14 +390,38 @@ export default function ProjectEnvironment({
   };
 
   const persist = (p: ArchProject) => {
-    try {
-      const bytes = new Blob([JSON.stringify(p)]).size;
-      if (bytes > 60 * 1024 * 1024) {
-        alert(`Este projeto está muito grande para salvar (${(bytes / 1024 / 1024).toFixed(0)}MB). Remova arquivos antigos e reenvie pelo botão de arquivo.`);
-        return Promise.resolve();
-      }
-    } catch { /* segue */ }
-    return saveDoc('arch_projects', p.id, p);
+    const LIMITE = 60 * 1024 * 1024; // 60MB (margem sob os 70MB do servidor)
+    const tamanho = (obj: any) => { try { return new Blob([JSON.stringify(obj)]).size; } catch { return 0; } };
+
+    let doc = p;
+    let bytes = tamanho(doc);
+
+    // Se passou do limite, enxuga: remove as miniaturas base64 (só preview visual;
+    // o arquivo real continua no Telegram via fileId/url). Isso NÃO perde arquivos.
+    if (bytes > LIMITE) {
+      doc = {
+        ...p,
+        phases: p.phases.map(ph => ({
+          ...ph,
+          files: ph.files.map(f =>
+            f.storage === 'telegram' && f.base64 ? { ...f, base64: undefined } : f
+          ),
+        })),
+      };
+      bytes = tamanho(doc);
+    }
+
+    // Se ainda passou, é porque há arquivos guardados inline (legado) ou peso real.
+    if (bytes > LIMITE) {
+      const inlineFiles = doc.phases.flatMap(ph => ph.files.filter(f => f.storage !== 'telegram' && f.base64));
+      const msg = inlineFiles.length > 0
+        ? `Este projeto tem ${inlineFiles.length} arquivo(s) salvos de forma antiga (embutidos), somando ${(bytes / 1024 / 1024).toFixed(0)}MB. Remova-os pelo lixeira e reenvie pelo botão "Enviar arquivo" (que usa o armazenamento externo).`
+        : `Este projeto está muito grande para salvar (${(bytes / 1024 / 1024).toFixed(0)}MB). Remova arquivos antigos e reenvie pelo botão de arquivo.`;
+      alert(msg);
+      return Promise.resolve();
+    }
+
+    return saveDoc('arch_projects', doc.id, doc);
   };
 
   const saveEditing = async () => {
@@ -1256,6 +1280,24 @@ function PageEscopo({ project, isAdmin, onPersist }: {
   const etapasAtivas = montarEtapas({ servicos, opcionaisAtivas: opcionais });
   const totalSemanas = etapasAtivas.filter(e => !e.paralela).reduce((a, e) => a + e.semanas, 0);
 
+  // --- Saúde do projeto: peso do documento e arquivos legados (inline) ---
+  const tamanhoBytes = (() => { try { return new Blob([JSON.stringify(project)]).size; } catch { return 0; } })();
+  const tamanhoMB = tamanhoBytes / 1024 / 1024;
+  const arquivosInline = project.phases.flatMap((ph, i) =>
+    ph.files.filter(f => f.storage !== 'telegram' && f.base64).map(f => ({ ...f, faseIdx: i, faseNome: ph.name }))
+  );
+  const totalMiniaturas = project.phases.reduce((a, ph) => a + ph.files.filter(f => f.base64).length, 0);
+  const pesoAlto = tamanhoMB > 40;
+
+  // Remove as miniaturas base64 de todos os arquivos (mantém o arquivo no Telegram).
+  const limparMiniaturas = () => {
+    const phases = project.phases.map(ph => ({
+      ...ph,
+      files: ph.files.map(f => f.storage === 'telegram' ? { ...f, base64: undefined } : f),
+    }));
+    onPersist({ ...project, phases });
+  };
+
   const SERVICO_META: Record<ServicoId, { nome: string; desc: string }> = {
     arquitetonico: { nome: 'Projeto Arquitetônico', desc: 'Estudo, anteprojeto, detalhamento e complementares.' },
     interiores: { nome: 'Projeto de Interiores', desc: 'Concepção 3D dos ambientes e cadernos.' },
@@ -1348,6 +1390,46 @@ function PageEscopo({ project, isAdmin, onPersist }: {
         <button onClick={salvarPrazos} className="v-btn mt-4 px-5 py-2.5 text-[13px] flex items-center gap-2">
           <Calendar size={15} /> Salvar cronograma e liberar etapas
         </button>
+      </div>
+
+      {/* Saúde do projeto (peso do documento) */}
+      <div className="v-card p-6">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <b className="text-[15px]" style={{ fontWeight: 800 }}>Saúde do projeto</b>
+            <p className="text-[12px] mt-0.5" style={{ color: 'var(--v-text-soft)' }}>
+              Tamanho do registro: <b style={{ fontWeight: 700, color: pesoAlto ? '#b06d05' : 'var(--v-text)' }}>{tamanhoMB.toFixed(1)} MB</b>
+              {' '}de 70 MB · {totalMiniaturas} miniatura{totalMiniaturas !== 1 ? 's' : ''}
+            </p>
+          </div>
+          {totalMiniaturas > 0 && (
+            <button onClick={limparMiniaturas} className="v-btn-ghost px-4 py-2 text-[12px] flex items-center gap-1.5">
+              <Trash2 size={13} /> Limpar miniaturas
+            </button>
+          )}
+        </div>
+        {pesoAlto && (
+          <div className="rounded-xl mt-3 p-3" style={{ background: '#fff8ec', border: '1px solid #f6dfb5' }}>
+            <span className="text-[12px]" style={{ color: '#7a6a4d' }}>
+              O projeto está ficando pesado. As miniaturas são só prévia visual — removê-las não apaga os arquivos (eles ficam no armazenamento externo) e libera espaço para salvar.
+            </span>
+          </div>
+        )}
+        {arquivosInline.length > 0 && (
+          <div className="rounded-xl mt-3 p-3" style={{ background: '#fdecef', border: '1px solid #f3c6d1' }}>
+            <span className="flex items-center gap-1.5 text-[12px]" style={{ color: '#c2255c', fontWeight: 700 }}>
+              <AlertTriangle size={13} /> {arquivosInline.length} arquivo(s) no formato antigo (embutido)
+            </span>
+            <p className="text-[11px] mt-1" style={{ color: '#a33b57' }}>
+              Estes ocupam muito espaço. Abra a etapa, remova-os pela lixeira e reenvie pelo botão "Enviar arquivo":
+            </p>
+            <ul className="mt-1.5 flex flex-col gap-0.5">
+              {arquivosInline.slice(0, 6).map(f => (
+                <li key={f.id} className="text-[11px]" style={{ color: '#a33b57' }}>• {f.name} <span style={{ opacity: 0.7 }}>(em {f.faseNome})</span></li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       {/* Prévia do cronograma */}
