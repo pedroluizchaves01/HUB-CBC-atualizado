@@ -1161,6 +1161,29 @@ function PageFase({ project, idx, isAdmin, userName, role, onPersist }: {
   };
   const addComment = (text: string) => update(withEvent({ kind: 'comentario', text }));
 
+  // Reabrir aprovação: o arquiteto reabre uma etapa já aprovada (inclusive por
+  // auto-aceite), devolvendo-a para o cliente com um novo prazo de resposta.
+  // Se a próxima etapa ainda não teve entregas, ela volta a ficar bloqueada.
+  const reabrirAprovacao = () => {
+    const agora = new Date();
+    const prazoAte = addDias(agora, prazoDias);
+    let ph = withEvent({ kind: 'comentario', text: `Aprovação reaberta pelo arquiteto. Novo prazo de resposta: ${prazoDias} dias (até ${fmtDataBR(prazoAte)}).` });
+    ph = ph.map((p, i) => {
+      if (i === idx) return {
+        ...p, state: 'aguardando_aprovacao' as PhaseState,
+        approvedBy: undefined, approvedAt: undefined,
+        enviadoEm: agora.toISOString(), prazoRespostaAte: prazoAte,
+      };
+      // Se a próxima etapa foi só desbloqueada (sem arquivos nem aprovação), rebloqueia.
+      if (i === idx + 1 && p.state === 'em_elaboracao' && (p.files?.length || 0) === 0 && (p.events?.length || 0) === 0) {
+        return { ...p, state: 'bloqueada' as PhaseState };
+      }
+      return p;
+    });
+    ph = recalcularCronograma(ph, project.dataBaseInicio);
+    update(ph);
+  };
+
   // Auto-aceite: se a entrega está aguardando e o prazo de resposta venceu, aceita.
   // A verificação roda ao abrir a fase (não há cron no backend).
   useEffect(() => {
@@ -1224,6 +1247,7 @@ function PageFase({ project, idx, isAdmin, userName, role, onPersist }: {
         onAddFiles={addFiles} onRemoveFile={removeFile} onAddComment={addComment}
         onApprove={approve} onRequestChanges={requestChanges} onSendForApproval={sendForApproval}
         rodadasRestantes={rodadasRestantes} maxRodadas={MAX_RODADAS}
+        onReopen={reabrirAprovacao}
       />
     </div>
   );
@@ -1962,13 +1986,13 @@ function PhaseCard({
   phase, index, total, isAdmin, isOpen, onToggle,
   onSendForApproval, onApprove, onRequestChanges,
   onAddFiles, onRemoveFile, onAddComment,
-  rodadasRestantes = 3, maxRodadas = 3,
+  rodadasRestantes = 3, maxRodadas = 3, onReopen,
 }: {
   phase: ArchPhase; index: number; total: number; isAdmin: boolean; isOpen: boolean;
   onToggle: () => void;
   onSendForApproval: () => void; onApprove: () => void; onRequestChanges: (m: string) => void;
   onAddFiles: (files: FileList, onStatus?: (msg: string | null) => void) => void; onRemoveFile: (id: string) => void; onAddComment: (t: string) => void;
-  rodadasRestantes?: number; maxRodadas?: number;
+  rodadasRestantes?: number; maxRodadas?: number; onReopen?: () => void;
 }) {
   const meta = STATE_META[phase.state];
   const Icon = meta.Icon;
@@ -2154,11 +2178,24 @@ function PhaseCard({
             )}
 
             {phase.state === 'aprovada' && phase.approvedAt && (
-              <div className="v-btn-solid p-3 flex items-center gap-2">
-                <CheckCircle2 size={16} className="text-white flex-shrink-0" />
-                <p className="text-xs" style={{ fontWeight: 300 }}>
-                  Aprovada por <b style={{ fontWeight: 700 }}>{phase.approvedBy}</b> em {new Date(phase.approvedAt).toLocaleString('pt-BR')}.
-                </p>
+              <div className="flex flex-col gap-2">
+                <div className="v-btn-solid p-3 flex items-center gap-2">
+                  <CheckCircle2 size={16} className="text-white flex-shrink-0" />
+                  <p className="text-xs" style={{ fontWeight: 300 }}>
+                    Aprovada por <b style={{ fontWeight: 700 }}>{phase.approvedBy || '—'}</b> em {new Date(phase.approvedAt).toLocaleString('pt-BR')}.
+                  </p>
+                </div>
+                {isAdmin && onReopen && (
+                  <div className="v-tint p-3 flex items-center justify-between gap-3 flex-wrap">
+                    <span className="text-[11px]" style={{ color: 'var(--v-text-soft)' }}>
+                      Precisa que o cliente revise de novo? Você pode reabrir o prazo de aprovação.
+                    </span>
+                    <button onClick={() => { if (confirm('Reabrir esta etapa para nova aprovação do cliente? O prazo de resposta será reiniciado.')) onReopen(); }}
+                      className="v-btn-ghost px-3 py-2 text-[12px] flex items-center gap-1.5 flex-shrink-0">
+                      <RotateCcw size={13} /> Reabrir para aprovação
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
