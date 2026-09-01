@@ -33,6 +33,7 @@ import { WindRose, SolarChart, TempBars, ComfortBar } from './thermal/ThermalCha
 import { DEFAULT_BRIEFING, BRIEFING_GROUPS, type BriefingQuestion, type BriefingAnswer } from '../lib/briefingTemplate';
 import { openBriefingReport } from '../lib/briefingReportHtml';
 import { CATALOGO_ETAPAS, montarEtapas, type PhaseTemplate, type ServicoId } from '../lib/phaseTemplates';
+import { openProjectReport, type ProjectReportData } from '../lib/projectReportHtml';
 
 interface Props {
   role: string;
@@ -139,7 +140,7 @@ function recalcularCronograma(phases: ArchPhase[], dataBase?: string): ArchPhase
 function gerarFases(opts: { servicos: ServicoId[]; opcionaisAtivas: string[]; anteriores?: ArchPhase[] }): ArchPhase[] {
   const templates = montarEtapas({ servicos: opts.servicos, opcionaisAtivas: opts.opcionaisAtivas });
   const antesPorKey = new Map((opts.anteriores || []).map(p => [p.key || p.name, p]));
-  return templates.map((t: PhaseTemplate, i) => {
+  const fases: ArchPhase[] = templates.map((t: PhaseTemplate, i) => {
     const prev = antesPorKey.get(t.key);
     return {
       name: t.name,
@@ -161,6 +162,17 @@ function gerarFases(opts: { servicos: ServicoId[]; opcionaisAtivas: string[]; an
       fimPrevisto: prev?.fimPrevisto,
     };
   });
+
+  // Proteção contra perda de dados: se uma etapa anterior tinha arquivos, comentários
+  // ou já foi aprovada, mas saiu do escopo (serviço desmarcado / opcional desligada),
+  // ela é PRESERVADA no fim da lista em vez de descartada. Nada do cliente se perde.
+  const keysNoEscopo = new Set(templates.map(t => t.key));
+  const orfas = (opts.anteriores || []).filter(p => {
+    const key = p.key || p.name;
+    const temConteudo = (p.files?.length || 0) > 0 || (p.events?.length || 0) > 0 || p.state === 'aprovada';
+    return !keysNoEscopo.has(key) && temConteudo;
+  });
+  return [...fases, ...orfas];
 }
 
 type PhaseState = 'bloqueada' | 'em_elaboracao' | 'aguardando_aprovacao' | 'ajustes' | 'aprovada';
@@ -186,6 +198,7 @@ interface PhaseEvent {
   role: string;
   at: string;
   text?: string;
+  files?: ArchFile[];   // anexos (ex.: cliente anexa PDF/imagem ao pedir ajuste)
 }
 
 // Mensagem do mural de recados do projeto.
@@ -869,6 +882,29 @@ function phaseIcon(state: PhaseState): React.ComponentType<any> {
 function PageInicio({ project, isAdmin, userName, onNavigate }: {
   project: ArchProject; isAdmin: boolean; userName?: string; onNavigate: (p: PageId) => void;
 }) {
+  // Monta os dados e abre o relatório de apresentação (A4 retrato).
+  const gerarRelatorio = () => {
+    const data: ProjectReportData = {
+      nome: project.name,
+      clienteNome: project.clientName,
+      tipo: project.type,
+      area: project.area,
+      responsavel: project.responsible,
+      localizacao: project.localizacao,
+      criadoEm: project.createdAt,
+      servicos: project.servicos,
+      dataBaseInicio: project.dataBaseInicio,
+      fases: project.phases.map(ph => ({
+        name: ph.name, state: ph.state, semanas: ph.semanas,
+        inicioPrevisto: ph.inicioPrevisto, fimPrevisto: ph.fimPrevisto,
+        approvedBy: ph.approvedBy, approvedAt: ph.approvedAt,
+        files: ph.files, events: ph.events, entregaveis: ph.entregaveis,
+        rodadasUsadas: ph.rodadasUsadas,
+      })),
+    };
+    openProjectReport(data);
+  };
+
   // ----- Cálculos de status reais a partir do projeto -----
   const phases = project.phases;
   const aprovadas = phases.filter(p => p.state === 'aprovada').length;
@@ -955,9 +991,16 @@ function PageInicio({ project, isAdmin, userName, onNavigate }: {
               {project.clientName}{project.localizacao ? ` · ${project.localizacao}` : ''}
             </span>
           </div>
-          <span className="v-chip v-chip-ok" style={{ padding: '7px 14px', fontSize: 11 }}>
-            {project.status === 'ativo' ? 'Em andamento' : project.status}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="v-chip v-chip-ok" style={{ padding: '7px 14px', fontSize: 11 }}>
+              {project.status === 'ativo' ? 'Em andamento' : project.status}
+            </span>
+            {isAdmin && (
+              <button onClick={gerarRelatorio} className="v-btn-ghost px-3 py-2 text-[12px] flex items-center gap-1.5">
+                <FileText size={13} /> Gerar relatório
+              </button>
+            )}
+          </div>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {contract.map(([label, value]) => (
@@ -1127,6 +1170,21 @@ function PageFase({ project, idx, isAdmin, userName, role, onPersist }: {
     if (parsed.length) update(project.phases.map((ph, i) => i === idx ? { ...ph, files: [...ph.files, ...parsed] } : ph));
   };
   const removeFile = (fileId: string) => update(project.phases.map((ph, i) => i === idx ? { ...ph, files: ph.files.filter(f => f.id !== fileId) } : ph));
+
+  // Uploader avulso: sobe arquivos e devolve os ArchFile (sem anexar à fase).
+  // Usado pelo formulário de "solicitar ajustes" para anexar PDF/imagem.
+  const uploadAvulso = async (files: FileList, onStatus?: (m: string | null) => void): Promise<ArchFile[]> => {
+    const parsed: ArchFile[] = [];
+    const arr = Array.from(files);
+    for (let k = 0; k < arr.length; k++) {
+      const f = arr[k];
+      if (f.size > 50 * 1024 * 1024) { onStatus?.(null); alert(`"${f.name}" excede 50MB.`); continue; }
+      try { onStatus?.(`Enviando ${arr.length > 1 ? `(${k + 1}/${arr.length}) ` : ''}${f.name}…`); parsed.push(await uploadArchFile(f)); }
+      catch (e: any) { onStatus?.(null); alert(`Falha ao enviar "${f.name}": ${e?.message || 'erro'}.`); }
+    }
+    onStatus?.(null);
+    return parsed;
+  };
   const prazoDias = project.prazoRespostaDias ?? PRAZO_RESPOSTA_PADRAO;
   const sendForApproval = () => {
     const agora = new Date();
@@ -1142,7 +1200,13 @@ function PageFase({ project, idx, isAdmin, userName, role, onPersist }: {
   const doApprove = (texto: string, kind: PhaseEvent['kind']) => {
     let ph = withEvent({ kind, text: texto });
     ph = ph.map((p, i) => {
-      if (i === idx) return { ...p, state: 'aprovada' as PhaseState, approvedBy: userName || (kind === 'auto_aceite' ? 'Sistema (auto-aceite)' : ''), approvedAt: new Date().toISOString() };
+      if (i === idx) return {
+        ...p, state: 'aprovada' as PhaseState,
+        approvedBy: userName || (kind === 'auto_aceite' ? 'Sistema (auto-aceite)' : ''),
+        approvedAt: new Date().toISOString(),
+        // limpa o prazo: a etapa não está mais aguardando resposta
+        enviadoEm: undefined, prazoRespostaAte: undefined,
+      };
       if (i === idx + 1 && p.state === 'bloqueada') return { ...p, state: 'em_elaboracao' as PhaseState };
       return p;
     });
@@ -1152,10 +1216,10 @@ function PageFase({ project, idx, isAdmin, userName, role, onPersist }: {
   const approve = () => doApprove('Etapa aprovada pelo cliente.', 'aprovacao');
   const rodadasUsadas = phase.rodadasUsadas ?? 0;
   const rodadasRestantes = MAX_RODADAS - rodadasUsadas;
-  const requestChanges = (motivo: string) => {
+  const requestChanges = (motivo: string, anexos?: ArchFile[]) => {
     if (rodadasRestantes <= 0) return;
     const nova = rodadasUsadas + 1;
-    let ph = withEvent({ kind: 'ajuste', text: `Rodada ${nova}/${MAX_RODADAS} — ${motivo}` });
+    let ph = withEvent({ kind: 'ajuste', text: `Rodada ${nova}/${MAX_RODADAS} — ${motivo}`, files: anexos && anexos.length ? anexos : undefined });
     ph = ph.map((p, i) => i === idx ? { ...p, state: 'ajustes' as PhaseState, rodadasUsadas: nova, enviadoEm: undefined, prazoRespostaAte: undefined } : p);
     update(ph);
   };
@@ -1184,16 +1248,33 @@ function PageFase({ project, idx, isAdmin, userName, role, onPersist }: {
     update(ph);
   };
 
-  // Auto-aceite: se a entrega está aguardando e o prazo de resposta venceu, aceita.
-  // A verificação roda ao abrir a fase (não há cron no backend).
+  // Auto-aceite: se a entrega está aguardando e o prazo de resposta REALMENTE venceu,
+  // aceita. Roda ao abrir a fase (não há cron no backend).
+  // Proteções contra fechar cedo demais (corrida de salvamento / prazo antigo):
+  //  - exige enviadoEm e prazoRespostaAte coerentes (prazo depois do envio);
+  //  - só aceita se o prazo passou com folga de 1 minuto (evita relógio/propagação);
+  //  - usa um ref para não reprocessar o mesmo prazo em re-renders.
+  const autoAceiteRef = React.useRef<string | null>(null);
   useEffect(() => {
-    if (phase.state === 'aguardando_aprovacao' && phase.prazoRespostaAte) {
-      if (new Date() > new Date(phase.prazoRespostaAte)) {
-        doApprove(`Aceite automático: o prazo de resposta (${prazoDias} dias) venceu sem manifestação do cliente.`, 'auto_aceite');
-      }
-    }
+    if (phase.state !== 'aguardando_aprovacao') { autoAceiteRef.current = null; return; }
+    const prazoIso = phase.prazoRespostaAte;
+    const envioIso = phase.enviadoEm;
+    if (!prazoIso || !envioIso) return;                 // sem dados de prazo → não faz nada
+    if (autoAceiteRef.current === prazoIso) return;     // já avaliei este prazo exato
+
+    const prazo = new Date(prazoIso).getTime();
+    const envio = new Date(envioIso).getTime();
+    const agora = Date.now();
+
+    // Coerência: o prazo tem que ser posterior ao envio (senão é dado antigo/inconsistente).
+    if (!(prazo > envio)) return;
+    // Só aceita com folga de 1 min após o prazo (evita fechar no mesmo instante da reabertura).
+    if (agora <= prazo + 60_000) return;
+
+    autoAceiteRef.current = prazoIso; // marca que este prazo já foi processado
+    doApprove(`Aceite automático: o prazo de resposta (${prazoDias} dias) venceu sem manifestação do cliente.`, 'auto_aceite');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase.state, phase.prazoRespostaAte]);
+  }, [phase.state, phase.prazoRespostaAte, phase.enviadoEm]);
 
   const stateStyle: Record<PhaseState, { grad: string; label: string; Icon: React.ComponentType<any> }> = {
     bloqueada: { grad: 'linear-gradient(135deg,#495057,#343a40)', label: 'Aguardando etapa anterior', Icon: Lock },
@@ -1247,7 +1328,7 @@ function PageFase({ project, idx, isAdmin, userName, role, onPersist }: {
         onAddFiles={addFiles} onRemoveFile={removeFile} onAddComment={addComment}
         onApprove={approve} onRequestChanges={requestChanges} onSendForApproval={sendForApproval}
         rodadasRestantes={rodadasRestantes} maxRodadas={MAX_RODADAS}
-        onReopen={reabrirAprovacao}
+        onReopen={reabrirAprovacao} onUpload={uploadAvulso}
       />
     </div>
   );
@@ -1986,13 +2067,14 @@ function PhaseCard({
   phase, index, total, isAdmin, isOpen, onToggle,
   onSendForApproval, onApprove, onRequestChanges,
   onAddFiles, onRemoveFile, onAddComment,
-  rodadasRestantes = 3, maxRodadas = 3, onReopen,
+  rodadasRestantes = 3, maxRodadas = 3, onReopen, onUpload,
 }: {
   phase: ArchPhase; index: number; total: number; isAdmin: boolean; isOpen: boolean;
   onToggle: () => void;
-  onSendForApproval: () => void; onApprove: () => void; onRequestChanges: (m: string) => void;
+  onSendForApproval: () => void; onApprove: () => void; onRequestChanges: (m: string, anexos?: ArchFile[]) => void;
   onAddFiles: (files: FileList, onStatus?: (msg: string | null) => void) => void; onRemoveFile: (id: string) => void; onAddComment: (t: string) => void;
   rodadasRestantes?: number; maxRodadas?: number; onReopen?: () => void;
+  onUpload?: (files: FileList, onStatus?: (m: string | null) => void) => Promise<ArchFile[]>;
 }) {
   const meta = STATE_META[phase.state];
   const Icon = meta.Icon;
@@ -2001,6 +2083,8 @@ function PhaseCard({
   const [viewing, setViewing] = useState<ArchFile | null>(null);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [motivo, setMotivo] = useState('');
+  const [ajusteAnexos, setAjusteAnexos] = useState<ArchFile[]>([]);
+  const [ajusteUploadMsg, setAjusteUploadMsg] = useState<string | null>(null);
   const [comment, setComment] = useState('');
 
   const connectorColor = phase.state === 'aprovada' ? '#000' : '#d6d3d1';
@@ -2148,13 +2232,41 @@ function PhaseCard({
                     <textarea value={motivo} onChange={e => setMotivo(e.target.value)} rows={2}
                       placeholder="Descreva o que precisa ser ajustado..."
                       className="w-full v-card-border px-3 py-2 text-sm placeholder:text-vmute focus:outline-none mb-2" />
+
+                    {/* Anexos do ajuste (PDF ou imagem) */}
+                    <div className="mb-2">
+                      <label className="inline-flex items-center gap-1.5 text-[12px] px-3 py-2 rounded-xl cursor-pointer" style={{ background: 'var(--v-surface-tint)', color: 'var(--v-text-soft)', fontWeight: 600 }}>
+                        <Upload size={13} /> Anexar PDF ou imagem
+                        <input type="file" multiple accept="application/pdf,image/*" className="hidden"
+                          onChange={async e => {
+                            if (e.target.files && e.target.files.length && onUpload) {
+                              const novos = await onUpload(e.target.files, setAjusteUploadMsg);
+                              setAjusteAnexos(prev => [...prev, ...novos]);
+                            }
+                            e.currentTarget.value = '';
+                          }} />
+                      </label>
+                      {ajusteUploadMsg && <span className="text-[11px] ml-2" style={{ color: 'var(--v-text-mute)' }}>{ajusteUploadMsg}</span>}
+                      {ajusteAnexos.length > 0 && (
+                        <div className="flex flex-col gap-1 mt-2">
+                          {ajusteAnexos.map(a => (
+                            <div key={a.id} className="flex items-center gap-2 text-[12px] v-tint px-2.5 py-1.5">
+                              <FileText size={13} style={{ color: 'var(--v-accent-2)', flexShrink: 0 }} />
+                              <span className="flex-1 min-w-0 truncate">{a.name}</span>
+                              <button onClick={() => setAjusteAnexos(prev => prev.filter(x => x.id !== a.id))} style={{ color: 'var(--v-text-mute)' }}><X size={13} /></button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
                     <div className="flex flex-col sm:flex-row gap-2">
-                      <button onClick={() => { if (motivo.trim()) { onRequestChanges(motivo.trim()); setMotivo(''); setAskChanges(false); } }}
-                        disabled={!motivo.trim()}
+                      <button onClick={() => { if (motivo.trim()) { onRequestChanges(motivo.trim(), ajusteAnexos); setMotivo(''); setAjusteAnexos([]); setAskChanges(false); } }}
+                        disabled={!motivo.trim() || !!ajusteUploadMsg}
                         className="flex items-center justify-center gap-1.5 v-btn-solid px-4 py-2.5 text-sm disabled:opacity-30 disabled:cursor-not-allowed transition-colors" style={{ fontWeight: 700 }}>
                         <Send size={14} /> Enviar solicitação (rodada {maxRodadas - rodadasRestantes + 1}/{maxRodadas})
                       </button>
-                      <button onClick={() => { setAskChanges(false); setMotivo(''); }} className="text-sm text-vsoft px-3 py-2.5" style={{ fontWeight: 600 }}>Cancelar</button>
+                      <button onClick={() => { setAskChanges(false); setMotivo(''); setAjusteAnexos([]); }} className="text-sm text-vsoft px-3 py-2.5" style={{ fontWeight: 600 }}>Cancelar</button>
                     </div>
                   </div>
                 )}
@@ -2213,6 +2325,16 @@ function PhaseCard({
                       </span>
                       <div className="flex-1 min-w-0">
                         <p className="text-black" style={{ fontWeight: 400 }}>{ev.text}</p>
+                        {ev.files && ev.files.length > 0 && (
+                          <div className="flex flex-col gap-1 mt-1.5">
+                            {ev.files.map(f => (
+                              <button key={f.id} onClick={() => setViewing(f)}
+                                className="flex items-center gap-1.5 text-[11px] v-tint px-2 py-1 self-start" style={{ color: 'var(--v-accent-2)', fontWeight: 600 }}>
+                                <FileText size={12} /> {f.name}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                         <p className="text-[10px] text-vsoft mt-0.5 font-mono">{ev.author} · {new Date(ev.at).toLocaleString('pt-BR')}</p>
                       </div>
                     </div>
