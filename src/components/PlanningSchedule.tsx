@@ -100,7 +100,11 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
     progress: 0,
     costPrev: '',
     costReal: '0',
-    monthlyProgress: {} as Record<string, number>
+    monthlyProgress: {} as Record<string, number>,
+    // Posicionamento da nova etapa: 'fim' (padrão), 'apos' (após uma etapa), 'data' (pela data)
+    posicao: 'fim' as 'fim' | 'apos' | 'data',
+    inserirAposId: '' as string,
+    empurrarSeguintes: true,
   });
 
   // Dialog/Confirmations local states
@@ -167,6 +171,56 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
     [ids[idx], ids[swap]] = [ids[swap], ids[idx]];
     persistPhaseOrder(ids);
   };
+
+  // ---- Inserção de etapa no meio com empurrão automático das seguintes ----
+  // Diferença em dias entre duas datas ISO (yyyy-mm-dd).
+  const diasEntre = (ini: string, fim: string) => {
+    const a = new Date(ini + 'T00:00:00').getTime();
+    const b = new Date(fim + 'T00:00:00').getTime();
+    if (isNaN(a) || isNaN(b)) return 0;
+    return Math.round((b - a) / 86400000);
+  };
+  // Soma dias a uma data ISO e devolve ISO (yyyy-mm-dd).
+  const somaDias = (iso: string, dias: number) => {
+    const d = new Date(iso + 'T00:00:00');
+    if (isNaN(d.getTime())) return iso;
+    d.setDate(d.getDate() + dias);
+    return d.toISOString().split('T')[0];
+  };
+
+  // Insere uma nova fase após 'afterId' (ou no início se afterId for null) e empurra
+  // as datas de TODAS as fases seguintes pela duração (em dias) da nova fase.
+  const inserirFaseComEmpurrao = (novaFase: any, afterId: string | null) => {
+    const ordenadas = [...orderedPhases];
+    // duração da nova fase, em dias (mínimo 0)
+    const dur = Math.max(0, diasEntre(novaFase.startDate, novaFase.endDate)) + 1; // +1: inclui o dia final
+    // posição de inserção
+    let pos: number;
+    if (afterId === null) pos = 0;
+    else {
+      const i = ordenadas.findIndex(p => p.id === afterId);
+      pos = i === -1 ? ordenadas.length : i + 1;
+    }
+    // empurra as fases que ficam DEPOIS da posição de inserção
+    const deslocadas = ordenadas.map((p, idx) => {
+      if (idx < pos) return p;
+      return {
+        ...p,
+        startDate: p.startDate ? somaDias(p.startDate, dur) : p.startDate,
+        endDate: p.endDate ? somaDias(p.endDate, dur) : p.endDate,
+      };
+    });
+    // monta a lista final com a nova fase na posição
+    const finais = [...deslocadas.slice(0, pos), novaFase, ...deslocadas.slice(pos)];
+    // reatribui 'order' sequencial e persiste tudo de uma vez
+    const comOrdem = finais.map((p, i) => ({ ...p, order: i }));
+    setTimelinePhases(prev => {
+      // troca as fases do projeto atual pelas recalculadas, mantém as de outros projetos
+      const outrosProjetos = prev.filter(ph => ph.projectId !== cronogramaProjectId);
+      return [...outrosProjetos, ...comOrdem];
+    });
+  };
+
   const activeProj = projects.find(p => p.id === cronogramaProjectId);
 
   // Helper date parsing and scheduling math
@@ -662,11 +716,35 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
   const handleConfirmSavePhase = () => {
     if (!phaseSaveConfirm) return;
     const { isEdit, payload } = phaseSaveConfirm;
+    const conf = phaseSaveConfirm as any;
 
     if (isEdit) {
       setTimelinePhases(prev => prev.map(ph => ph.id === payload.id ? payload : ph));
-    } else {
+    } else if (conf.posicao === 'fim' || !conf.posicao) {
+      // comportamento antigo: adiciona no fim
       setTimelinePhases(prev => [...prev, payload]);
+    } else {
+      // Inserção posicionada. Descobre "após qual etapa" a nova entra:
+      let afterId: string | null = null;
+      if (conf.posicao === 'apos') {
+        afterId = conf.inserirAposId || null;
+      } else if (conf.posicao === 'data') {
+        // posiciona pela data de início: entra após a última etapa que começa antes dela
+        const anteriores = orderedPhases.filter(p => (p.startDate || '') <= payload.startDate);
+        afterId = anteriores.length ? anteriores[anteriores.length - 1].id : null;
+      }
+      if (conf.empurrarSeguintes) {
+        inserirFaseComEmpurrao(payload, afterId);
+      } else {
+        // só insere na posição, sem mexer nas datas das outras
+        const ordenadas = [...orderedPhases];
+        const pos = afterId === null ? 0 : (ordenadas.findIndex(p => p.id === afterId) + 1) || ordenadas.length;
+        const finais = [...ordenadas.slice(0, pos), payload, ...ordenadas.slice(pos)].map((p, i) => ({ ...p, order: i }));
+        setTimelinePhases(prev => {
+          const outros = prev.filter(ph => ph.projectId !== cronogramaProjectId);
+          return [...outros, ...finais];
+        });
+      }
     }
 
     setPhaseSaveConfirm(null);
@@ -733,8 +811,12 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
           setPhaseSaveConfirm({
             isOpen: true,
             isEdit: !!editingPhase,
-            payload
-          });
+            payload,
+            // posicionamento (só relevante ao criar)
+            posicao: phaseInput.posicao,
+            inserirAposId: phaseInput.inserirAposId,
+            empurrarSeguintes: phaseInput.empurrarSeguintes,
+          } as any);
         }} className="space-y-4 font-sans">
           {phaseFormError && (
             <div className="bg-red-50 border border-red-200 text-red-800 p-3 text-xs font-mono flex items-start gap-2">
@@ -883,10 +965,49 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
             );
           })()}
 
+          {/* Posicionamento da nova etapa (só ao criar) */}
+          {!editingPhase && orderedPhases.length > 0 && (
+            <div className="border-t border-stone-200 pt-4 space-y-3">
+              <label className="block text-[8px] font-mono uppercase tracking-wider text-stone-500 font-bold">Onde inserir esta etapa</label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {([
+                  ['fim', 'No final'],
+                  ['apos', 'Após uma etapa'],
+                  ['data', 'Pela data de início'],
+                ] as const).map(([val, label]) => (
+                  <button key={val} type="button"
+                    onClick={() => setPhaseInput({ ...phaseInput, posicao: val })}
+                    className={`text-[10px] font-mono uppercase tracking-wide py-2 px-2 border transition-all ${
+                      phaseInput.posicao === val ? 'bg-stone-950 text-white border-stone-950' : 'bg-white text-stone-600 border-stone-200 hover:border-stone-400'
+                    }`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {phaseInput.posicao === 'apos' && (
+                <div>
+                  <label className="block text-[8px] font-mono uppercase tracking-wider text-stone-500 font-bold mb-1">Inserir logo após</label>
+                  <select
+                    className="w-full bg-white border border-stone-200 py-1.5 px-3 text-xs focus:outline-none focus:border-stone-400"
+                    value={phaseInput.inserirAposId}
+                    onChange={(e) => setPhaseInput({ ...phaseInput, inserirAposId: e.target.value })}
+                  >
+                    <option value="">— início do cronograma —</option>
+                    {orderedPhases.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+              )}
+
+              <label className="flex items-center gap-2 text-[11px] text-stone-600 cursor-pointer">
+                <input type="checkbox" checked={phaseInput.empurrarSeguintes}
+                  onChange={(e) => setPhaseInput({ ...phaseInput, empurrarSeguintes: e.target.checked })} />
+                Empurrar as datas das etapas seguintes automaticamente (pela duração desta etapa)
+              </label>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 gap-4 border-t border-stone-200 pt-4">
-            {/* Custo Realizado e Progresso Realizado foram removidos do planejamento:
-                planejamento é a linha de base (baseline). O realizado é registrado e
-                exibido exclusivamente no módulo de Acompanhamento. */}
             <div className="flex items-end">
               <button
                 type="submit"
