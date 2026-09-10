@@ -221,6 +221,38 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
     });
   };
 
+  // Edita uma fase existente e ajusta as fases SEGUINTES pela variação da data de fim.
+  // Ex.: fim ia até 15/08, mudou para 30/08 (+15 dias) → as seguintes deslocam +15 dias.
+  // Antecipar (fim de 30/08 para 15/08, -15 dias) puxa as seguintes -15 dias.
+  const editarFaseComEmpurrao = (faseEditada: any) => {
+    const ordenadas = [...orderedPhases];
+    const idx = ordenadas.findIndex(p => p.id === faseEditada.id);
+    if (idx === -1) {
+      // fase não está na lista ordenada — só atualiza
+      setTimelinePhases(prev => prev.map(ph => ph.id === faseEditada.id ? faseEditada : ph));
+      return;
+    }
+    const antiga = ordenadas[idx];
+    // deslocamento = diferença entre o novo fim e o fim antigo (em dias)
+    const desloc = (antiga.endDate && faseEditada.endDate) ? diasEntre(antiga.endDate, faseEditada.endDate) : 0;
+
+    const novas = ordenadas.map((p, i) => {
+      if (i === idx) return faseEditada;            // a própria fase, com as datas novas
+      if (i < idx) return p;                        // anteriores não mudam
+      if (desloc === 0) return p;                   // sem mudança de fim, seguintes ficam
+      return {
+        ...p,
+        startDate: p.startDate ? somaDias(p.startDate, desloc) : p.startDate,
+        endDate: p.endDate ? somaDias(p.endDate, desloc) : p.endDate,
+      };
+    });
+    const comOrdem = novas.map((p, i) => ({ ...p, order: i }));
+    setTimelinePhases(prev => {
+      const outrosProjetos = prev.filter(ph => ph.projectId !== cronogramaProjectId);
+      return [...outrosProjetos, ...comOrdem];
+    });
+  };
+
   const activeProj = projects.find(p => p.id === cronogramaProjectId);
 
   // Helper date parsing and scheduling math
@@ -436,7 +468,10 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
       progress: phase.progress,
       costPrev: String(phase.costPrev),
       costReal: String(phase.costReal),
-      monthlyProgress: phase.monthlyProgress || {}
+      monthlyProgress: phase.monthlyProgress || {},
+      posicao: 'fim',
+      inserirAposId: '',
+      empurrarSeguintes: true,   // por padrão, ajustar as seguintes ao editar datas
     });
   };
 
@@ -450,7 +485,10 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
       progress: 0,
       costPrev: '',
       costReal: '0',
-      monthlyProgress: {}
+      monthlyProgress: {},
+      posicao: 'fim',
+      inserirAposId: '',
+      empurrarSeguintes: true,
     });
   };
 
@@ -719,7 +757,12 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
     const conf = phaseSaveConfirm as any;
 
     if (isEdit) {
-      setTimelinePhases(prev => prev.map(ph => ph.id === payload.id ? payload : ph));
+      // Se o usuário optou por ajustar as seguintes, empurra pela variação da data de fim.
+      if (conf.empurrarSeguintes) {
+        editarFaseComEmpurrao(payload);
+      } else {
+        setTimelinePhases(prev => prev.map(ph => ph.id === payload.id ? payload : ph));
+      }
     } else if (conf.posicao === 'fim' || !conf.posicao) {
       // comportamento antigo: adiciona no fim
       setTimelinePhases(prev => [...prev, payload]);
@@ -1003,6 +1046,20 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
                 <input type="checkbox" checked={phaseInput.empurrarSeguintes}
                   onChange={(e) => setPhaseInput({ ...phaseInput, empurrarSeguintes: e.target.checked })} />
                 Empurrar as datas das etapas seguintes automaticamente (pela duração desta etapa)
+              </label>
+            </div>
+          )}
+
+          {/* Ao EDITAR: opção de ajustar as etapas seguintes pela mudança de data */}
+          {editingPhase && orderedPhases.length > 1 && (
+            <div className="border-t border-stone-200 pt-4">
+              <label className="flex items-start gap-2 text-[11px] text-stone-600 cursor-pointer">
+                <input type="checkbox" checked={phaseInput.empurrarSeguintes}
+                  onChange={(e) => setPhaseInput({ ...phaseInput, empurrarSeguintes: e.target.checked })} />
+                <span>
+                  <b className="text-stone-800">Ajustar as etapas seguintes automaticamente.</b><br/>
+                  Se você mudar a data de término desta etapa, as etapas posteriores serão deslocadas na mesma medida (para frente ou para trás).
+                </span>
               </label>
             </div>
           )}
