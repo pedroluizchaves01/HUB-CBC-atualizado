@@ -24,7 +24,8 @@ export type ProjectStatus = 'planejamento' | 'execucao' | 'concluido' | 'suspens
 export interface Project {
   id: string;
   name: string;
-  clientId: string;
+  clientId: string;          // cliente principal (dono)
+  clientIds?: string[];      // donos adicionais (obra compartilhada entre clientes)
   type: ProjectType;
   status: ProjectStatus;
   budget: number;

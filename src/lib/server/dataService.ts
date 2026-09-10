@@ -136,15 +136,19 @@ export async function listCollectionForUser(collection: string, req: Requester):
   const clientId = req.clientId;
   if (!clientId) return [];
 
+  // Uma obra pode ter um dono (clientId) ou ser compartilhada (clientIds: string[]).
+  const donoDaObra = (p: any) =>
+    p?.clientId === clientId || (Array.isArray(p?.clientIds) && p.clientIds.includes(clientId));
+
   if (collection === "clients") return all.filter((d) => d.id === clientId);
-  if (collection === "projects") return all.filter((d) => d.clientId === clientId);
-  // Projetos de arquitetura: ligados ao cliente diretamente por clientId (não por projectId de obra).
-  if (collection === "arch_projects") return all.filter((d) => d.clientId === clientId);
+  if (collection === "projects") return all.filter(donoDaObra);
+  // Projetos de arquitetura: ligados ao cliente diretamente por clientId (ou compartilhado).
+  if (collection === "arch_projects") return all.filter((d) => d.clientId === clientId || (Array.isArray(d.clientIds) && d.clientIds.includes(clientId)));
 
   if (PROJECT_SCOPED.has(collection)) {
-    // Descobre os projetos do cliente e filtra os itens por projectId.
+    // Descobre os projetos do cliente (incluindo compartilhados) e filtra por projectId.
     const projects = await listCollection("projects");
-    const myProjectIds = new Set(projects.filter((p) => p.clientId === clientId).map((p) => p.id));
+    const myProjectIds = new Set(projects.filter(donoDaObra).map((p) => p.id));
     return all.filter((d) => myProjectIds.has(d.projectId));
   }
 
@@ -190,11 +194,15 @@ export async function assertCanWriteDoc(
   const clientId = req.clientId;
   if (!clientId) throw new Error("Você não tem permissão para alterar estes dados.");
 
+  // Uma obra pode ter um dono (clientId) ou vários (clientIds[]).
+  const donoDaObra = (p: any) =>
+    p?.clientId === clientId || (Array.isArray(p?.clientIds) && p.clientIds.includes(clientId));
+
   // 3) Coleções ligadas a projeto: o doc existente E o novo projectId devem ser do cliente.
   if (PROJECT_SCOPED.has(collection)) {
     const projects = await listCollection("projects");
     const myProjectIds = new Set(
-      projects.filter((p) => p.clientId === clientId).map((p) => p.id),
+      projects.filter(donoDaObra).map((p) => p.id),
     );
     const existing = await getDocById(collection, id).catch(() => null);
     if (existing && !myProjectIds.has(existing.projectId)) {
@@ -219,13 +227,15 @@ export async function assertCanWriteDoc(
     return;
   }
 
-  // 4) 'projects': só o próprio projeto do cliente.
+  // 4) 'projects': o cliente dono (único ou compartilhado) pode escrever.
   if (collection === "projects") {
     const existing = await getDocById(collection, id).catch(() => null);
-    if (existing && existing.clientId !== clientId) {
+    if (existing && !donoDaObra(existing)) {
       throw new Error("Você não tem permissão para alterar estes dados.");
     }
-    if (incomingData && incomingData.clientId && incomingData.clientId !== clientId) {
+    // Um cliente não pode reatribuir a obra (mudar o dono principal ou a lista de donos).
+    // Só o admin altera clientId/clientIds.
+    if (incomingData && incomingData.clientId && existing && incomingData.clientId !== existing.clientId) {
       throw new Error("Você não tem permissão para alterar estes dados.");
     }
     return;

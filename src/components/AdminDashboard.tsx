@@ -760,6 +760,7 @@ export default function AdminDashboard({
   const [projectForm, setProjectForm] = useState({
     name: '',
     clientId: '',
+    clientIds: [] as string[],   // donos adicionais (obra compartilhada)
     type: 'obra' as ProjectType,
     status: 'execucao' as ProjectStatus,
     budget: '',
@@ -1125,7 +1126,9 @@ export default function AdminDashboard({
   // Project Submit
   const handleProjectSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { name, clientId, type, status, budget, startDate, location, area, description } = projectForm;
+    const { name, clientId, clientIds, type, status, budget, startDate, location, area, description } = projectForm;
+    // donos adicionais, sem duplicar o principal
+    const donosAdicionais = (clientIds || []).filter(cid => cid && cid !== clientId);
 
     if (!name.trim() || !clientId || !budget || !startDate) {
       alert('Por favor, preencha todos os campos obrigatórios do projeto.');
@@ -1144,6 +1147,7 @@ export default function AdminDashboard({
           ...editingProject,
           name: name.trim(),
           clientId,
+          clientIds: donosAdicionais.length ? donosAdicionais : undefined,
           type,
           status,
           budget: budgetVal,
@@ -1159,6 +1163,7 @@ export default function AdminDashboard({
           id: `project-${Date.now()}`,
           name: name.trim(),
           clientId,
+          clientIds: donosAdicionais.length ? donosAdicionais : undefined,
           type,
           status,
           budget: budgetVal,
@@ -1174,6 +1179,7 @@ export default function AdminDashboard({
       setProjectForm({
         name: '',
         clientId: '',
+        clientIds: [],
         type: 'obra',
         status: 'execucao',
         budget: '',
@@ -1193,6 +1199,7 @@ export default function AdminDashboard({
     setProjectForm({
       name: p.name,
       clientId: p.clientId,
+      clientIds: p.clientIds || [],
       type: p.type,
       status: p.status,
       budget: p.budget.toString(),
@@ -1210,6 +1217,7 @@ export default function AdminDashboard({
     setProjectForm({
       name: '',
       clientId: '',
+      clientIds: [],
       type: 'obra',
       status: 'execucao',
       budget: '',
@@ -1695,6 +1703,7 @@ export default function AdminDashboard({
                       setProjectForm({
                         name: '',
                         clientId: '',
+                        clientIds: [],
                         type: 'obra',
                         status: 'execucao',
                         budget: '',
@@ -2335,6 +2344,42 @@ export default function AdminDashboard({
                           <option key={c.id} value={c.id}>{c.name}</option>
                         ))}
                       </select>
+                    </div>
+
+                    {/* Donos adicionais — obra compartilhada entre clientes */}
+                    <div>
+                      <label className="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">
+                        Clientes adicionais (obra compartilhada)
+                      </label>
+                      {clients.filter(c => c.id !== projectForm.clientId).length === 0 ? (
+                        <p className="text-[11px] text-stone-400">Selecione o cliente principal primeiro.</p>
+                      ) : (
+                        <div className="border border-stone-200 bg-[#F4F4F3] rounded-none max-h-32 overflow-y-auto">
+                          {clients.filter(c => c.id !== projectForm.clientId).map(c => {
+                            const marcado = projectForm.clientIds.includes(c.id);
+                            return (
+                              <label key={c.id} className="flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer hover:bg-white">
+                                <input
+                                  type="checkbox"
+                                  checked={marcado}
+                                  onChange={(e) => {
+                                    setProjectForm(prev => ({
+                                      ...prev,
+                                      clientIds: e.target.checked
+                                        ? [...prev.clientIds, c.id]
+                                        : prev.clientIds.filter(id => id !== c.id),
+                                    }));
+                                  }}
+                                />
+                                {c.name}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <p className="text-[10px] text-stone-400 mt-1">
+                        Marque outro cliente para que ele também veja esta obra e seus lançamentos.
+                      </p>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
