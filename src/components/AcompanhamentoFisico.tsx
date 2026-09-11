@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Activity, 
   Plus, 
-  Trash2, 
+  Trash2, Pencil,
   Camera, 
   Calendar, 
   FileText, 
@@ -32,6 +32,7 @@ interface AcompanhamentoFisicoProps {
   setTimelinePhases?: React.Dispatch<React.SetStateAction<any[]>>;
   weeklyLogs: PhysicalWeeklyLog[];
   addWeeklyLog?: (log: PhysicalWeeklyLog) => void;
+  editWeeklyLog?: (log: PhysicalWeeklyLog) => void;
   deleteWeeklyLog?: (id: string) => void;
   readOnly?: boolean;
   transactions?: Transaction[];
@@ -44,6 +45,7 @@ export default function AcompanhamentoFisico({
   setTimelinePhases,
   weeklyLogs,
   addWeeklyLog,
+  editWeeklyLog,
   deleteWeeklyLog,
   readOnly = false,
   transactions = []
@@ -60,6 +62,8 @@ export default function AcompanhamentoFisico({
     phaseProgressions: {} as Record<string, number>,
     photos: [] as { id: string; url: string; name: string; description?: string }[]
   });
+  // Id do relatório semanal sendo editado (null = criando um novo).
+  const [editingLogId, setEditingLogId] = useState<string | null>(null);
 
   // Photo uploading states
   const [isUploading, setIsUploading] = useState(false);
@@ -295,6 +299,21 @@ export default function AcompanhamentoFisico({
     setTempPhotos(prev => prev.filter(p => p.id !== id));
   };
 
+  // Preenche o formulário com os dados de um relatório existente para edição.
+  const iniciarEdicaoLog = (log: PhysicalWeeklyLog) => {
+    setEditingLogId(log.id);
+    setNewLog({
+      date: log.date,
+      weekLabel: log.weekLabel,
+      description: log.description,
+      phaseProgressions: { ...log.phaseProgressions },
+      photos: [...(log.photos || [])],
+    });
+    setTempPhotos([]);
+    setIsFormOpen(true);
+    setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50);
+  };
+
   // Submit Weekly Log Form
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -341,9 +360,9 @@ export default function AcompanhamentoFisico({
         });
       }
 
-      // 2. Assemble new weekly log
-      const logId = `wl-${Date.now()}`;
-      const logToAdd: PhysicalWeeklyLog = {
+      // 2. Assemble weekly log (novo ou editado)
+      const logId = editingLogId || `wl-${Date.now()}`;
+      const logToSave: PhysicalWeeklyLog = {
         id: logId,
         projectId,
         date: newLog.date,
@@ -365,10 +384,15 @@ export default function AcompanhamentoFisico({
       });
       setTimelinePhases(updatedPhases);
 
-      // 4. Save Weekly Log
-      addWeeklyLog(logToAdd);
+      // 4. Save Weekly Log (edita se estiver em modo edição, senão adiciona)
+      if (editingLogId) {
+        editWeeklyLog?.(logToSave);
+      } else {
+        addWeeklyLog?.(logToSave);
+      }
 
       // 5. Reset Form
+      setEditingLogId(null);
       setNewLog({
         date: toLocalISODate(new Date()),
         weekLabel: '',
@@ -869,10 +893,10 @@ export default function AcompanhamentoFisico({
                 {isFormOpen && (
                   <form onSubmit={handleSubmit} className="border border-stone-300 p-4 bg-stone-50 space-y-4">
                     <div className="border-b border-stone-200 pb-2 flex items-center justify-between">
-                      <h4 className="font-mono text-xs uppercase tracking-wider text-stone-900 font-bold">Lançar Acompanhamento Físico</h4>
+                      <h4 className="font-mono text-xs uppercase tracking-wider text-stone-900 font-bold">{editingLogId ? 'Editar Relatório Semanal' : 'Lançar Acompanhamento Físico'}</h4>
                       <button 
                         type="button" 
-                        onClick={() => setIsFormOpen(false)}
+                        onClick={() => { setIsFormOpen(false); setEditingLogId(null); }}
                         className="text-stone-400 hover:text-stone-700"
                       >
                         <X size={14} />
@@ -1022,7 +1046,7 @@ export default function AcompanhamentoFisico({
                     <div className="flex justify-end gap-2 pt-2 border-t border-stone-200">
                       <button
                         type="button"
-                        onClick={() => setIsFormOpen(false)}
+                        onClick={() => { setIsFormOpen(false); setEditingLogId(null); }}
                         className="px-3 py-1.5 text-xs font-mono uppercase text-stone-500 hover:text-stone-800 cursor-pointer"
                       >
                         Descartar
@@ -1039,7 +1063,7 @@ export default function AcompanhamentoFisico({
                           </>
                         ) : (
                           <>
-                            <span>Salvar Acompanhamento</span>
+                            <span>{editingLogId ? 'Salvar Alterações' : 'Salvar Acompanhamento'}</span>
                           </>
                         )}
                       </button>
@@ -1113,9 +1137,17 @@ export default function AcompanhamentoFisico({
                               </div>
                             )}
 
-                            {/* Trash button */}
+                            {/* Ações: editar e excluir */}
                             {!readOnly && (
-                              <div className="flex justify-end pt-1 border-t border-stone-150">
+                              <div className="flex justify-end items-center gap-4 pt-1 border-t border-stone-150">
+                                <button
+                                  type="button"
+                                  onClick={() => iniciarEdicaoLog(log)}
+                                  className="text-stone-400 hover:text-stone-800 transition-all font-mono text-[9px] uppercase tracking-wider flex items-center gap-1 cursor-pointer font-bold"
+                                >
+                                  <Pencil size={11} />
+                                  Editar Relatório
+                                </button>
                                 <button
                                   type="button"
                                   onClick={() => {

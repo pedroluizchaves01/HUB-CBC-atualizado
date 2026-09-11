@@ -3125,6 +3125,7 @@ export default function AdminDashboard({
                   setTimelinePhases={setTimelinePhases}
                   weeklyLogs={physicalWeeklyLogs}
                   addWeeklyLog={(log) => setPhysicalWeeklyLogs(prev => [...prev, log])}
+                  editWeeklyLog={(log) => setPhysicalWeeklyLogs(prev => prev.map(l => l.id === log.id ? log : l))}
                   deleteWeeklyLog={(id) => setPhysicalWeeklyLogs(prev => prev.filter(log => log.id !== id))}
                   transactions={transactions}
                 />
