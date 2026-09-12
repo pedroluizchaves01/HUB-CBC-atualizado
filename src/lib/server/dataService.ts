@@ -36,7 +36,7 @@ export const ALLOWED_COLLECTIONS = new Set<string>([
 // Coleções que só o admin/marketing podem ler/escrever (não são de cliente).
 // A coleção 'users' contém credenciais — nunca é exposta por este serviço (ver getCollection).
 export const ADMIN_ONLY_COLLECTIONS = new Set<string>([
-  "office_transactions", "office_leads", "labor_contracts", "labor_payments",
+  "office_transactions", "office_leads",
   "marketing_outbound", "marketing_posts", "marketing_press", "marketing_settings",
   "unified_suppliers", "unified_materials", "settings",
   // Contratos são gerados e geridos apenas pelo admin por enquanto (sem visão do cliente ainda).
@@ -102,6 +102,8 @@ export interface Requester {
 const PROJECT_SCOPED = new Set<string>([
   "transactions", "documents", "materials", "daily_logs", "timeline_phases",
   "punch_lists", "weekly_logs", "regulatory_steps", "measurements",
+  // Contratos e pagamentos de mão de obra: o cliente vê os do seu próprio projeto.
+  "labor_contracts", "labor_payments",
 ]);
 
 /**

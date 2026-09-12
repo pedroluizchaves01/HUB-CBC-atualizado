@@ -24,6 +24,8 @@ import { motion } from 'motion/react';
 import AcompanhamentoFisico from './AcompanhamentoFisico';
 import QuotationMaps from './QuotationMaps';
 import ClientAcompanhamentoDashboard from './ClientAcompanhamentoDashboard';
+import ClientFinanceTable from './ClientFinanceTable';
+import ClientLaborContracts from './ClientLaborContracts';
 import { subscribeCollection } from '../lib/firebaseDb';
 import { generateClientContractPdf } from '../lib/pdfReports';
 import { formatDateBR } from '../lib/formatDate';
@@ -854,6 +856,13 @@ export default function ClientDashboard({ client, projects, transactions, docume
 
                     </div>
 
+                    {/* Contratos de mão de obra do centro de custo */}
+                    {selectedProjectId && (
+                      <div className="mt-6">
+                        <ClientLaborContracts projectId={selectedProjectId} />
+                      </div>
+                    )}
+
                   </div>
                 )}
 
@@ -868,6 +877,11 @@ export default function ClientDashboard({ client, projects, transactions, docume
                         phases={timelinePhases.filter((p: any) => p.projectId === selectedProjectId)}
                         measurements={measurements.filter((mm: any) => mm.projectId === selectedProjectId && mm.released)}
                       />
+                    )}
+
+                    {/* Tabela financeira detalhada com filtros e agrupamento */}
+                    {selectedProjectId && (
+                      <ClientFinanceTable transactions={projectTransactions} />
                     )}
 
                     {/* Detalhamento técnico — recolhido por padrão, para quem quiser aprofundar. */}
