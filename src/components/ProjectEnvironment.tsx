@@ -21,7 +21,7 @@ import {
   Sun, Wind, Thermometer, Droplets, Compass as CompassIcon, ClipboardList,
   Home, Menu, BookOpen, Leaf, Building2,
   MapPin, Palette, Users, Wallet, Sparkles,
-  Search, Bell, MessageSquare, SlidersHorizontal, Calendar, Check, XCircle, RotateCcw,
+  Search, Bell, MessageSquare, SlidersHorizontal, Calendar, Check, XCircle, RotateCcw, Zap, Pen,
 } from 'lucide-react';
 import { subscribeCollection, saveDoc, removeDoc } from '../lib/firebaseDb';
 import { PROJECT_BG } from '../lib/projectBackground';
@@ -33,6 +33,8 @@ import { WindRose, SolarChart, TempBars, ComfortBar } from './thermal/ThermalCha
 import { DEFAULT_BRIEFING, BRIEFING_GROUPS, type BriefingQuestion, type BriefingAnswer } from '../lib/briefingTemplate';
 import { openBriefingReport } from '../lib/briefingReportHtml';
 import { CATALOGO_ETAPAS, montarEtapas, type PhaseTemplate, type ServicoId } from '../lib/phaseTemplates';
+import { THEMATIC_BRIEFINGS, briefingsDaEtapa, type ThematicBriefing } from '../lib/thematicBriefings';
+import PlanMarkupEditor from './PlanMarkupEditor';
 import { openProjectReport, type ProjectReportData } from '../lib/projectReportHtml';
 
 interface Props {
@@ -254,6 +256,9 @@ interface ArchProject {
   briefingAnswers?: BriefingAnswer[];
   briefingDone?: boolean;
   briefingDoneAt?: string;
+  // Briefings temáticos (elétrica, hidráulica…) liberados por etapa.
+  // Chave = id do briefing temático (ex.: 'brief_eletrica').
+  thematicBriefings?: Record<string, { answers: BriefingAnswer[]; done: boolean; doneAt?: string }>;
   // Mural de recados do projeto (troca cliente ↔ arquiteto, não preso a fase)
   mural?: MuralMessage[];
   // --- Escopo contratado e prazos ---
@@ -291,6 +296,16 @@ function fileToBase64(file: File): Promise<string> {
     reader.onload = () => resolve(reader.result as string);
     reader.readAsDataURL(file);
   });
+}
+
+// Converte um dataURL (ex.: PNG do canvas de marcação) em File para upload.
+function dataURLtoFile(dataUrl: string, filename: string): File {
+  const [head, body] = dataUrl.split(',');
+  const mime = (head.match(/:(.*?);/) || [])[1] || 'image/png';
+  const bin = atob(body);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new File([arr], filename, { type: mime });
 }
 
 // Gera uma miniatura leve (JPEG) de uma imagem, para preview rápido no card.
@@ -674,12 +689,26 @@ function ProjectShell({
 
   const hasThermal = !!(project.localizacao && project.latitude != null && project.longitude != null);
 
+  // Briefings temáticos liberados: aqueles cuja etapa (por key) já saiu de 'bloqueada'.
+  const briefingsLiberados = THEMATIC_BRIEFINGS.filter(tb => {
+    const fase = project.phases.find(p => p.key === tb.phaseKey);
+    return fase && fase.state !== 'bloqueada';
+  });
+  const briefingTematicoStatus = (id: string) => project.thematicBriefings?.[id];
+
   // Itens do menu lateral.
   const navItems: { id: PageId; label: string; Icon: React.ComponentType<any>; badge?: string; locked?: boolean }[] = [
     { id: 'inicio', label: 'Início', Icon: Home },
     ...(isAdmin ? [{ id: 'escopo' as PageId, label: 'Escopo & Prazos', Icon: SlidersHorizontal, badge: project.escopoConfigurado ? undefined : '!' }] : []),
     { id: 'termico', label: 'Conforto Térmico', Icon: Sun, locked: !hasThermal },
     { id: 'briefing', label: 'Briefing de Premissas', Icon: ClipboardList, badge: project.briefingDone ? '✓' : undefined },
+    // Briefings temáticos (elétrica, hidráulica…) que já foram liberados:
+    ...briefingsLiberados.map(tb => ({
+      id: `brief-${tb.id}` as PageId,
+      label: tb.title,
+      Icon: tb.id === 'brief_eletrica' ? Zap : tb.id === 'brief_hidraulica' ? Droplets : ClipboardList,
+      badge: briefingTematicoStatus(tb.id)?.done ? '✓' : '!',
+    })),
     { id: 'mural', label: 'Mural de Recados', Icon: MessageSquare, badge: (project.mural?.length || 0) > 0 ? String(project.mural!.length) : undefined },
     ...project.phases.map((ph, i) => ({
       id: `fase-${i}`, label: ph.name, Icon: phaseIcon(ph.state),
@@ -862,6 +891,11 @@ function ProjectPage({ page, project, isAdmin, userName, role, onPersist, onNavi
   if (page === 'termico') return <PageTermico project={project} />;
   if (page === 'briefing') return <PageBriefing project={project} isAdmin={isAdmin} userName={userName} role={role} onPersist={onPersist} />;
   if (page === 'mural') return <PageMural project={project} isAdmin={isAdmin} userName={userName} role={role} onPersist={onPersist} />;
+  if (page.startsWith('brief-')) {
+    const tbId = page.replace('brief-', '');
+    const tb = THEMATIC_BRIEFINGS.find(b => b.id === tbId);
+    if (tb) return <PageBriefingTematico project={project} briefing={tb} isAdmin={isAdmin} userName={userName} onPersist={onPersist} />;
+  }
   if (page.startsWith('fase-')) {
     const idx = parseInt(page.split('-')[1], 10);
     return <PageFase project={project} idx={idx} isAdmin={isAdmin} userName={userName} role={role} onPersist={onPersist} />;
@@ -1104,6 +1138,109 @@ function PageInicio({ project, isAdmin, userName, onNavigate }: {
 }
 
 // Página do briefing (reusa a lógica do BriefingCard, agora como página).
+// Página de um briefing temático (elétrica, hidráulica) liberado por etapa.
+function PageBriefingTematico({ project, briefing, isAdmin, userName, onPersist }: {
+  project: ArchProject; briefing: ThematicBriefing; isAdmin: boolean; userName?: string;
+  onPersist: (p: ArchProject) => Promise<any> | void;
+}) {
+  const stored = project.thematicBriefings?.[briefing.id];
+  const done = stored?.done || false;
+  const [open, setOpen] = useState(!done);
+  const [draft, setDraft] = useState<Record<string, string>>(() => {
+    const m: Record<string, string> = {};
+    (stored?.answers || []).forEach(a => { m[a.questionId] = a.answer; });
+    return m;
+  });
+
+  const toAnswers = (): BriefingAnswer[] =>
+    briefing.questions.map(q => ({ questionId: q.id, answer: draft[q.id] || '' })).filter(a => a.answer.trim() !== '');
+
+  const respondidas = briefing.questions.filter(q => (draft[q.id] || '').trim() !== '').length;
+  const total = briefing.questions.length;
+  const pct = Math.round((respondidas / total) * 100);
+
+  const salvar = (finalizar: boolean) => {
+    const answers = toAnswers();
+    const novo = {
+      ...(project.thematicBriefings || {}),
+      [briefing.id]: {
+        answers,
+        done: finalizar || done,
+        doneAt: finalizar ? new Date().toISOString() : stored?.doneAt,
+      },
+    };
+    onPersist({ ...project, thematicBriefings: novo });
+    if (finalizar) setOpen(false);
+  };
+
+  const Icon = briefing.id === 'brief_eletrica' ? Zap : briefing.id === 'brief_hidraulica' ? Droplets : ClipboardList;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <PageHeader eyebrow="Anteprojeto · Briefing técnico" title={briefing.title} subtitle={briefing.description} />
+
+      {done && !open && (
+        <div className="v-card-border p-4 flex items-center justify-between gap-3 flex-wrap">
+          <span className="flex items-center gap-2 text-[13px]" style={{ color: '#12805a', fontWeight: 700 }}>
+            <CheckCircle2 size={15} /> Briefing respondido{stored?.doneAt ? ` em ${new Date(stored.doneAt).toLocaleDateString('pt-BR')}` : ''}.
+          </span>
+          <button onClick={() => setOpen(true)} className="v-btn-ghost px-4 py-2 text-[12px]">Revisar respostas</button>
+        </div>
+      )}
+
+      {open && (
+        <div className="v-card-border bg-white">
+          <div className="px-5 py-4 border-b">
+            <div className="flex items-center gap-2 mb-2">
+              <Icon size={18} style={{ color: 'var(--v-accent)' }} />
+              <p className="text-sm" style={{ fontWeight: 700 }}>{briefing.title}</p>
+            </div>
+            <p className="text-xs text-vsoft mb-3">Responda o que puder — suas respostas orientam o arquiteto nas plantas técnicas.</p>
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-1.5 v-track rounded-full overflow-hidden"><div className="h-1.5 v-fill" style={{ width: `${pct}%` }} /></div>
+              <span className="text-[11px]" style={{ fontWeight: 600 }}>{respondidas}/{total}</span>
+            </div>
+          </div>
+
+          <div className="p-5 space-y-6">
+            {briefing.groups.map(group => (
+              <div key={group}>
+                <p className="text-[10px] uppercase tracking-[0.12em] mb-2" style={{ color: 'var(--v-accent-2)', fontWeight: 700 }}>{group}</p>
+                <div className="space-y-3">
+                  {briefing.questions.filter(q => q.group === group).map(q => (
+                    <div key={q.id}>
+                      <label className="block text-[13px] mb-1" style={{ fontWeight: 500 }}>{q.text}</label>
+                      <textarea
+                        value={draft[q.id] || ''}
+                        onChange={e => setDraft({ ...draft, [q.id]: e.target.value })}
+                        rows={2}
+                        disabled={isAdmin}
+                        placeholder={isAdmin ? '(resposta do cliente)' : 'Sua resposta...'}
+                        className="w-full px-3 py-2 text-sm focus:outline-none"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {!isAdmin && (
+            <div className="px-5 py-4 border-t flex flex-col sm:flex-row gap-2">
+              <button onClick={() => salvar(false)} className="v-btn-ghost flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm" style={{ fontWeight: 600 }}>
+                <Send size={14} /> Salvar rascunho
+              </button>
+              <button onClick={() => salvar(true)} className="v-grad flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm rounded-xl" style={{ fontWeight: 700 }}>
+                <CheckCircle2 size={14} /> Concluir e enviar
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PageBriefing({ project, isAdmin, userName, role, onPersist }: {
   project: ArchProject; isAdmin: boolean; userName?: string; role: string;
   onPersist: (p: ArchProject) => Promise<any> | void;
@@ -2086,11 +2223,41 @@ function PhaseCard({
   const [ajusteAnexos, setAjusteAnexos] = useState<ArchFile[]>([]);
   const [ajusteUploadMsg, setAjusteUploadMsg] = useState<string | null>(null);
   const [comment, setComment] = useState('');
+  // Planta em marcação (editor aberto) e a imagem que está sendo anotada.
+  const [marcandoPlanta, setMarcandoPlanta] = useState<ArchFile | null>(null);
 
   const connectorColor = phase.state === 'aprovada' ? '#000' : '#d6d3d1';
 
+  // Recebe a planta marcada do editor: sobe a imagem, anexa ao pedido de ajuste,
+  // preenche o motivo com os comentários e abre o formulário de ajuste.
+  const handleSalvarMarcacao = async (result: { dataUrl: string; comentarios: string; fileName: string }) => {
+    if (!onUpload) { alert('Upload indisponível.'); return; }
+    const file = dataURLtoFile(result.dataUrl, result.fileName);
+    // onUpload espera um FileList; criamos um via DataTransfer.
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    const enviados = await onUpload(dt.files, setAjusteUploadMsg);
+    if (enviados.length) {
+      setAjusteAnexos(prev => [...prev, ...enviados]);
+      // pré-preenche o motivo com os comentários dos pins
+      if (result.comentarios) {
+        setMotivo(prev => (prev ? prev + '\n\n' : '') + 'Sugestões na planta:\n' + result.comentarios);
+      }
+      setAskChanges(true); // abre o formulário de ajuste já com a planta anexada
+    }
+    setMarcandoPlanta(null);
+  };
+
   return (
     <div className="relative">
+      {marcandoPlanta && (
+        <PlanMarkupEditor
+          imageUrl={fileHref(marcandoPlanta)}
+          fileName={marcandoPlanta.name}
+          onCancel={() => setMarcandoPlanta(null)}
+          onSave={handleSalvarMarcacao}
+        />
+      )}
       {index < total - 1 && (
         <div className="absolute left-[32px] top-[52px] bottom-[-12px] w-0.5 z-0" style={{ background: connectorColor }} />
       )}
@@ -2181,7 +2348,8 @@ function PhaseCard({
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {phase.files.map(f => (
-                    <FileCard key={f.id} file={f} isAdmin={isAdmin} onRemove={() => onRemoveFile(f.id)} onView={() => setViewing(f)} />
+                    <FileCard key={f.id} file={f} isAdmin={isAdmin} onRemove={() => onRemoveFile(f.id)} onView={() => setViewing(f)}
+                      onAnnotate={!isAdmin && phase.state === 'aguardando_aprovacao' && f.type.startsWith('image/') ? () => setMarcandoPlanta(f) : undefined} />
                   ))}
                 </div>
               )}
@@ -2364,8 +2532,8 @@ function fileHref(file: ArchFile): string {
   return file.base64 || '';
 }
 
-function FileCard({ file, isAdmin, onRemove, onView }: {
-  file: ArchFile; isAdmin: boolean; onRemove: () => void; onView: () => void;
+function FileCard({ file, isAdmin, onRemove, onView, onAnnotate }: {
+  file: ArchFile; isAdmin: boolean; onRemove: () => void; onView: () => void; onAnnotate?: () => void;
 }) {
   const isImg = file.type.startsWith('image/');
   const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
@@ -2395,9 +2563,17 @@ function FileCard({ file, isAdmin, onRemove, onView }: {
       </button>
       <div className="p-2 flex items-center gap-1 border-t ">
         <span className="flex-1 min-w-0 text-[11px] text-black truncate" title={file.name} style={{ fontWeight: 300 }}>{file.name}</span>
+        {onAnnotate && (
+          <button onClick={onAnnotate} className="text-vsoft hover:text-black p-0.5" title="Anotar na planta (desenhar e comentar)"><Pen size={13} /></button>
+        )}
         <button onClick={download} className="text-vsoft hover:text-black p-0.5" title="Baixar arquivo completo"><Download size={13} /></button>
         {isAdmin && <button onClick={onRemove} className="text-vsoft hover:text-black p-0.5" title="Remover"><Trash2 size={13} /></button>}
       </div>
+      {onAnnotate && (
+        <button onClick={onAnnotate} className="w-full py-1.5 text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 border-t" style={{ background: 'linear-gradient(140deg,#7d5bf8,#4f2fd4)', color: '#fff', fontWeight: 700 }}>
+          <Pen size={11} /> Anotar na planta
+        </button>
+      )}
     </div>
   );
 }
