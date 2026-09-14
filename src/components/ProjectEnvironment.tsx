@@ -2380,7 +2380,7 @@ function PhaseCard({
                 )}
                 {!askChanges ? (
                   <div className="flex flex-col sm:flex-row gap-2">
-                    <button onClick={onApprove}
+                    <button onClick={() => { if (window.confirm('Confirmar a aprovação desta etapa? Após aprovar, a próxima etapa é liberada e esta entrega é considerada aceita.')) onApprove(); }}
                       className="flex items-center justify-center gap-1.5 v-btn-solid px-4 py-2.5 text-sm transition-colors" style={{ fontWeight: 700 }}>
                       <ThumbsUp size={15} /> Aprovar etapa
                     </button>
@@ -2532,6 +2532,15 @@ function fileHref(file: ArchFile): string {
   return file.base64 || '';
 }
 
+// URL para BAIXAR o arquivo (força download com o nome/extensão corretos).
+function fileDownloadHref(file: ArchFile): string {
+  if (file.storage === 'telegram' && file.url) {
+    const sep = file.url.includes('?') ? '&' : '?';
+    return `${file.url}${sep}download=1&name=${encodeURIComponent(file.name)}`;
+  }
+  return file.base64 || '';
+}
+
 function FileCard({ file, isAdmin, onRemove, onView, onAnnotate }: {
   file: ArchFile; isAdmin: boolean; onRemove: () => void; onView: () => void; onAnnotate?: () => void;
 }) {
@@ -2540,9 +2549,9 @@ function FileCard({ file, isAdmin, onRemove, onView, onAnnotate }: {
   const href = fileHref(file);
   const sizeLabel = file.size ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : '';
   const download = () => {
-    // Baixa o arquivo COMPLETO (Telegram) — abre o proxy numa nova aba para o navegador salvar.
+    // Baixa o arquivo COMPLETO com nome/extensão corretos (Content-Disposition: attachment).
     const a = document.createElement('a');
-    a.href = href; a.download = file.name; a.target = '_blank'; a.rel = 'noopener'; a.click();
+    a.href = fileDownloadHref(file); a.download = file.name; a.rel = 'noopener'; a.click();
   };
   // Preview do card: miniatura leve (base64) para imagens; ícone para PDF.
   const thumb = isImg ? file.base64 : undefined;
@@ -2589,8 +2598,9 @@ function FileViewer({ file, onClose }: { file: ArchFile; onClose: () => void }) 
   const isImg = file.type.startsWith('image/');
   const href = fileHref(file);
   const download = () => {
+    // Baixa o arquivo COMPLETO com nome/extensão corretos (Content-Disposition: attachment).
     const a = document.createElement('a');
-    a.href = href; a.download = file.name; a.target = '_blank'; a.rel = 'noopener'; a.click();
+    a.href = fileDownloadHref(file); a.download = file.name; a.rel = 'noopener'; a.click();
   };
   // Fecha com ESC.
   useEffect(() => {

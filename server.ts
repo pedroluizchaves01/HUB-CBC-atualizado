@@ -1416,8 +1416,22 @@ app.get("/api/telegram/file/:fileId", requireAuth, async (req, res) => {
     // Admin/marketing passam direto (checado dentro de assertCanReadFile).
     await dataService.assertCanReadFile(req.params.fileId, { role: u.role, clientId: u.clientId, userId: u.id });
     const { buffer, contentType, fileName } = await telegram.fetchFileBinary(req.params.fileId);
-    res.setHeader("Content-Type", contentType);
-    res.setHeader("Content-Disposition", `inline; filename="${fileName}"`);
+    // Prioriza o nome/tipo reais do arquivo: o cliente pode passar ?name= e ?download=1.
+    const nomeSolicitado = typeof req.query.name === 'string' && req.query.name ? req.query.name : fileName;
+    const querBaixar = req.query.download === '1' || req.query.download === 'true';
+    // Deriva um Content-Type melhor pela extensão quando o Telegram devolve genérico.
+    const ext = (nomeSolicitado.split('.').pop() || '').toLowerCase();
+    const mimePorExt: Record<string, string> = {
+      pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+      webp: 'image/webp', gif: 'image/gif', dwg: 'application/acad',
+      doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    };
+    const tipoFinal = (contentType && contentType !== 'application/octet-stream') ? contentType : (mimePorExt[ext] || 'application/octet-stream');
+    res.setHeader("Content-Type", tipoFinal);
+    // attachment força o download com o nome certo; inline abre no navegador (preview).
+    const disposicao = querBaixar ? 'attachment' : 'inline';
+    res.setHeader("Content-Disposition", `${disposicao}; filename="${nomeSolicitado.replace(/"/g, '')}"`);
     return res.send(buffer);
   } catch (e: any) {
     if (/Acesso negado/i.test(e?.message || "")) {

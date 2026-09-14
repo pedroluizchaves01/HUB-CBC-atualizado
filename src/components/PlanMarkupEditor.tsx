@@ -6,7 +6,7 @@
 // comentários, que são enviados ao arquiteto num pedido de ajuste.
 // ============================================================
 import React, { useRef, useState, useEffect } from 'react';
-import { Pen, MapPin, Undo2, Trash2, X, Check, Loader2 } from 'lucide-react';
+import { Pen, MapPin, Undo2, Trash2, X, Check, Loader2, Minus, Plus, Maximize2 } from 'lucide-react';
 
 interface Pin { id: number; x: number; y: number; text: string; } // x,y em fração 0-1
 interface Stroke { color: string; width: number; points: { x: number; y: number }[]; } // pontos em fração 0-1
@@ -27,6 +27,7 @@ export default function PlanMarkupEditor({ imageUrl, fileName, onCancel, onSave 
   const svgRef = useRef<SVGSVGElement>(null);
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgDims, setImgDims] = useState({ w: 0, h: 0 });
+  const [zoom, setZoom] = useState(1);
 
   const [tool, setTool] = useState<'pen' | 'pin'>('pen');
   const [cor, setCor] = useState(CORES[0]);
@@ -158,6 +159,13 @@ export default function PlanMarkupEditor({ imageUrl, fileName, onCancel, onSave 
           <button onClick={() => setTool('pin')} className={btn(tool === 'pin')}><MapPin size={13} /> Comentário</button>
           <button onClick={desfazer} className="flex items-center gap-1.5 px-3 py-2 text-[12px] rounded-lg bg-white text-stone-700 border border-stone-200 hover:border-stone-400"><Undo2 size={13} /> Desfazer</button>
           <button onClick={limpar} className="flex items-center gap-1.5 px-3 py-2 text-[12px] rounded-lg bg-white text-stone-700 border border-stone-200 hover:border-red-400 hover:text-red-600"><Trash2 size={13} /> Limpar</button>
+          {/* Zoom */}
+          <div className="flex items-center gap-1 bg-white border border-stone-200 rounded-lg px-1">
+            <button onClick={() => setZoom(z => Math.max(0.5, +(z - 0.25).toFixed(2)))} className="px-2 py-1.5 text-stone-600 hover:text-black" title="Diminuir zoom"><Minus size={13} /></button>
+            <span className="text-[11px] text-stone-500 font-mono w-10 text-center">{Math.round(zoom * 100)}%</span>
+            <button onClick={() => setZoom(z => Math.min(4, +(z + 0.25).toFixed(2)))} className="px-2 py-1.5 text-stone-600 hover:text-black" title="Aumentar zoom"><Plus size={13} /></button>
+            <button onClick={() => setZoom(1)} className="px-2 py-1.5 text-stone-600 hover:text-black" title="Redefinir zoom"><Maximize2 size={12} /></button>
+          </div>
           <button onClick={onCancel} className="ml-1 text-stone-400 hover:text-stone-800"><X size={18} /></button>
         </div>
 
@@ -175,7 +183,7 @@ export default function PlanMarkupEditor({ imageUrl, fileName, onCancel, onSave 
 
         {/* Área de desenho */}
         <div className="flex-1 overflow-auto bg-stone-100 p-3" ref={wrapRef}>
-          <div className="relative inline-block mx-auto" style={{ touchAction: 'none' }}>
+          <div className="relative inline-block mx-auto" style={{ touchAction: 'none', transform: `scale(${zoom})`, transformOrigin: 'top left' }}>
             <img
               ref={imgRef}
               src={imageUrl}
