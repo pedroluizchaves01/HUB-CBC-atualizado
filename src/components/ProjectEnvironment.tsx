@@ -12,7 +12,7 @@
 // Arquivos: base64 (imagens comprimidas), visualizados e baixados na própria tela.
 // Coleção própria 'arch_projects' — independente da obra.
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import {
   Compass, FolderOpen, Plus, ArrowLeftRight, LogOut, Ruler, Lock,
@@ -21,7 +21,7 @@ import {
   Sun, Wind, Thermometer, Droplets, Compass as CompassIcon, ClipboardList,
   Home, Menu, BookOpen, Leaf, Building2,
   MapPin, Palette, Users, Wallet, Sparkles,
-  Search, Bell, MessageSquare, SlidersHorizontal, Calendar, Check, XCircle, RotateCcw, Zap, Pen,
+  Search, Bell, MessageSquare, SlidersHorizontal, Calendar, Check, XCircle, RotateCcw, Zap, Pen, FolderLock,
 } from 'lucide-react';
 import { subscribeCollection, saveDoc, removeDoc } from '../lib/firebaseDb';
 import { PROJECT_BG } from '../lib/projectBackground';
@@ -233,6 +233,23 @@ interface ArchPhase {
   enviadoEm?: string;        // ISO — quando a entrega atual foi enviada p/ aprovação
   prazoRespostaAte?: string; // ISO — auto-aceite após esta data
 }
+// Documento oficial do projeto (contrato, ART/RRT, procuração...).
+// Não é uma entrega de etapa — é um documento formal, avulso, opcionalmente
+// marcado com uma etapa para organização. Só o arquiteto sobe/organiza.
+interface OfficialDocument {
+  id: string;
+  name: string;           // nome de exibição (ex.: "Contrato de Prestação de Serviços")
+  category: string;       // categoria (ex.: "Contrato", "ART/RRT", "Procuração", "Outro")
+  phaseKey?: string;      // etapa vinculada (opcional) — key do catálogo, ou undefined = "Geral"
+  storage: 'telegram';
+  fileId: string;
+  url: string;
+  type: string;           // mime type
+  size?: number;
+  uploadedAt: string;
+  uploadedBy?: string;
+}
+
 interface ArchProject {
   id: string;
   name: string;
@@ -261,6 +278,8 @@ interface ArchProject {
   thematicBriefings?: Record<string, { answers: BriefingAnswer[]; done: boolean; doneAt?: string }>;
   // Mural de recados do projeto (troca cliente ↔ arquiteto, não preso a fase)
   mural?: MuralMessage[];
+  // Documentos oficiais do projeto (contrato, ART/RRT, procuração...).
+  officialDocuments?: OfficialDocument[];
   // --- Escopo contratado e prazos ---
   servicos?: ('arquitetonico' | 'interiores')[];  // serviços contratados
   opcionaisAtivas?: string[];                       // keys de etapas opcionais ligadas
@@ -710,6 +729,7 @@ function ProjectShell({
       badge: briefingTematicoStatus(tb.id)?.done ? '✓' : '!',
     })),
     { id: 'mural', label: 'Mural de Recados', Icon: MessageSquare, badge: (project.mural?.length || 0) > 0 ? String(project.mural!.length) : undefined },
+    { id: 'documentos', label: 'Documentos Oficiais', Icon: FolderLock, badge: (project.officialDocuments?.length || 0) > 0 ? String(project.officialDocuments!.length) : undefined },
     ...project.phases.map((ph, i) => ({
       id: `fase-${i}`, label: ph.name, Icon: phaseIcon(ph.state),
       locked: ph.state === 'bloqueada',
@@ -891,6 +911,7 @@ function ProjectPage({ page, project, isAdmin, userName, role, onPersist, onNavi
   if (page === 'termico') return <PageTermico project={project} />;
   if (page === 'briefing') return <PageBriefing project={project} isAdmin={isAdmin} userName={userName} role={role} onPersist={onPersist} />;
   if (page === 'mural') return <PageMural project={project} isAdmin={isAdmin} userName={userName} role={role} onPersist={onPersist} />;
+  if (page === 'documentos') return <PageDocumentosOficiais project={project} isAdmin={isAdmin} userName={userName} onPersist={onPersist} />;
   if (page.startsWith('brief-')) {
     const tbId = page.replace('brief-', '');
     const tb = THEMATIC_BRIEFINGS.find(b => b.id === tbId);
@@ -1745,6 +1766,199 @@ function PageEscopo({ project, isAdmin, onPersist }: {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+
+// === PÁGINA: Documentos Oficiais (contrato, ART/RRT, procuração...) ===
+// Documentos formais do projeto, avulsos — não são entregas de etapa.
+// Só o arquiteto sobe/organiza; o cliente só visualiza. Podem ser marcados
+// com uma etapa (para organização) ou ficar em "Geral".
+const CATEGORIAS_DOC_OFICIAL = ['Contrato', 'ART/RRT', 'Procuração', 'Distrato', 'Aditivo', 'Outro'];
+
+function PageDocumentosOficiais({ project, isAdmin, userName, onPersist }: {
+  project: ArchProject; isAdmin: boolean; userName?: string;
+  onPersist: (p: ArchProject) => Promise<any> | void;
+}) {
+  const docs = project.officialDocuments || [];
+  const [filtroEtapa, setFiltroEtapa] = useState<string>('todas'); // 'todas' | 'geral' | key da fase
+  const [enviando, setEnviando] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<ArchFile | null>(null);
+
+  // Formulário de novo documento (só admin)
+  const [novoNome, setNovoNome] = useState('');
+  const [novaCategoria, setNovaCategoria] = useState(CATEGORIAS_DOC_OFICIAL[0]);
+  const [novaFase, setNovaFase] = useState<string>(''); // '' = Geral
+  const [mostrarForm, setMostrarForm] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fases que têm 'key' (do catálogo) — usadas tanto no filtro quanto no formulário.
+  const fasesComKey = project.phases.filter(p => p.key);
+
+  const filtrados = filtroEtapa === 'todas'
+    ? docs
+    : filtroEtapa === 'geral'
+      ? docs.filter(d => !d.phaseKey)
+      : docs.filter(d => d.phaseKey === filtroEtapa);
+
+  const nomeDaFase = (key?: string) => key ? (project.phases.find(p => p.key === key)?.name || key) : 'Geral';
+
+  const enviarDocumento = async () => {
+    if (!novoNome.trim() || !fileInputRef.current?.files?.length) return;
+    const file = fileInputRef.current.files[0];
+    if (file.size > 50 * 1024 * 1024) { alert(`"${file.name}" excede 50MB.`); return; }
+    setEnviando(true);
+    setUploadMsg(`Enviando ${file.name}…`);
+    try {
+      const uploaded = await uploadArchFile(file);
+      const novoDoc: OfficialDocument = {
+        id: uid('doc'),
+        name: novoNome.trim(),
+        category: novaCategoria,
+        phaseKey: novaFase || undefined,
+        storage: 'telegram',
+        fileId: uploaded.fileId!,
+        url: uploaded.url!,
+        type: uploaded.type,
+        size: uploaded.size,
+        uploadedAt: new Date().toISOString(),
+        uploadedBy: userName,
+      };
+      onPersist({ ...project, officialDocuments: [...docs, novoDoc] });
+      setNovoNome(''); setNovaCategoria(CATEGORIAS_DOC_OFICIAL[0]); setNovaFase(''); setMostrarForm(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    } catch (e: any) {
+      alert(`Falha ao enviar "${file.name}": ${e?.message || 'erro'}.`);
+    } finally {
+      setEnviando(false); setUploadMsg(null);
+    }
+  };
+
+  const removerDocumento = (id: string) => {
+    if (!window.confirm('Remover este documento? Ele deixará de ser visível para o cliente.')) return;
+    onPersist({ ...project, officialDocuments: docs.filter(d => d.id !== id) });
+  };
+
+  const asArchFile = (d: OfficialDocument): ArchFile => ({
+    id: d.id, name: d.name, type: d.type, uploadedAt: d.uploadedAt,
+    storage: 'telegram', fileId: d.fileId, url: d.url, size: d.size,
+  });
+
+  return (
+    <div className="flex flex-col gap-4">
+      <PageHeader eyebrow="Central de documentos" title="Documentos Oficiais" subtitle="Contrato, ART/RRT, procuração e outros documentos formais do projeto." />
+
+      {viewing && <FileViewer file={viewing} onClose={() => setViewing(null)} />}
+
+      {/* Ações do arquiteto */}
+      {isAdmin && (
+        <div className="v-card p-5">
+          {!mostrarForm ? (
+            <button onClick={() => setMostrarForm(true)} className="v-btn flex items-center gap-2 px-4 py-2.5 text-[13px]">
+              <Plus size={15} /> Adicionar documento
+            </button>
+          ) : (
+            <div className="space-y-3">
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider mb-1" style={{ color: 'var(--v-text-soft)', fontWeight: 700 }}>Nome do documento</label>
+                  <input value={novoNome} onChange={e => setNovoNome(e.target.value)} placeholder='Ex.: "Contrato de Prestação de Serviços"'
+                    className="w-full px-3 py-2.5 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider mb-1" style={{ color: 'var(--v-text-soft)', fontWeight: 700 }}>Categoria</label>
+                  <select value={novaCategoria} onChange={e => setNovaCategoria(e.target.value)} className="w-full px-3 py-2.5 text-sm">
+                    {CATEGORIAS_DOC_OFICIAL.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] uppercase tracking-wider mb-1" style={{ color: 'var(--v-text-soft)', fontWeight: 700 }}>Vincular a uma etapa (opcional)</label>
+                <select value={novaFase} onChange={e => setNovaFase(e.target.value)} className="w-full px-3 py-2.5 text-sm">
+                  <option value="">Geral (não vinculado a etapa)</option>
+                  {fasesComKey.map(p => <option key={p.key} value={p.key}>{p.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] uppercase tracking-wider mb-1" style={{ color: 'var(--v-text-soft)', fontWeight: 700 }}>Arquivo (PDF ou imagem)</label>
+                <input ref={fileInputRef} type="file" accept="application/pdf,image/*" className="text-sm" />
+              </div>
+              {uploadMsg && <p className="text-[12px]" style={{ color: 'var(--v-text-soft)' }}>{uploadMsg}</p>}
+              <div className="flex gap-2">
+                <button onClick={enviarDocumento} disabled={enviando || !novoNome.trim()}
+                  className="v-btn flex items-center gap-1.5 px-4 py-2.5 text-[13px] disabled:opacity-40">
+                  {enviando ? <><Loader2 size={14} className="animate-spin" /> Enviando…</> : <><Upload size={14} /> Enviar documento</>}
+                </button>
+                <button onClick={() => { setMostrarForm(false); setNovoNome(''); }} className="px-4 py-2.5 text-[13px] text-vsoft" style={{ fontWeight: 600 }}>Cancelar</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Filtro: geral ou por etapa */}
+      <div className="flex flex-wrap gap-2">
+        <button onClick={() => setFiltroEtapa('todas')}
+          className="text-[12px] px-3 py-1.5 rounded-full transition-colors"
+          style={{ background: filtroEtapa === 'todas' ? 'var(--v-accent)' : '#f0edfd', color: filtroEtapa === 'todas' ? '#fff' : 'var(--v-text-soft)', fontWeight: 600 }}>
+          Todos ({docs.length})
+        </button>
+        <button onClick={() => setFiltroEtapa('geral')}
+          className="text-[12px] px-3 py-1.5 rounded-full transition-colors"
+          style={{ background: filtroEtapa === 'geral' ? 'var(--v-accent)' : '#f0edfd', color: filtroEtapa === 'geral' ? '#fff' : 'var(--v-text-soft)', fontWeight: 600 }}>
+          Geral ({docs.filter(d => !d.phaseKey).length})
+        </button>
+        {fasesComKey.map(p => {
+          const n = docs.filter(d => d.phaseKey === p.key).length;
+          if (n === 0 && filtroEtapa !== p.key) return null; // esconde etapas sem documento (menos poluição)
+          return (
+            <button key={p.key} onClick={() => setFiltroEtapa(p.key!)}
+              className="text-[12px] px-3 py-1.5 rounded-full transition-colors"
+              style={{ background: filtroEtapa === p.key ? 'var(--v-accent)' : '#f0edfd', color: filtroEtapa === p.key ? '#fff' : 'var(--v-text-soft)', fontWeight: 600 }}>
+              {p.name} ({n})
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Lista de documentos */}
+      {filtrados.length === 0 ? (
+        <div className="v-card p-10 text-center">
+          <FolderLock size={32} style={{ color: 'var(--v-text-mute)' }} className="mx-auto mb-2" strokeWidth={1.5} />
+          <p className="text-[13px]" style={{ color: 'var(--v-text-soft)' }}>
+            {docs.length === 0 ? 'Nenhum documento oficial ainda.' : 'Nenhum documento nesta categoria.'}
+          </p>
+        </div>
+      ) : (
+        <div className="grid sm:grid-cols-2 gap-3">
+          {filtrados.slice().sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt)).map(d => (
+            <div key={d.id} className="v-card p-4 flex items-start gap-3">
+              <span className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#f0edfd' }}>
+                <FileText size={17} style={{ color: 'var(--v-accent)' }} />
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] truncate" style={{ fontWeight: 700 }}>{d.name}</p>
+                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                  <span className="v-chip v-chip-mute">{d.category}</span>
+                  <span className="text-[11px]" style={{ color: 'var(--v-text-mute)' }}>· {nomeDaFase(d.phaseKey)}</span>
+                </div>
+                <p className="text-[11px] mt-1" style={{ color: 'var(--v-text-mute)' }}>
+                  Enviado em {new Date(d.uploadedAt).toLocaleDateString('pt-BR')}{d.uploadedBy ? ` por ${d.uploadedBy}` : ''}
+                </p>
+                <div className="flex items-center gap-3 mt-2">
+                  <button onClick={() => setViewing(asArchFile(d))} className="text-[12px]" style={{ color: 'var(--v-accent-2)', fontWeight: 700 }}>Visualizar</button>
+                  <a href={`${d.url}${d.url.includes('?') ? '&' : '?'}download=1&name=${encodeURIComponent(d.name)}`} className="text-[12px]" style={{ color: 'var(--v-accent-2)', fontWeight: 700 }}>Baixar</a>
+                  {isAdmin && (
+                    <button onClick={() => removerDocumento(d.id)} className="text-[12px] ml-auto" style={{ color: '#c2255c', fontWeight: 700 }}>Remover</button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
