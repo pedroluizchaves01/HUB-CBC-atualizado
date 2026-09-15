@@ -48,6 +48,7 @@ import Measurements from './Measurements';
 import { PlanningLaborPayments } from './PlanningLaborPayments';
 import AcompanhamentoFinanceiro from './AcompanhamentoFinanceiro';
 import AcompanhamentoFisico from './AcompanhamentoFisico';
+import UnproductiveDaysCard from './UnproductiveDaysCard';
 import QuotationMaps from './QuotationMaps';
 import { OfficeManagement } from './OfficeManagement';
 import { MarketingManagement } from './MarketingManagement';
@@ -288,6 +289,7 @@ export default function AdminDashboard({
   const [measurements, setMeasurementsState] = useState<any[]>([]);
   const [laborContracts, setLaborContractsState] = useState<any[]>([]);
   const [laborPayments, setLaborPaymentsState] = useState<any[]>([]);
+  const [unproductiveDays, setUnproductiveDaysState] = useState<any[]>([]);
 
   // Subscriptions to Firestore
   React.useEffect(() => {
@@ -298,6 +300,7 @@ export default function AdminDashboard({
     const unsubReg = subscribeCollection('regulatory_steps', setRegulatoryStepsState, INITIAL_REGULATORY_STEPS, 'cbc_regulatory_steps_v2');
     const unsubWeekly = subscribeCollection('weekly_logs', setPhysicalWeeklyLogsState, INITIAL_WEEKLY_LOGS, 'cbc_physical_weekly_logs_v2');
     const unsubMeasurements = subscribeCollection('measurements', setMeasurementsState, [], 'cbc_measurements_v1');
+    const unsubUnproductive = subscribeCollection('unproductive_days', setUnproductiveDaysState, [], 'cbc_unproductive_days_v1');
     const unsubLaborC = subscribeCollection('labor_contracts', setLaborContractsState, [], 'cbc_labor_contracts_v1');
     const unsubLaborP = subscribeCollection('labor_payments', setLaborPaymentsState, [], 'cbc_labor_payments_v1');
 
@@ -311,6 +314,7 @@ export default function AdminDashboard({
       unsubPunch();
       unsubReg();
       unsubWeekly();
+      unsubUnproductive();
     };
   }, []);
 
@@ -411,6 +415,12 @@ export default function AdminDashboard({
     const nextList = typeof action === 'function' ? action(physicalWeeklyLogs) : action;
     setPhysicalWeeklyLogsState(nextList);
     syncToFirestore('weekly_logs', physicalWeeklyLogs, nextList);
+  };
+
+  const setUnproductiveDays = (action: any) => {
+    const nextList = typeof action === 'function' ? action(unproductiveDays) : action;
+    setUnproductiveDaysState(nextList);
+    syncToFirestore('unproductive_days', unproductiveDays, nextList);
   };
 
 
@@ -3116,6 +3126,17 @@ export default function AdminDashboard({
                 />
               )}
 
+              {/* Registro de dias improdutivos (chuva, feriado, etc.) */}
+              {selectedClassProjectId && (
+                <UnproductiveDaysCard
+                  projectId={selectedClassProjectId}
+                  days={unproductiveDays.filter((d: any) => d.projectId === selectedClassProjectId)}
+                  onAdd={(day) => setUnproductiveDays((prev: any[]) => [...prev, day])}
+                  onRemove={(id) => setUnproductiveDays((prev: any[]) => prev.filter((d: any) => d.id !== id))}
+                  currentUserName={currentUserId}
+                />
+              )}
+
               {/* Módulo de Acompanhamento Físico da Obra */}
               {selectedClassProjectId && (
                 <AcompanhamentoFisico
@@ -3200,6 +3221,7 @@ export default function AdminDashboard({
               laborContracts={laborContracts}
               laborPayments={laborPayments}
               measurements={measurements}
+              unproductiveDays={unproductiveDays}
               onSaveMeasurement={async (mm) => { await saveDoc('measurements', mm.id, mm); }}
               onDeleteMeasurement={async (id) => { await removeDoc('measurements', id); }}
             />

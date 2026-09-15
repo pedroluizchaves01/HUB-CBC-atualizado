@@ -109,6 +109,17 @@ export interface PhysicalWeeklyLog {
 }
 
 // Boletim de Medição — documento formal de avanço da obra por período.
+// Dia improdutivo: dia em que a obra não teve trabalho (chuva, feriado, etc.).
+// Um clique para hoje, ou escolha de outra data. Conta automaticamente.
+export interface UnproductiveDay {
+  id: string;
+  projectId: string;
+  date: string;       // YYYY-MM-DD
+  reason?: string;     // motivo opcional (ex.: "Chuva")
+  createdBy?: string;  // quem registrou
+  createdAt: string;   // ISO — quando foi lançado
+}
+
 export interface MeasurementBulletin {
   id: string;
   projectId: string;
@@ -129,6 +140,8 @@ export interface MeasurementBulletin {
   physicalPlannedPeriod?: number;   // % avanço físico PREVISTO no período
   financialPlannedPeriod?: number;  // % avanço financeiro PREVISTO no período (do orçamento)
   costPlannedPeriod?: number;       // R$ previsto para o período (cronograma)
+  // Dias improdutivos DENTRO do período desta medição (snapshot — não muda depois).
+  unproductiveDaysPeriod?: { date: string; reason?: string }[];
   // Fotos com legendas editáveis (base64 ou url)
   photos: { id: string; url: string; caption: string }[];
   // Snapshot dos dados usados (para o documento não mudar depois)

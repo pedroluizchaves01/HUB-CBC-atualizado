@@ -1077,6 +1077,7 @@ export interface MeasurementBulletinData {
   laborPayments: BulletinLaborPayment[];
   phaseProgress: BulletinPhaseProgress[];
   photos: BulletinPhoto[];
+  unproductiveDays?: { date: string; reason?: string }[]; // dias sem trabalho NO período
   responsibleTechnical?: string;   // nome do responsável técnico CBC
 }
 
@@ -1220,6 +1221,21 @@ export async function generateMeasurementBulletinPdf(data: MeasurementBulletinDa
     doc.text(v, m + i * vCol + 3, y + 8.5);
   });
   y += 11 + 7;
+
+  // -------- DIAS IMPRODUTIVOS NO PERÍODO (chuva, feriado, etc.) --------
+  if (data.unproductiveDays && data.unproductiveDays.length > 0) {
+    const boxH = 9;
+    doc.setFillColor(255, 247, 230); doc.setDrawColor(...BRAND.line); doc.setLineWidth(0.2);
+    doc.rect(m, y, w - 2 * m, boxH, "FD");
+    doc.setFont("helvetica", "bold"); doc.setFontSize(6.2); doc.setTextColor(150, 100, 20);
+    doc.text(`DIAS IMPRODUTIVOS NO PERÍODO: ${data.unproductiveDays.length}`, m + 3, y + 4);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(6);
+    const datasTxt = data.unproductiveDays
+      .map(d => `${new Date(d.date + 'T00:00:00').toLocaleDateString('pt-BR')}${d.reason ? ` (${d.reason})` : ''}`)
+      .join('  ·  ');
+    doc.text(datasTxt, m + 3, y + 7.5, { maxWidth: w - 2 * m - 6 });
+    y += boxH + 5;
+  }
 
   // -------- DASHBOARD VISUAL (anéis de progresso do período) --------
   {

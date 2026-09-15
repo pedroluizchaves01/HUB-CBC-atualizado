@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import AcompanhamentoFisico from './AcompanhamentoFisico';
+import UnproductiveDaysCard from './UnproductiveDaysCard';
 import QuotationMaps from './QuotationMaps';
 import ClientAcompanhamentoDashboard from './ClientAcompanhamentoDashboard';
 import ClientFinanceTable from './ClientFinanceTable';
@@ -99,6 +100,7 @@ export default function ClientDashboard({ client, projects, transactions, docume
   const [physicalWeeklyLogs, setPhysicalWeeklyLogs] = useState<any[]>([]);
   const [measurements, setMeasurements] = useState<any[]>([]);
   const [regulatorySteps, setRegulatorySteps] = useState<any[]>([]);
+  const [unproductiveDays, setUnproductiveDays] = useState<any[]>([]);
 
   useEffect(() => {
     const INITIAL_DAILY_LOGS = [
@@ -139,6 +141,7 @@ export default function ClientDashboard({ client, projects, transactions, docume
     const unsubWeekly = subscribeCollection('weekly_logs', setPhysicalWeeklyLogs, [], 'cbc_physical_weekly_logs_v2');
     const unsubMeasurements = subscribeCollection('measurements', setMeasurements, [], 'cbc_measurements_v1');
     const unsubReg = subscribeCollection('regulatory_steps', setRegulatorySteps, INITIAL_REGULATORY_STEPS, 'cbc_regulatory_steps_v2');
+    const unsubUnproductive = subscribeCollection('unproductive_days', setUnproductiveDays, [], 'cbc_unproductive_days_v1');
 
     return () => {
       unsubDailyLogs();
@@ -147,6 +150,7 @@ export default function ClientDashboard({ client, projects, transactions, docume
       unsubWeekly();
       unsubMeasurements();
       unsubReg();
+      unsubUnproductive();
     };
   }, []);
 
@@ -893,6 +897,13 @@ export default function ClientDashboard({ client, projects, transactions, docume
                           <span className="text-[10px] font-mono uppercase tracking-widest text-stone-400 hidden group-open:inline">Fechar ▴</span>
                         </summary>
                         <div className="border-t border-stone-150 p-4 space-y-6">
+                          <UnproductiveDaysCard
+                            projectId={selectedProjectId}
+                            days={unproductiveDays.filter((d: any) => d.projectId === selectedProjectId)}
+                            onAdd={() => {}}
+                            onRemove={() => {}}
+                            readOnly={true}
+                          />
                           <AcompanhamentoFisico
                             projectId={selectedProjectId}
                             project={projects.find(p => p.id === selectedProjectId)}

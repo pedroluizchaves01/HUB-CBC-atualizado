@@ -13,6 +13,7 @@ export const ALLOWED_COLLECTIONS = new Set<string>([
   "system_status", "settings",
   // Físico / obra
   "daily_logs", "timeline_phases", "punch_lists", "weekly_logs", "regulatory_steps", "materials",
+  "unproductive_days",
   // Escritório
   "office_transactions", "office_leads",
   // Mão de obra
@@ -101,7 +102,7 @@ export interface Requester {
 // Coleções ligadas a um projeto (têm campo projectId) — usadas para filtrar por cliente.
 const PROJECT_SCOPED = new Set<string>([
   "transactions", "documents", "materials", "daily_logs", "timeline_phases",
-  "punch_lists", "weekly_logs", "regulatory_steps", "measurements",
+  "punch_lists", "weekly_logs", "regulatory_steps", "measurements", "unproductive_days",
   // Contratos e pagamentos de mão de obra: o cliente vê os do seu próprio projeto.
   "labor_contracts", "labor_payments",
 ]);
@@ -168,7 +169,8 @@ export function assertCanWrite(collection: string, req: Requester): void {
     throw new Error("Você não tem permissão para alterar estes dados.");
   }
   // client: sem escrita nas coleções administrativas, users, settings.
-  if (collection === "users" || collection === "settings" || ADMIN_ONLY_COLLECTIONS.has(collection)) {
+  // unproductive_days: o cliente vê (para acompanhar), mas só o arquiteto registra.
+  if (collection === "users" || collection === "settings" || collection === "unproductive_days" || ADMIN_ONLY_COLLECTIONS.has(collection)) {
     throw new Error("Você não tem permissão para alterar estes dados.");
   }
   // Demais escritas de cliente (ex.: comprovantes) são permitidas; a checagem de POSSE

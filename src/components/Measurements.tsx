@@ -15,7 +15,7 @@ import {
   CheckCircle2, AlertTriangle, X, Camera, Wand2,
 } from 'lucide-react';
 import {
-  Project, Transaction, PhysicalWeeklyLog, MeasurementBulletin, TransactionCategory,
+  Project, Transaction, PhysicalWeeklyLog, MeasurementBulletin, TransactionCategory, UnproductiveDay,
 } from '../types';
 import { generateMeasurementBulletinPdf, validateMeasurementBulletinData } from '../lib/pdfReports';
 import { formatDateBR } from '../lib/formatDate';
@@ -31,6 +31,7 @@ interface Props {
   laborContracts: LaborContract[];
   laborPayments: LaborPayment[];
   measurements: MeasurementBulletin[];
+  unproductiveDays?: UnproductiveDay[];
   onSaveMeasurement: (m: MeasurementBulletin) => Promise<void> | void;
   onDeleteMeasurement: (id: string) => Promise<void> | void;
 }
@@ -53,7 +54,7 @@ const inPeriod = (date: string, start: string, end: string) => {
 
 export default function Measurements({
   projects, transactions, weeklyLogs, timelinePhases, laborContracts, laborPayments,
-  measurements, onSaveMeasurement, onDeleteMeasurement,
+  measurements, unproductiveDays = [], onSaveMeasurement, onDeleteMeasurement,
 }: Props) {
   const [projectId, setProjectId] = useState<string>(projects[0]?.id || '');
   const [periodStart, setPeriodStart] = useState('');
@@ -182,6 +183,12 @@ export default function Measurements({
         };
       });
 
+    // Dias improdutivos DENTRO do período desta medição.
+    const unproductiveDaysPeriod = unproductiveDays
+      .filter(d => d.projectId === projectId && inPeriod(d.date, periodStart, periodEnd))
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map(d => ({ date: d.date, reason: d.reason }));
+
     return {
       id: uid('measurement'),
       projectId,
@@ -198,6 +205,7 @@ export default function Measurements({
       physicalPlannedPeriod,
       financialPlannedPeriod,
       costPlannedPeriod,
+      unproductiveDaysPeriod,
       photos,
       phaseProgress,
       expensesSnapshot,
@@ -267,6 +275,7 @@ export default function Measurements({
         expenses, laborPayments: payments,
         phaseProgress: m.phaseProgress,
         photos: m.photos.map(p => ({ url: p.url, caption: p.caption })),
+        unproductiveDays: m.unproductiveDaysPeriod,
         responsibleTechnical: m.responsibleTechnical,
       };
       const report = validateMeasurementBulletinData(data);
