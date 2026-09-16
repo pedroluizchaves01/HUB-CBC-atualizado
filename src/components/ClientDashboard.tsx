@@ -42,9 +42,11 @@ interface ClientDashboardProps {
 }
 
 export default function ClientDashboard({ client, projects, transactions, documents, onLogout, onAddTransaction }: ClientDashboardProps) {
-  // Find projects belonging to this client
+  // Obras deste cliente: dono principal (clientId) OU dono adicional numa obra
+  // compartilhada (clientIds). Sem isso, o segundo cliente vinculado a um centro
+  // de custo compartilhado nunca via a obra, mesmo o backend já enviando os dados.
   const clientProjects = useMemo(() => {
-    return projects.filter(p => p.clientId === client.id);
+    return projects.filter(p => p.clientId === client.id || (Array.isArray(p.clientIds) && p.clientIds.includes(client.id)));
   }, [projects, client.id]);
 
   // Selected project state
