@@ -1407,7 +1407,7 @@ export default function AdminDashboard({
                 <h1 className="font-sans font-bold text-xs tracking-[0.12em] uppercase text-white leading-tight">
                   CHAVES BRITES CORREA
                 </h1>
-                <p className="font-sans text-[8px] tracking-[0.2em] uppercase text-slate-400 mt-0.5">
+                <p className="font-sans text-[length:var(--ui-text-xs)] tracking-[0.2em] uppercase text-slate-400 mt-0.5">
                   ARQUITETURA &amp; ENGENHARIA
                 </p>
               </div>
@@ -1419,20 +1419,20 @@ export default function AdminDashboard({
           <div className="bg-white/[0.02] border border-white/5 p-4 rounded-2xl relative overflow-hidden">
             <div className="absolute top-0 right-0 w-2 h-2 rounded-full bg-[#FF5A35] animate-ping m-3"></div>
             <div className="absolute top-0 right-0 w-2 h-2 rounded-full bg-[#FF5A35] m-3"></div>
-            <span className="text-[8px] font-mono uppercase tracking-wider text-slate-500 block">
+            <span className="text-[length:var(--ui-text-xs)] font-mono uppercase tracking-wider text-slate-500 block">
               {role === 'marketing' ? 'Sessão Marketing' : 'Sessão Administrador'}
             </span>
-            <span className="text-[11px] font-mono text-white font-bold mt-1.5 block truncate">
+            <span className="text-[length:var(--ui-text-xs)] font-mono text-white font-bold mt-1.5 block truncate">
               {role === 'marketing' ? 'TIME DE MARKETING' : 'CHAVES BRITES CORREA'}
             </span>
-            <span className="text-[9px] text-slate-400 block mt-0.5">
+            <span className="text-[length:var(--ui-text-xs)] text-slate-400 block mt-0.5">
               {role === 'marketing' ? 'Campanhas e Divulgação' : 'Gestão de Custos Globais'}
             </span>
           </div>
 
           {/* Navigation Links */}
           <nav className="space-y-1">
-            <span className="text-[8px] font-mono text-slate-500 uppercase tracking-widest block mb-2 px-2">Menu do Painel</span>
+            <span className="text-[length:var(--ui-text-xs)] font-mono text-slate-500 uppercase tracking-widest block mb-2 px-2">Menu do Painel</span>
             
             {role !== 'marketing' && (
               <>
@@ -1521,7 +1521,7 @@ export default function AdminDashboard({
             {role !== 'marketing' && (
               <>
                 <div className="pt-4 pb-1">
-                  <span className="text-[8px] font-mono text-slate-500 uppercase tracking-widest block mb-1 px-2">Módulos de Trabalho</span>
+                  <span className="text-[length:var(--ui-text-xs)] font-mono text-slate-500 uppercase tracking-widest block mb-1 px-2">Módulos de Trabalho</span>
                 </div>
 
                 <button
@@ -1625,7 +1625,7 @@ export default function AdminDashboard({
 
           {role !== 'marketing' && (
             <div className="mt-6 pt-4 border-t border-white/5 space-y-1">
-              <span className="text-[8px] font-mono text-slate-500 uppercase tracking-widest block mb-2 px-2">Configuração do Sistema</span>
+              <span className="text-[length:var(--ui-text-xs)] font-mono text-slate-500 uppercase tracking-widest block mb-2 px-2">Configuração do Sistema</span>
               <button
                 id="nav_btn_telegram"
                 onClick={() => setActiveTab('telegram')}
@@ -1656,7 +1656,7 @@ export default function AdminDashboard({
             <LogOut size={14} className="text-slate-400 hover:text-white" />
             <span>Encerrar Painel</span>
           </button>
-          <p className="text-[8px] font-mono text-slate-600 uppercase tracking-widest mt-4">CBC OFFICE TOOL v1.0</p>
+          <p className="text-[length:var(--ui-text-xs)] font-mono text-slate-600 uppercase tracking-widest mt-4">CBC OFFICE TOOL v1.0</p>
         </div>
       </aside>
 
@@ -1666,12 +1666,12 @@ export default function AdminDashboard({
         {/* Top bar for general branding info */}
         <header className="bg-[#090D16]/40 border-b border-white/5 px-6 py-4 flex items-center justify-between flex-shrink-0 backdrop-blur-md print:hidden">
           <div>
-            <span className="text-[9px] font-mono text-slate-500 uppercase tracking-widest block">Ambiente compartilhado</span>
+            <span className="text-[length:var(--ui-text-xs)] font-mono text-slate-500 uppercase tracking-widest block">Ambiente compartilhado</span>
             <h2 className="text-xs font-bold text-white uppercase tracking-wider">Centro de Custo &amp; Gestão de Obras</h2>
           </div>
           <div className="flex items-center gap-4 text-xs">
             {role !== 'marketing' && <NotificationBell />}
-            <span className="font-mono text-slate-400 uppercase text-[9px] px-2.5 py-1 bg-white/5 border border-white/10 rounded-full">TIME CORPORATIVO</span>
+            <span className="font-mono text-slate-400 uppercase text-[length:var(--ui-text-xs)] px-2.5 py-1 bg-white/5 border border-white/10 rounded-full">TIME CORPORATIVO</span>
           </div>
         </header>
 
@@ -1704,7 +1704,7 @@ export default function AdminDashboard({
                       setClientSuccess(null);
                       setActiveTab('clientes');
                     }}
-                    className="bg-[#1E1E1E] text-white px-3.5 py-2 text-[10px] font-mono uppercase tracking-widest hover:bg-stone-800 transition-all cursor-pointer border border-stone-900 flex items-center gap-1.5"
+                    className="bg-[#1E1E1E] text-white px-3.5 py-2 text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest hover:bg-stone-800 transition-all cursor-pointer border border-stone-900 flex items-center gap-1.5"
                   >
                     <span>+ Cadastrar Novo Cliente</span>
                   </button>
@@ -1725,7 +1725,7 @@ export default function AdminDashboard({
                       });
                       setActiveTab('projetos');
                     }}
-                    className="bg-white text-stone-900 px-3.5 py-2 text-[10px] font-mono uppercase tracking-widest hover:bg-stone-100 transition-all cursor-pointer border border-stone-300 flex items-center gap-1.5"
+                    className="bg-white text-stone-900 px-3.5 py-2 text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest hover:bg-stone-100 transition-all cursor-pointer border border-stone-300 flex items-center gap-1.5"
                   >
                     <span>+ Cadastrar Nova Obra/Projeto</span>
                   </button>
@@ -1744,7 +1744,7 @@ export default function AdminDashboard({
                       <Briefcase size={16} className="text-stone-500" />
                       Projetos / Obras
                     </h3>
-                    <span className="bg-stone-100 text-stone-600 font-mono text-[10px] px-2 py-0.5 border border-stone-200">
+                    <span className="bg-stone-100 text-stone-600 font-mono text-[length:var(--ui-text-xs)] px-2 py-0.5 border border-stone-200">
                       {projects.length} registros
                     </span>
                   </div>
@@ -1773,30 +1773,30 @@ export default function AdminDashboard({
                                   {p.name}
                                 </h4>
                                 {!hasContract(p.id) && (
-                                  <span className="inline-flex items-center gap-0.5 text-[8px] font-mono font-bold uppercase tracking-wider bg-red-100 text-red-800 border border-red-300 px-1.5 py-0.2" title="Falta Contrato Obrigatório">
+                                  <span className="inline-flex items-center gap-0.5 text-[length:var(--ui-text-xs)] font-mono font-bold uppercase tracking-wider bg-red-100 text-red-800 border border-red-300 px-1.5 py-0.2" title="Falta Contrato Obrigatório">
                                     ⚠️ PENDÊNCIA
                                   </span>
                                 )}
                               </div>
                               {/* 1 line description below each title */}
-                              <p className="text-[11px] text-stone-500 truncate mt-0.5 font-sans leading-normal">
+                              <p className="text-[length:var(--ui-text-xs)] text-stone-500 truncate mt-0.5 font-sans leading-normal">
                                 {p.description || "Sem descrição cadastrada para este canteiro."}
                               </p>
                               {!hasContract(p.id) && (
-                                <p className="text-[10px] text-red-700 font-medium font-sans mt-1">
+                                <p className="text-[length:var(--ui-text-xs)] text-red-700 font-medium font-sans mt-1">
                                   Contrato mínimo obrigatório pendente de anexo!
                                 </p>
                               )}
                             </div>
                             <div className="flex-shrink-0 text-stone-400">
                               {isExpanded ? (
-                                <span className="text-[10px] font-mono text-stone-800 uppercase tracking-widest border border-stone-800 px-1.5 py-0.5 bg-stone-50">Ativo</span>
+                                <span className="text-[length:var(--ui-text-xs)] font-mono text-stone-800 uppercase tracking-widest border border-stone-800 px-1.5 py-0.5 bg-stone-50">Ativo</span>
                               ) : (
                                 <div className="flex items-center gap-2">
                                   {!hasContract(p.id) && (
                                     <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" title="Notificação pendente" />
                                   )}
-                                  <span className="text-[10px] font-mono text-stone-400 uppercase tracking-widest">Ver Detalhes</span>
+                                  <span className="text-[length:var(--ui-text-xs)] font-mono text-stone-400 uppercase tracking-widest">Ver Detalhes</span>
                                 </div>
                               )}
                             </div>
@@ -1813,15 +1813,15 @@ export default function AdminDashboard({
                             >
                               {/* Notificações do Centro de Projeto / Obra */}
                               <div className="bg-white border border-stone-200 p-3 space-y-2">
-                                <h5 className="font-mono text-[9px] uppercase tracking-widest text-stone-500 font-bold flex items-center gap-1.5 border-b border-stone-100 pb-1">
+                                <h5 className="font-mono text-[length:var(--ui-text-xs)] uppercase tracking-widest text-stone-500 font-bold flex items-center gap-1.5 border-b border-stone-100 pb-1">
                                   <span>Painel de Notificações do Centro</span>
                                 </h5>
                                 {!hasContract(p.id) ? (
-                                  <div className="flex items-start gap-2 text-[11px] text-amber-850 bg-amber-50/50 border border-amber-200 p-2.5">
+                                  <div className="flex items-start gap-2 text-[length:var(--ui-text-xs)] text-amber-850 bg-amber-50/50 border border-amber-200 p-2.5">
                                     <span className="text-amber-600 mt-0.5 flex-shrink-0">⚠️</span>
                                     <div>
                                       <p className="font-bold text-amber-950 text-xs">Falta Documento Mínimo Obrigatório</p>
-                                      <p className="text-stone-600 text-[10px] mt-0.5 leading-relaxed">
+                                      <p className="text-stone-600 text-[length:var(--ui-text-xs)] mt-0.5 leading-relaxed">
                                         Este centro de custo não possui o contrato homologado anexado. Por favor, acesse a aba administrativa de anexos e envie o contrato de prestação de serviços no formato PDF para regularizar esta pendência administrativa.
                                       </p>
                                     </div>
@@ -1836,14 +1836,14 @@ export default function AdminDashboard({
 
                               <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                  <span className="text-[9px] font-mono text-stone-400 uppercase tracking-wider block">Descrição do Escopo</span>
-                                  <p className="mt-1 font-sans text-[11px] leading-relaxed text-stone-800">
+                                  <span className="text-[length:var(--ui-text-xs)] font-mono text-stone-400 uppercase tracking-wider block">Descrição do Escopo</span>
+                                  <p className="mt-1 font-sans text-[length:var(--ui-text-xs)] leading-relaxed text-stone-800">
                                     {p.description || "Nenhum escopo específico cadastrado pelo arquiteto."}
                                   </p>
                                 </div>
                                 <div>
-                                  <span className="text-[9px] font-mono text-stone-400 uppercase tracking-wider block">Localização / Endereço</span>
-                                  <p className="mt-1 font-sans text-[11px] text-stone-800">
+                                  <span className="text-[length:var(--ui-text-xs)] font-mono text-stone-400 uppercase tracking-wider block">Localização / Endereço</span>
+                                  <p className="mt-1 font-sans text-[length:var(--ui-text-xs)] text-stone-800">
                                     📍 {p.location || "Local não informado pelo escritório"}
                                   </p>
                                 </div>
@@ -1851,17 +1851,17 @@ export default function AdminDashboard({
 
                               <div className="grid grid-cols-3 gap-2 pt-3 border-t border-stone-100">
                                 <div>
-                                  <span className="text-[9px] font-mono text-stone-400 uppercase tracking-wider block">Status da Obra</span>
-                                  <span className="inline-block mt-1 px-2 py-0.5 font-mono text-[9px] uppercase bg-stone-100 text-stone-700 border">
+                                  <span className="text-[length:var(--ui-text-xs)] font-mono text-stone-400 uppercase tracking-wider block">Status da Obra</span>
+                                  <span className="inline-block mt-1 px-2 py-0.5 font-mono text-[length:var(--ui-text-xs)] uppercase bg-stone-100 text-stone-700 border">
                                     {p.status}
                                   </span>
                                 </div>
                                 <div>
-                                  <span className="text-[9px] font-mono text-stone-400 uppercase tracking-wider block">Orçamento Contratado</span>
+                                  <span className="text-[length:var(--ui-text-xs)] font-mono text-stone-400 uppercase tracking-wider block">Orçamento Contratado</span>
                                   <span className="font-semibold text-stone-900 block mt-1 font-mono">{formatCurrency(p.budget)}</span>
                                 </div>
                                 <div>
-                                  <span className="text-[9px] font-mono text-stone-400 uppercase tracking-wider block">Saldo do Canteiro</span>
+                                  <span className="text-[length:var(--ui-text-xs)] font-mono text-stone-400 uppercase tracking-wider block">Saldo do Canteiro</span>
                                   <span className={`font-semibold block mt-1 font-mono ${remains >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
                                     {formatCurrency(remains)}
                                   </span>
@@ -1880,10 +1880,10 @@ export default function AdminDashboard({
                                   <div className="bg-[#FAF9F6] border border-stone-200 p-3 hover:border-stone-400 transition-all flex flex-col justify-between">
                                     <div>
                                       <div className="flex items-center justify-between mb-1">
-                                        <span className="font-mono text-[9px] uppercase tracking-wider text-stone-500 font-semibold">1. Administrativo</span>
+                                        <span className="font-mono text-[length:var(--ui-text-xs)] uppercase tracking-wider text-stone-500 font-semibold">1. Administrativo</span>
                                         <FileText size={12} className="text-stone-400" />
                                       </div>
-                                      <p className="text-[10px] text-stone-600 leading-normal">
+                                      <p className="text-[length:var(--ui-text-xs)] text-stone-600 leading-normal">
                                         Minutas e contratos, alvarás de prefeitura, responsabilidades técnicas RRT/ART e documentação fiscal.
                                       </p>
                                     </div>
@@ -1894,7 +1894,7 @@ export default function AdminDashboard({
                                         setSelectedClassProjectId(p.id);
                                         setActiveTab('classe_administrativo');
                                       }}
-                                      className="mt-3 w-full bg-white hover:bg-stone-100 border border-stone-300 py-1.5 text-[9px] font-mono uppercase tracking-wider text-stone-900 text-center font-bold cursor-pointer transition-all"
+                                      className="mt-3 w-full bg-white hover:bg-stone-100 border border-stone-300 py-1.5 text-[length:var(--ui-text-xs)] font-mono uppercase tracking-wider text-stone-900 text-center font-bold cursor-pointer transition-all"
                                     >
                                       Acessar Painel Admin →
                                     </button>
@@ -1904,10 +1904,10 @@ export default function AdminDashboard({
                                   <div className="bg-[#FAF9F6] border border-stone-200 p-3 hover:border-stone-400 transition-all flex flex-col justify-between">
                                     <div>
                                       <div className="flex items-center justify-between mb-1">
-                                        <span className="font-mono text-[9px] uppercase tracking-wider text-stone-500 font-semibold">2. Planejamento</span>
+                                        <span className="font-mono text-[length:var(--ui-text-xs)] uppercase tracking-wider text-stone-500 font-semibold">2. Planejamento</span>
                                         <Sliders size={12} className="text-stone-400" />
                                       </div>
-                                      <p className="text-[10px] text-stone-600 leading-normal">
+                                      <p className="text-[length:var(--ui-text-xs)] text-stone-600 leading-normal">
                                         Cronogramas físico-financeiros interativos, controle de fases do canteiro e simulação de buffers de contingência.
                                       </p>
                                     </div>
@@ -1918,7 +1918,7 @@ export default function AdminDashboard({
                                         setSelectedClassProjectId(p.id);
                                         setActiveTab('classe_planejamento');
                                       }}
-                                      className="mt-3 w-full bg-white hover:bg-stone-100 border border-stone-300 py-1.5 text-[9px] font-mono uppercase tracking-wider text-stone-900 text-center font-bold cursor-pointer transition-all"
+                                      className="mt-3 w-full bg-white hover:bg-stone-100 border border-stone-300 py-1.5 text-[length:var(--ui-text-xs)] font-mono uppercase tracking-wider text-stone-900 text-center font-bold cursor-pointer transition-all"
                                     >
                                       Ver Cronograma →
                                     </button>
@@ -1928,10 +1928,10 @@ export default function AdminDashboard({
                                   <div className="bg-[#FAF9F6] border border-stone-200 p-3 hover:border-stone-400 transition-all flex flex-col justify-between">
                                     <div>
                                       <div className="flex items-center justify-between mb-1">
-                                        <span className="font-mono text-[9px] uppercase tracking-wider text-stone-500 font-semibold">3. Acompanhamento</span>
+                                        <span className="font-mono text-[length:var(--ui-text-xs)] uppercase tracking-wider text-stone-500 font-semibold">3. Acompanhamento</span>
                                         <TrendingUp size={12} className="text-stone-400" />
                                       </div>
-                                      <p className="text-[10px] text-stone-600 leading-normal">
+                                      <p className="text-[length:var(--ui-text-xs)] text-stone-600 leading-normal">
                                         Diário de Obra Digital (RDO), punch-list de vistorias e correções técnicas, relatórios fotográficos.
                                       </p>
                                     </div>
@@ -1942,7 +1942,7 @@ export default function AdminDashboard({
                                         setSelectedClassProjectId(p.id);
                                         setActiveTab('classe_acompanhamento');
                                       }}
-                                      className="mt-3 w-full bg-white hover:bg-stone-100 border border-stone-300 py-1.5 text-[9px] font-mono uppercase tracking-wider text-stone-900 text-center font-bold cursor-pointer transition-all"
+                                      className="mt-3 w-full bg-white hover:bg-stone-100 border border-stone-300 py-1.5 text-[length:var(--ui-text-xs)] font-mono uppercase tracking-wider text-stone-900 text-center font-bold cursor-pointer transition-all"
                                     >
                                       Diário & Vistoria RDO →
                                     </button>
@@ -1951,12 +1951,12 @@ export default function AdminDashboard({
                               </div>
 
                               <div className="pt-3 border-t border-stone-100 flex justify-between items-center">
-                                <span className="text-[10px] text-stone-400">Cliente Proprietário: <strong className="text-stone-700">{clientName}</strong></span>
+                                <span className="text-[length:var(--ui-text-xs)] text-stone-400">Cliente Proprietário: <strong className="text-stone-700">{clientName}</strong></span>
                                 <button
                                   onClick={() => {
                                     startEditProject(p);
                                   }}
-                                  className="text-[10px] font-mono text-[#1E1E1E] uppercase tracking-wider underline hover:text-stone-600 cursor-pointer"
+                                  className="text-[length:var(--ui-text-xs)] font-mono text-[#1E1E1E] uppercase tracking-wider underline hover:text-stone-600 cursor-pointer"
                                 >
                                   Editar Parâmetros →
                                 </button>
@@ -1976,7 +1976,7 @@ export default function AdminDashboard({
                       <Users size={16} className="text-stone-500" />
                       Clientes Cadastrados
                     </h3>
-                    <span className="bg-stone-100 text-stone-600 font-mono text-[10px] px-2 py-0.5 border border-stone-200">
+                    <span className="bg-stone-100 text-stone-600 font-mono text-[length:var(--ui-text-xs)] px-2 py-0.5 border border-stone-200">
                       {clients.length} registros
                     </span>
                   </div>
@@ -2003,15 +2003,15 @@ export default function AdminDashboard({
                                 {c.name}
                               </h4>
                               {/* 1 line description below each title */}
-                              <p className="text-[11px] text-stone-500 truncate mt-0.5 font-sans leading-normal">
+                              <p className="text-[length:var(--ui-text-xs)] text-stone-500 truncate mt-0.5 font-sans leading-normal">
                                 {c.email || "Sem e-mail de contato configurado."} • {c.phone || "Sem telefone."}
                               </p>
                             </div>
                             <div className="flex-shrink-0 text-stone-400">
                               {isExpanded ? (
-                                <span className="text-[10px] font-mono text-stone-800 uppercase tracking-widest border border-stone-800 px-1.5 py-0.5 bg-stone-50">Ativo</span>
+                                <span className="text-[length:var(--ui-text-xs)] font-mono text-stone-800 uppercase tracking-widest border border-stone-800 px-1.5 py-0.5 bg-stone-50">Ativo</span>
                               ) : (
-                                <span className="text-[10px] font-mono text-stone-400 uppercase tracking-widest">Ver Detalhes</span>
+                                <span className="text-[length:var(--ui-text-xs)] font-mono text-stone-400 uppercase tracking-widest">Ver Detalhes</span>
                               )}
                             </div>
                           </div>
@@ -2027,13 +2027,13 @@ export default function AdminDashboard({
                             >
                               <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                  <span className="text-[9px] font-mono text-stone-400 uppercase tracking-wider block mb-1.5">Centros de Custo ({linkedProjects.length})</span>
+                                  <span className="text-[length:var(--ui-text-xs)] font-mono text-stone-400 uppercase tracking-wider block mb-1.5">Centros de Custo ({linkedProjects.length})</span>
                                   {linkedProjects.length === 0 ? (
-                                    <p className="text-[11px] text-stone-500 italic">Nenhum centro de custo ativo para este cliente.</p>
+                                    <p className="text-[length:var(--ui-text-xs)] text-stone-500 italic">Nenhum centro de custo ativo para este cliente.</p>
                                   ) : (
                                     <ul className="space-y-1">
                                       {linkedProjects.map(proj => (
-                                        <li key={proj.id} className="flex items-center gap-1.5 text-[11px] font-medium text-stone-800">
+                                        <li key={proj.id} className="flex items-center gap-1.5 text-[length:var(--ui-text-xs)] font-medium text-stone-800">
                                           <span className="w-1.5 h-1.5 rounded-full bg-stone-400"></span>
                                           {proj.name}
                                         </li>
@@ -2042,8 +2042,8 @@ export default function AdminDashboard({
                                   )}
                                 </div>
                                 <div>
-                                  <span className="text-[9px] font-mono text-stone-400 uppercase tracking-wider block">Informações Breves de Contato</span>
-                                  <div className="mt-1 space-y-1 text-[11px] text-stone-800">
+                                  <span className="text-[length:var(--ui-text-xs)] font-mono text-stone-400 uppercase tracking-wider block">Informações Breves de Contato</span>
+                                  <div className="mt-1 space-y-1 text-[length:var(--ui-text-xs)] text-stone-800">
                                     <p><strong>E-mail:</strong> {c.email}</p>
                                     <p><strong>WhatsApp:</strong> {c.phone || "Não cadastrado"}</p>
                                     <p><strong>Conta de Login:</strong> <span className="font-mono bg-stone-100 border px-1">{c.username}</span></p>
@@ -2051,7 +2051,7 @@ export default function AdminDashboard({
                                 </div>
                               </div>
 
-                              <div className="pt-2 border-t border-stone-100 flex justify-between items-center text-[10px]">
+                              <div className="pt-2 border-t border-stone-100 flex justify-between items-center text-[length:var(--ui-text-xs)]">
                                 <span className="text-stone-400">Cadastrado no CBC Office em: {c.createdAt}</span>
                                 <button
                                   onClick={() => {
@@ -2116,7 +2116,7 @@ export default function AdminDashboard({
                     )}
 
                     <div>
-                      <label className="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">Nome Completo / Empresa *</label>
+                      <label className="block text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest text-stone-500 mb-1">Nome Completo / Empresa *</label>
                       <input
                         type="text"
                         className="w-full bg-[#F4F4F3] border border-stone-200 py-2 px-3 text-xs focus:outline-none focus:border-stone-400 focus:bg-white rounded-none"
@@ -2129,7 +2129,7 @@ export default function AdminDashboard({
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">E-mail de Contato *</label>
+                        <label className="block text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest text-stone-500 mb-1">E-mail de Contato *</label>
                         <input
                           type="email"
                           className="w-full bg-[#F4F4F3] border border-stone-200 py-2 px-3 text-xs focus:outline-none focus:border-stone-400 focus:bg-white rounded-none"
@@ -2140,7 +2140,7 @@ export default function AdminDashboard({
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">Telefone / WhatsApp</label>
+                        <label className="block text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest text-stone-500 mb-1">Telefone / WhatsApp</label>
                         <input
                           type="text"
                           className="w-full bg-[#F4F4F3] border border-stone-200 py-2 px-3 text-xs focus:outline-none focus:border-stone-400 focus:bg-white rounded-none"
@@ -2152,11 +2152,11 @@ export default function AdminDashboard({
                     </div>
 
                     <div className="border-t border-stone-100 pt-4 space-y-4">
-                      <span className="text-[10px] font-mono text-stone-400 uppercase tracking-widest block">Credenciais de Login</span>
+                      <span className="text-[length:var(--ui-text-xs)] font-mono text-stone-400 uppercase tracking-widest block">Credenciais de Login</span>
                       
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">Usuário *</label>
+                          <label className="block text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest text-stone-500 mb-1">Usuário *</label>
                           <input
                             type="text"
                             className="w-full bg-[#F4F4F3] border border-stone-200 py-2 px-3 text-xs focus:outline-none focus:border-stone-400 focus:bg-white rounded-none"
@@ -2167,7 +2167,7 @@ export default function AdminDashboard({
                           />
                         </div>
                         <div>
-                          <label className="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">
+                          <label className="block text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest text-stone-500 mb-1">
                             {editingClient ? 'Redefinir Senha' : 'Senha de Acesso *'}
                           </label>
                           <input
@@ -2245,7 +2245,7 @@ export default function AdminDashboard({
                           <div className="flex justify-between items-start">
                             <div>
                               <h4 className="font-serif text-sm text-stone-900 font-semibold">{c.name}</h4>
-                              <p className="text-[10px] font-mono text-stone-400 uppercase mt-0.5">Cadastrado em {c.createdAt}</p>
+                              <p className="text-[length:var(--ui-text-xs)] font-mono text-stone-400 uppercase mt-0.5">Cadastrado em {c.createdAt}</p>
                             </div>
                             <div className="flex items-center gap-1">
                               <button
@@ -2271,22 +2271,22 @@ export default function AdminDashboard({
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-3 border-t border-stone-100 text-[11px] text-stone-600">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-3 border-t border-stone-100 text-[length:var(--ui-text-xs)] text-stone-600">
                             <div>
-                              <span className="font-mono text-[9px] text-stone-400 uppercase tracking-wider block">Usuário de Login</span>
+                              <span className="font-mono text-[length:var(--ui-text-xs)] text-stone-400 uppercase tracking-wider block">Usuário de Login</span>
                               <span className="font-mono bg-stone-50 border border-stone-200 px-1.5 py-0.5 font-medium">{c.username}</span>
                             </div>
                             <div>
-                              <span className="font-mono text-[9px] text-stone-400 uppercase tracking-wider block">Projetos Ativos</span>
+                              <span className="font-mono text-[length:var(--ui-text-xs)] text-stone-400 uppercase tracking-wider block">Projetos Ativos</span>
                               <span className="font-semibold text-stone-800">{c.projectCount} centro(s) de custo</span>
                             </div>
                             <div>
-                              <span className="font-mono text-[9px] text-stone-400 uppercase tracking-wider block">Total Lançado</span>
+                              <span className="font-mono text-[length:var(--ui-text-xs)] text-stone-400 uppercase tracking-wider block">Total Lançado</span>
                               <span className="font-semibold text-stone-800">{formatCurrency(c.spent)}</span>
                             </div>
                           </div>
 
-                          <div className="text-[11px] text-stone-500 space-y-0.5">
+                          <div className="text-[length:var(--ui-text-xs)] text-stone-500 space-y-0.5">
                             <p><strong>Email:</strong> {c.email}</p>
                             {c.phone && <p><strong>Telefone:</strong> {c.phone}</p>}
                           </div>
@@ -2331,7 +2331,7 @@ export default function AdminDashboard({
                   <form onSubmit={handleProjectSubmit} className="space-y-4">
                     
                     <div>
-                      <label className="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">Título do Projeto *</label>
+                      <label className="block text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest text-stone-500 mb-1">Título do Projeto *</label>
                       <input
                         type="text"
                         className="w-full bg-[#F4F4F3] border border-stone-200 py-2 px-3 text-xs focus:outline-none focus:border-stone-400 focus:bg-white rounded-none"
@@ -2343,7 +2343,7 @@ export default function AdminDashboard({
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">Cliente Vinculado *</label>
+                      <label className="block text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest text-stone-500 mb-1">Cliente Vinculado *</label>
                       <select
                         className="w-full bg-[#F4F4F3] border border-stone-200 py-2 px-3 text-xs focus:outline-none focus:border-stone-400 focus:bg-white rounded-none"
                         value={projectForm.clientId}
@@ -2359,11 +2359,11 @@ export default function AdminDashboard({
 
                     {/* Donos adicionais — obra compartilhada entre clientes */}
                     <div>
-                      <label className="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">
+                      <label className="block text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest text-stone-500 mb-1">
                         Clientes adicionais (obra compartilhada)
                       </label>
                       {clients.filter(c => c.id !== projectForm.clientId).length === 0 ? (
-                        <p className="text-[11px] text-stone-400">Selecione o cliente principal primeiro.</p>
+                        <p className="text-[length:var(--ui-text-xs)] text-stone-400">Selecione o cliente principal primeiro.</p>
                       ) : (
                         <div className="border border-stone-200 bg-[#F4F4F3] rounded-none max-h-32 overflow-y-auto">
                           {clients.filter(c => c.id !== projectForm.clientId).map(c => {
@@ -2388,14 +2388,14 @@ export default function AdminDashboard({
                           })}
                         </div>
                       )}
-                      <p className="text-[10px] text-stone-400 mt-1">
+                      <p className="text-[length:var(--ui-text-xs)] text-stone-400 mt-1">
                         Marque outro cliente para que ele também veja esta obra e seus lançamentos.
                       </p>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">Tipo de Centro *</label>
+                        <label className="block text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest text-stone-500 mb-1">Tipo de Centro *</label>
                         <select
                           className="w-full bg-[#F4F4F3] border border-stone-200 py-2 px-3 text-xs focus:outline-none focus:border-stone-400 focus:bg-white rounded-none"
                           value={projectForm.type}
@@ -2407,7 +2407,7 @@ export default function AdminDashboard({
                         </select>
                       </div>
                       <div>
-                        <label className="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">Status Atual *</label>
+                        <label className="block text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest text-stone-500 mb-1">Status Atual *</label>
                         <select
                           className="w-full bg-[#F4F4F3] border border-stone-200 py-2 px-3 text-xs focus:outline-none focus:border-stone-400 focus:bg-white rounded-none"
                           value={projectForm.status}
@@ -2424,7 +2424,7 @@ export default function AdminDashboard({
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">Orçamento Aprovado *</label>
+                        <label className="block text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest text-stone-500 mb-1">Orçamento Aprovado *</label>
                         <div className="relative">
                           <span className="absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none text-stone-400 text-xs font-mono">R$</span>
                           <input
@@ -2439,7 +2439,7 @@ export default function AdminDashboard({
                         </div>
                       </div>
                       <div>
-                        <label className="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">Área Estimada (m²)</label>
+                        <label className="block text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest text-stone-500 mb-1">Área Estimada (m²)</label>
                         <input
                           type="number"
                           className="w-full bg-[#F4F4F3] border border-stone-200 py-2 px-3 text-xs focus:outline-none focus:border-stone-400 focus:bg-white rounded-none font-mono"
@@ -2452,7 +2452,7 @@ export default function AdminDashboard({
 
                     <div className="grid grid-cols-1 gap-4">
                       <div>
-                        <label className="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">Data de Início *</label>
+                        <label className="block text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest text-stone-500 mb-1">Data de Início *</label>
                         <input
                           type="date"
                           className="w-full bg-[#F4F4F3] border border-stone-200 py-2 px-3 text-xs focus:outline-none focus:border-stone-400 focus:bg-white rounded-none font-mono"
@@ -2464,7 +2464,7 @@ export default function AdminDashboard({
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">Endereço / Localização</label>
+                      <label className="block text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest text-stone-500 mb-1">Endereço / Localização</label>
                       <input
                         type="text"
                         className="w-full bg-[#F4F4F3] border border-stone-200 py-2 px-3 text-xs focus:outline-none focus:border-stone-400 focus:bg-white rounded-none"
@@ -2475,7 +2475,7 @@ export default function AdminDashboard({
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">Descrição do Escopo</label>
+                      <label className="block text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest text-stone-500 mb-1">Descrição do Escopo</label>
                       <textarea
                         className="w-full bg-[#F4F4F3] border border-stone-200 py-2 px-3 text-xs focus:outline-none focus:border-stone-400 focus:bg-white rounded-none h-20 resize-none"
                         placeholder="Descreva resumidamente os limites do projeto..."
@@ -2563,10 +2563,10 @@ export default function AdminDashboard({
                             <div className="flex justify-between items-start gap-4">
                               <div className="space-y-1">
                                 <div className="flex items-center gap-2">
-                                  <span className="inline-block px-1.5 py-0.5 font-mono text-[8px] uppercase bg-stone-100 text-stone-700 border">
+                                  <span className="inline-block px-1.5 py-0.5 font-mono text-[length:var(--ui-text-xs)] uppercase bg-stone-100 text-stone-700 border">
                                     {p.type === 'obra' ? 'Obra' : 'Projeto'}
                                   </span>
-                                  <span className={`inline-block px-1.5 py-0.5 font-mono text-[8px] uppercase border ${
+                                  <span className={`inline-block px-1.5 py-0.5 font-mono text-[length:var(--ui-text-xs)] uppercase border ${
                                     p.status === 'execucao' ? 'bg-[#EBF7EE] text-[#245D3B] border-[#245D3B]/20' : 'bg-stone-100 text-stone-700'
                                   }`}>
                                     {p.status}
@@ -2602,7 +2602,7 @@ export default function AdminDashboard({
 
                             {/* Financial Progress representation */}
                             <div className="space-y-2.5 pt-3 border-t border-stone-100">
-                              <div className="flex justify-between text-[11px] text-stone-600">
+                              <div className="flex justify-between text-[length:var(--ui-text-xs)] text-stone-600">
                                 <span>Progresso dos Lançamentos:</span>
                                 <span className="font-mono font-semibold text-stone-800">
                                   {pctSpent.toFixed(1)}% do teto
@@ -2616,17 +2616,17 @@ export default function AdminDashboard({
                               </div>
                             </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[11px] pt-1">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[length:var(--ui-text-xs)] pt-1">
                               <div>
-                                <span className="text-stone-400 block font-mono text-[9px] uppercase tracking-wider">Verba Aprovada</span>
+                                <span className="text-stone-400 block font-mono text-[length:var(--ui-text-xs)] uppercase tracking-wider">Verba Aprovada</span>
                                 <span className="font-semibold text-stone-900">{formatCurrency(p.budget)}</span>
                               </div>
                               <div>
-                                <span className="text-stone-400 block font-mono text-[9px] uppercase tracking-wider">Despesas Lançadas</span>
+                                <span className="text-stone-400 block font-mono text-[length:var(--ui-text-xs)] uppercase tracking-wider">Despesas Lançadas</span>
                                 <span className="font-semibold text-stone-900">{formatCurrency(p.spent)}</span>
                               </div>
                               <div>
-                                <span className="text-stone-400 block font-mono text-[9px] uppercase tracking-wider">Saldo Restante</span>
+                                <span className="text-stone-400 block font-mono text-[length:var(--ui-text-xs)] uppercase tracking-wider">Saldo Restante</span>
                                 <span className={`font-semibold ${remains >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
                                   {formatCurrency(remains)}
                                 </span>
@@ -2634,7 +2634,7 @@ export default function AdminDashboard({
                             </div>
 
                             {p.location && (
-                              <p className="text-[10px] text-stone-400 font-sans mt-2 italic">📍 Endereço: {p.location}</p>
+                              <p className="text-[length:var(--ui-text-xs)] text-stone-400 font-sans mt-2 italic">📍 Endereço: {p.location}</p>
                             )}
 
                           </div>
@@ -2667,7 +2667,7 @@ export default function AdminDashboard({
               {/* Shared Project Switcher Header */}
               <div className="bg-stone-100 border border-stone-200 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                  <span className="text-[9px] font-mono uppercase tracking-widest text-stone-500 block">Obra / Centro de Custo Ativo</span>
+                  <span className="text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest text-stone-500 block">Obra / Centro de Custo Ativo</span>
                   <h3 className="font-serif text-base text-stone-900 mt-1 font-bold">
                     {projects.find(p => p.id === selectedClassProjectId)?.name || "Nenhum projeto cadastrado"}
                   </h3>
@@ -2709,7 +2709,7 @@ export default function AdminDashboard({
                         <h4 className="font-serif text-xs font-bold text-stone-900 tracking-tight">
                           {editingAdminDoc ? "Alterar / Substituir Documento" : "Anexar Novo Documento"}
                         </h4>
-                        <p className="text-[10px] text-stone-500 mt-0.5">
+                        <p className="text-[length:var(--ui-text-xs)] text-stone-500 mt-0.5">
                           {editingAdminDoc 
                             ? "Altere os metadados ou envie um novo arquivo PDF para substituir o atual." 
                             : "Envie arquivos obrigatórios ou complementares exclusivamente em formato PDF."}
@@ -2753,7 +2753,7 @@ export default function AdminDashboard({
                         });
                       }} className="space-y-3.5">
                         <div>
-                          <label className="text-[9px] font-mono uppercase tracking-wider text-stone-500 block mb-1 font-bold">Categoria do Documento</label>
+                          <label className="text-[length:var(--ui-text-xs)] font-mono uppercase tracking-wider text-stone-500 block mb-1 font-bold">Categoria do Documento</label>
                           <select
                             value={selectedDocCategory}
                             onChange={(e) => setSelectedDocCategory(e.target.value)}
@@ -2769,7 +2769,7 @@ export default function AdminDashboard({
                         </div>
 
                         <div>
-                          <label className="text-[9px] font-mono uppercase tracking-wider text-stone-500 block mb-1 font-bold">Título do Documento</label>
+                          <label className="text-[length:var(--ui-text-xs)] font-mono uppercase tracking-wider text-stone-500 block mb-1 font-bold">Título do Documento</label>
                           <input
                             type="text"
                             name="doc_name"
@@ -2782,7 +2782,7 @@ export default function AdminDashboard({
                         </div>
 
                         <div>
-                          <label className="text-[9px] font-mono uppercase tracking-wider text-stone-500 block mb-1 font-bold">Descrição Curta</label>
+                          <label className="text-[length:var(--ui-text-xs)] font-mono uppercase tracking-wider text-stone-500 block mb-1 font-bold">Descrição Curta</label>
                           <input
                             type="text"
                             name="doc_desc"
@@ -2795,7 +2795,7 @@ export default function AdminDashboard({
 
                         {/* Dual File Upload System (Local File & Camera) */}
                         <div>
-                          <label className="text-[9px] font-mono uppercase tracking-wider text-stone-500 block mb-1 font-bold">
+                          <label className="text-[length:var(--ui-text-xs)] font-mono uppercase tracking-wider text-stone-500 block mb-1 font-bold">
                             {editingAdminDoc ? "Substituir Arquivo / Documento (Opcional)" : "Anexo do Documento"}
                           </label>
                           
@@ -2803,7 +2803,7 @@ export default function AdminDashboard({
                             <button
                               type="button"
                               onClick={() => document.getElementById('pdf-file-picker')?.click()}
-                              className="flex items-center justify-center gap-2 border-2 border-dashed border-stone-300 hover:border-stone-500 bg-white hover:bg-[#FAF9F6] py-3.5 px-3 text-[10px] font-mono uppercase font-bold tracking-wider text-stone-800 transition-all cursor-pointer group"
+                              className="flex items-center justify-center gap-2 border-2 border-dashed border-stone-300 hover:border-stone-500 bg-white hover:bg-[#FAF9F6] py-3.5 px-3 text-[length:var(--ui-text-xs)] font-mono uppercase font-bold tracking-wider text-stone-800 transition-all cursor-pointer group"
                             >
                               <Layers size={13} className="text-stone-500 group-hover:text-stone-800" />
                               <span>Adicionar Arquivo Local</span>
@@ -2812,7 +2812,7 @@ export default function AdminDashboard({
                             <button
                               type="button"
                               onClick={() => document.getElementById('camera-file-picker')?.click()}
-                              className="flex items-center justify-center gap-2 border-2 border-dashed border-stone-300 hover:border-stone-500 bg-white hover:bg-[#FAF9F6] py-3.5 px-3 text-[10px] font-mono uppercase font-bold tracking-wider text-stone-800 transition-all cursor-pointer group"
+                              className="flex items-center justify-center gap-2 border-2 border-dashed border-stone-300 hover:border-stone-500 bg-white hover:bg-[#FAF9F6] py-3.5 px-3 text-[length:var(--ui-text-xs)] font-mono uppercase font-bold tracking-wider text-stone-800 transition-all cursor-pointer group"
                             >
                               <Camera size={13} className="text-stone-500 group-hover:text-stone-800" />
                               <span>Tirar Foto</span>
@@ -2874,13 +2874,13 @@ export default function AdminDashboard({
                                 <span className="text-sm">📄</span>
                                 <div className="truncate">
                                   <p className="font-bold text-emerald-900 truncate">{selectedPdfFile.name}</p>
-                                  <p className="text-[9px] font-mono text-emerald-700">{(selectedPdfFile.size / 1024).toFixed(1)} KB • Pronto para salvar</p>
+                                  <p className="text-[length:var(--ui-text-xs)] font-mono text-emerald-700">{(selectedPdfFile.size / 1024).toFixed(1)} KB • Pronto para salvar</p>
                                 </div>
                               </div>
                               <button
                                 type="button"
                                 onClick={() => setSelectedPdfFile(null)}
-                                className="text-red-600 hover:text-red-800 text-[10px] font-mono uppercase font-bold"
+                                className="text-red-600 hover:text-red-800 text-[length:var(--ui-text-xs)] font-mono uppercase font-bold"
                               >
                                 Limpar
                               </button>
@@ -2891,14 +2891,14 @@ export default function AdminDashboard({
                                 <span className="text-emerald-600 text-sm">✓</span>
                                 <div>
                                   <p className="font-semibold text-stone-700">Manter arquivo existente: {editingAdminDoc.fileName}</p>
-                                  <p className="text-[9px] text-stone-400">Substitua o arquivo usando os botões acima se desejar.</p>
+                                  <p className="text-[length:var(--ui-text-xs)] text-stone-400">Substitua o arquivo usando os botões acima se desejar.</p>
                                 </div>
                               </div>
                             </div>
                           ) : null}
 
                           {pdfUploadError && (
-                            <p className="text-[10px] text-red-600 mt-2.5 font-mono">{pdfUploadError}</p>
+                            <p className="text-[length:var(--ui-text-xs)] text-red-600 mt-2.5 font-mono">{pdfUploadError}</p>
                           )}
                         </div>
 
@@ -2907,14 +2907,14 @@ export default function AdminDashboard({
                             <button
                               type="button"
                               onClick={handleCancelAdminDocEdit}
-                              className="flex-1 bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-700 py-2.5 px-3 text-[10px] font-mono uppercase tracking-wider cursor-pointer font-bold transition-all"
+                              className="flex-1 bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-700 py-2.5 px-3 text-[length:var(--ui-text-xs)] font-mono uppercase tracking-wider cursor-pointer font-bold transition-all"
                             >
                               Cancelar
                             </button>
                           )}
                           <button
                             type="submit"
-                            className="flex-2 bg-stone-900 text-white hover:bg-stone-800 py-2.5 px-3 text-[10px] font-mono uppercase tracking-wider cursor-pointer font-bold transition-all border border-transparent hover:border-stone-900 shadow-sm"
+                            className="flex-2 bg-stone-900 text-white hover:bg-stone-800 py-2.5 px-3 text-[length:var(--ui-text-xs)] font-mono uppercase tracking-wider cursor-pointer font-bold transition-all border border-transparent hover:border-stone-900 shadow-sm"
                           >
                             {editingAdminDoc ? "Salvar Alterações" : "Salvar e Vincular PDF"}
                           </button>
@@ -2939,7 +2939,7 @@ export default function AdminDashboard({
                               <div className="min-w-0 flex-1 space-y-1">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <h5 className="font-sans font-bold text-xs text-stone-900 truncate">{doc.name}</h5>
-                                  <span className={`inline-block px-1.5 py-0.5 text-[8px] font-mono font-bold uppercase border ${
+                                  <span className={`inline-block px-1.5 py-0.5 text-[length:var(--ui-text-xs)] font-mono font-bold uppercase border ${
                                     doc.category === 'contrato' ? 'bg-amber-50 text-amber-800 border-amber-200' :
                                     doc.category === 'alvara' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
                                     doc.category === 'rrt' ? 'bg-blue-50 text-blue-800 border-blue-200' :
@@ -2956,7 +2956,7 @@ export default function AdminDashboard({
                                   </span>
                                 </div>
                                 <p className="text-[10.5px] text-stone-600 leading-normal">{doc.description || 'Sem descrição detalhada.'}</p>
-                                <div className="flex items-center gap-2 text-[9px] font-mono text-stone-400 flex-wrap">
+                                <div className="flex items-center gap-2 text-[length:var(--ui-text-xs)] font-mono text-stone-400 flex-wrap">
                                   <span>📄 {doc.fileName}</span>
                                   <span>•</span>
                                   <span>Enviado em: {doc.uploadedAt}</span>
@@ -3011,16 +3011,16 @@ export default function AdminDashboard({
                     {/* Status de Conformidade */}
                     <div className="pt-4 border-t border-stone-100">
                       {documents.some(d => d.projectId === selectedClassProjectId && d.class === 'administrativo' && d.category === 'contrato') ? (
-                        <div className="bg-emerald-50/50 border border-emerald-200 p-3 text-[11px] text-emerald-800 flex items-center gap-2">
+                        <div className="bg-emerald-50/50 border border-emerald-200 p-3 text-[length:var(--ui-text-xs)] text-emerald-800 flex items-center gap-2">
                           <span className="text-emerald-600 text-xs font-bold">✓</span>
                           <span><strong>Conformidade Contratual Ativa:</strong> O contrato mínimo obrigatório está anexado e validado.</span>
                         </div>
                       ) : (
-                        <div className="bg-amber-50/50 border border-amber-200 p-3 text-[11px] text-amber-800 flex items-start gap-2">
+                        <div className="bg-amber-50/50 border border-amber-200 p-3 text-[length:var(--ui-text-xs)] text-amber-800 flex items-start gap-2">
                           <span className="text-amber-600 text-xs font-bold mt-0.5">⚠️</span>
                           <div>
                             <span className="font-bold block">Contrato Obrigatório Pendente</span>
-                            <span className="text-stone-600 text-[10px] leading-relaxed mt-0.5 block">Anexe o contrato de prestação de serviços na categoria "Contrato Técnico Homologado" para liberar o canteiro.</span>
+                            <span className="text-stone-600 text-[length:var(--ui-text-xs)] leading-relaxed mt-0.5 block">Anexe o contrato de prestação de serviços na categoria "Contrato Técnico Homologado" para liberar o canteiro.</span>
                           </div>
                         </div>
                       )}
@@ -3097,7 +3097,7 @@ export default function AdminDashboard({
               {/* Shared Project Switcher Header */}
               <div className="bg-stone-100 border border-stone-200 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                  <span className="text-[9px] font-mono uppercase tracking-widest text-stone-500 block">Obra / Centro de Custo Ativo</span>
+                  <span className="text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest text-stone-500 block">Obra / Centro de Custo Ativo</span>
                   <h3 className="font-serif text-base text-stone-900 mt-1 font-bold">
                     {projects.find(p => p.id === selectedClassProjectId)?.name || "Nenhum projeto cadastrado"}
                   </h3>
@@ -3283,8 +3283,8 @@ export default function AdminDashboard({
                   </p>
                   {saveDocError && (
                     <div className="bg-stone-50 border border-stone-200 p-2.5 mt-3 text-left">
-                      <p className="text-[9px] font-mono font-semibold uppercase tracking-wider text-amber-700">Nota técnica (Sessão Local):</p>
-                      <p className="text-[10px] text-stone-600 leading-normal mt-0.5">{saveDocError}</p>
+                      <p className="text-[length:var(--ui-text-xs)] font-mono font-semibold uppercase tracking-wider text-amber-700">Nota técnica (Sessão Local):</p>
+                      <p className="text-[length:var(--ui-text-xs)] text-stone-600 leading-normal mt-0.5">{saveDocError}</p>
                     </div>
                   )}
                 </div>
@@ -3302,11 +3302,11 @@ export default function AdminDashboard({
                 </div>
                 
                 <div className="bg-red-50 border border-red-200 p-3 text-left">
-                  <p className="text-[9px] font-mono font-semibold uppercase tracking-wider text-red-700">Detalhes do erro:</p>
-                  <p className="text-[10px] text-red-900 leading-normal mt-0.5 font-mono break-all max-h-32 overflow-y-auto">{saveDocError}</p>
+                  <p className="text-[length:var(--ui-text-xs)] font-mono font-semibold uppercase tracking-wider text-red-700">Detalhes do erro:</p>
+                  <p className="text-[length:var(--ui-text-xs)] text-red-900 leading-normal mt-0.5 font-mono break-all max-h-32 overflow-y-auto">{saveDocError}</p>
                 </div>
 
-                <div className="flex justify-end gap-3 pt-2 font-mono text-[10px] uppercase">
+                <div className="flex justify-end gap-3 pt-2 font-mono text-[length:var(--ui-text-xs)] uppercase">
                   <button
                     type="button"
                     onClick={() => {
@@ -3346,7 +3346,7 @@ export default function AdminDashboard({
                     </p>
                   </div>
                 </div>
-                <div className="flex justify-end gap-3 pt-2 font-mono text-[10px] uppercase">
+                <div className="flex justify-end gap-3 pt-2 font-mono text-[length:var(--ui-text-xs)] uppercase">
                   <button
                     type="button"
                     onClick={() => setAdminDocSaveConfirm(null)}
@@ -3512,12 +3512,12 @@ export default function AdminDashboard({
             {/* Header */}
             <div className="bg-[#1E1E1E] text-white px-6 py-4 flex items-center justify-between border-b border-stone-800">
               <div className="flex items-center gap-3">
-                <span className="p-1.5 bg-stone-800 text-stone-200 border border-stone-700 text-[9px] font-mono font-bold uppercase tracking-wider">
+                <span className="p-1.5 bg-stone-800 text-stone-200 border border-stone-700 text-[length:var(--ui-text-xs)] font-mono font-bold uppercase tracking-wider">
                   {previewDoc.category?.toUpperCase() || 'ANEXO'}
                 </span>
                 <div>
                   <h3 className="font-serif text-xs md:text-sm font-bold tracking-tight text-stone-100">{previewDoc.name}</h3>
-                  <p className="text-[9px] text-stone-400 font-mono mt-0.5">
+                  <p className="text-[length:var(--ui-text-xs)] text-stone-400 font-mono mt-0.5">
                     ID do Documento: {previewDoc.id}
                   </p>
                 </div>
@@ -3526,7 +3526,7 @@ export default function AdminDashboard({
                 <button
                   type="button"
                   onClick={() => handleDownloadDoc(previewDoc)}
-                  className="bg-stone-800 hover:bg-stone-700 text-stone-200 hover:text-white px-3 py-1.5 font-mono text-[9px] uppercase tracking-wider font-bold transition-all flex items-center gap-1.5 border border-stone-700 cursor-pointer"
+                  className="bg-stone-800 hover:bg-stone-700 text-stone-200 hover:text-white px-3 py-1.5 font-mono text-[length:var(--ui-text-xs)] uppercase tracking-wider font-bold transition-all flex items-center gap-1.5 border border-stone-700 cursor-pointer"
                 >
                   <Download size={12} />
                   Baixar Arquivo
@@ -3548,11 +3548,11 @@ export default function AdminDashboard({
               {/* Left Column: Metadata & Details */}
               <div className="w-full md:w-80 bg-stone-100 border-r border-stone-200 p-5 overflow-y-auto space-y-6 flex-shrink-0">
                 <div>
-                  <span className="block text-[8px] font-mono uppercase tracking-widest text-stone-400 font-bold mb-3">
+                  <span className="block text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest text-stone-400 font-bold mb-3">
                     Metadados da Pasta
                   </span>
                   
-                  <div className="border border-stone-200 divide-y divide-stone-200 bg-white font-mono text-[10px]">
+                  <div className="border border-stone-200 divide-y divide-stone-200 bg-white font-mono text-[length:var(--ui-text-xs)]">
                     <div className="p-2.5 flex justify-between items-center">
                       <span className="text-stone-500 font-sans">Categoria:</span>
                       <span className="font-bold text-stone-900 uppercase">{previewDoc.category || 'Outros'}</span>
@@ -3567,7 +3567,7 @@ export default function AdminDashboard({
                     </div>
                     <div className="p-2.5 flex justify-between items-center">
                       <span className="text-stone-500 font-sans">Status:</span>
-                      <span className={`px-2 py-0.5 text-[8px] font-bold uppercase rounded-sm ${
+                      <span className={`px-2 py-0.5 text-[length:var(--ui-text-xs)] font-bold uppercase rounded-sm ${
                         (previewDoc.status as string) === 'aprovado' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' :
                         (previewDoc.status as string) === 'pendente' ? 'bg-amber-50 text-amber-800 border border-amber-200' :
                         (previewDoc.status as string) === 'rejeitado' ? 'bg-red-50 text-red-800 border border-red-200' :
@@ -3582,7 +3582,7 @@ export default function AdminDashboard({
                     </div>
                     <div className="p-2.5 flex flex-col gap-1">
                       <span className="text-stone-500 font-sans">Arquivo Físico:</span>
-                      <span className="text-stone-700 truncate font-sans text-[9px] font-medium" title={previewDoc.fileName || 'documento_digital.pdf'}>
+                      <span className="text-stone-700 truncate font-sans text-[length:var(--ui-text-xs)] font-medium" title={previewDoc.fileName || 'documento_digital.pdf'}>
                         {previewDoc.fileName || 'documento_digital.pdf'}
                       </span>
                     </div>
@@ -3590,7 +3590,7 @@ export default function AdminDashboard({
                 </div>
 
                 <div className="space-y-2">
-                  <span className="block text-[8px] font-mono uppercase tracking-widest text-stone-400 font-bold">
+                  <span className="block text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest text-stone-400 font-bold">
                     Descrição / Observações
                   </span>
                   <div className="bg-stone-50 border border-stone-200 p-4 font-sans text-xs text-stone-600 leading-relaxed rounded-xs italic">
@@ -3599,11 +3599,11 @@ export default function AdminDashboard({
                 </div>
 
                 {/* Authenticity Certificate Box */}
-                <div className="bg-stone-50 border border-stone-200 p-4 text-[10px] space-y-2 font-mono">
+                <div className="bg-stone-50 border border-stone-200 p-4 text-[length:var(--ui-text-xs)] space-y-2 font-mono">
                   <span className="font-bold text-stone-800 font-serif block uppercase tracking-wider">
                     Certificação Digital
                   </span>
-                  <div className="text-stone-500 space-y-1 text-[9px]">
+                  <div className="text-stone-500 space-y-1 text-[length:var(--ui-text-xs)]">
                     <p><strong>Hash:</strong> SHA-256: e3b0c442...</p>
                     <p><strong>Responsável:</strong> Eng. Pedro L. Chaves</p>
                     <p><strong>Assinatura:</strong> ICP-Brasil Credenciado</p>
@@ -3620,7 +3620,7 @@ export default function AdminDashboard({
                         />
                       ))}
                     </div>
-                    <span className="text-[8px] leading-tight text-stone-400 uppercase font-sans">
+                    <span className="text-[length:var(--ui-text-xs)] leading-tight text-stone-400 uppercase font-sans">
                       Documento integrado ao banco de dados Chaves Brites Correa.
                     </span>
                   </div>
@@ -3635,7 +3635,7 @@ export default function AdminDashboard({
                     {((fileBlobs[previewDoc.id] && fileBlobs[previewDoc.id].type.startsWith('image/')) || 
                       (previewDoc.fileUrl && previewDoc.fileUrl.match(/\.(jpeg|jpg|gif|png|webp)/i))) ? (
                       <div className="bg-white p-4 border border-stone-300 shadow-md">
-                        <span className="block text-[9px] font-mono text-stone-400 uppercase mb-2">
+                        <span className="block text-[length:var(--ui-text-xs)] font-mono text-stone-400 uppercase mb-2">
                           Visualização de Imagem Anexada
                         </span>
                         <img
@@ -3652,7 +3652,7 @@ export default function AdminDashboard({
                           
                           {/* PDF Document Visual */}
                           <div className="w-20 h-24 bg-red-50 border-2 border-red-200 rounded-lg flex flex-col items-center justify-between p-3 relative shadow-sm mt-4">
-                            <span className="text-[10px] font-mono font-bold text-red-700 bg-red-100 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                            <span className="text-[length:var(--ui-text-xs)] font-mono font-bold text-red-700 bg-red-100 px-1.5 py-0.5 rounded uppercase tracking-wider">
                               PDF
                             </span>
                             <div className="space-y-1 w-full">
@@ -3667,7 +3667,7 @@ export default function AdminDashboard({
                             <h4 className="font-serif text-sm font-bold text-stone-900">
                               {fileBlobs[previewDoc.id] ? fileBlobs[previewDoc.id].name : (previewDoc.fileName || previewDoc.name)}
                             </h4>
-                            <p className="text-[10px] font-mono text-stone-500 uppercase tracking-wider">
+                            <p className="text-[length:var(--ui-text-xs)] font-mono text-stone-500 uppercase tracking-wider">
                               {fileBlobs[previewDoc.id] 
                                 ? `Tamanho: ${(fileBlobs[previewDoc.id].size / 1024).toFixed(1)} KB • Formato: PDF Digitalizado`
                                 : `Arquivo disponível para visualização e download na nuvem`}
@@ -3690,7 +3690,7 @@ export default function AdminDashboard({
                               href={previewUrl || ''}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="bg-red-700 hover:bg-red-800 text-white font-mono text-[10px] font-bold py-3 px-5 uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-sm border border-transparent cursor-pointer text-center"
+                              className="bg-red-700 hover:bg-red-800 text-white font-mono text-[length:var(--ui-text-xs)] font-bold py-3 px-5 uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-sm border border-transparent cursor-pointer text-center"
                             >
                               <ExternalLink size={12} />
                               Visualizar em Nova Aba
@@ -3698,7 +3698,7 @@ export default function AdminDashboard({
                             <button
                               type="button"
                               onClick={() => handleDownloadDoc(previewDoc)}
-                              className="bg-stone-900 hover:bg-stone-800 text-white font-mono text-[10px] font-bold py-3 px-5 uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer text-center"
+                              className="bg-stone-900 hover:bg-stone-800 text-white font-mono text-[length:var(--ui-text-xs)] font-bold py-3 px-5 uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer text-center"
                             >
                               <Download size={12} />
                               Baixar Arquivo PDF
@@ -3721,16 +3721,16 @@ export default function AdminDashboard({
 
                     {/* Official Document Header */}
                     <div className="text-center space-y-2 border-b-2 border-stone-900 pb-5">
-                      <div className="font-mono text-[9px] tracking-widest uppercase text-stone-500 font-bold">
+                      <div className="font-mono text-[length:var(--ui-text-xs)] tracking-widest uppercase text-stone-500 font-bold">
                         República Federativa do Brasil
                       </div>
                       <h4 className="font-bold text-sm uppercase tracking-wider font-serif text-stone-900">
                         CHAVES BRITES CORREA LTDA
                       </h4>
-                      <p className="text-[10px] font-mono text-stone-600 uppercase tracking-wide">
+                      <p className="text-[length:var(--ui-text-xs)] font-mono text-stone-600 uppercase tracking-wide">
                         Engenharia de Infraestrutura e Gestão de Obras Civis
                       </p>
-                      <div className="text-[8px] text-stone-400 font-mono">
+                      <div className="text-[length:var(--ui-text-xs)] text-stone-400 font-mono">
                         CGC/CNPJ nº 48.151.623/0001-42 | Registro CREA/CAU nº 1048-A SP
                       </div>
                     </div>
@@ -3744,7 +3744,7 @@ export default function AdminDashboard({
                          previewDoc.category === 'orcamento' ? 'Planilha Orçamentária Consolidada / Memória de Cálculo' :
                          'Certidão Administrativa de Homologação de Documento'}
                       </h3>
-                      <p className="text-[10px] font-mono text-stone-500 uppercase">
+                      <p className="text-[length:var(--ui-text-xs)] font-mono text-stone-500 uppercase">
                         Código de Controle: DOC-{previewDoc.id.substring(0, 8).toUpperCase()}
                       </p>
                     </div>
@@ -3753,20 +3753,20 @@ export default function AdminDashboard({
                     <div className="text-xs space-y-5 leading-relaxed font-sans text-stone-800">
                       
                       {previewDoc.category === 'contrato' && (
-                        <div className="space-y-4 text-[11px]">
+                        <div className="space-y-4 text-[length:var(--ui-text-xs)]">
                           <p>
                             <strong>CONTRATANTE:</strong> CHAVES BRITES CORREA LTDA, sediada na Av. Paulista, São Paulo/SP, neste ato representada por seu corpo de engenharia civil diretivo.
                           </p>
                           <p>
                             <strong>CONTRATADO:</strong> Empresa parceira subempreiteira homologada no sistema de compras e suprimentos da contratante, responsável pela execução dos serviços civis correlatos.
                           </p>
-                          <p className="font-serif font-bold text-stone-950 uppercase text-[9px] tracking-wide border-b border-stone-200 pb-1 mt-4">
+                          <p className="font-serif font-bold text-stone-950 uppercase text-[length:var(--ui-text-xs)] tracking-wide border-b border-stone-200 pb-1 mt-4">
                             CLÁUSULA PRIMEIRA - DO OBJETO
                           </p>
                           <p>
                             O presente instrumento tem como objeto a prestação de serviços de engenharia civil, abrangendo mão de obra qualificada, fornecimento de materiais básicos e equipamentos para a execução da obra designada como <strong>"{projects.find(p => p.id === previewDoc.projectId)?.name || 'Projeto de Infraestrutura'}"</strong>.
                           </p>
-                          <p className="font-serif font-bold text-stone-950 uppercase text-[9px] tracking-wide border-b border-stone-200 pb-1 mt-4">
+                          <p className="font-serif font-bold text-stone-950 uppercase text-[length:var(--ui-text-xs)] tracking-wide border-b border-stone-200 pb-1 mt-4">
                             CLÁUSULA SEGUNDA - DOS PRAZOS E CONDIÇÕES
                           </p>
                           <p>
@@ -3776,46 +3776,46 @@ export default function AdminDashboard({
                       )}
 
                       {previewDoc.category === 'alvara' && (
-                        <div className="space-y-4 text-[11px] bg-amber-50/20 p-4 border border-amber-200/50">
-                          <p className="text-center font-bold text-stone-950 uppercase text-[10px]">
+                        <div className="space-y-4 text-[length:var(--ui-text-xs)] bg-amber-50/20 p-4 border border-amber-200/50">
+                          <p className="text-center font-bold text-stone-950 uppercase text-[length:var(--ui-text-xs)]">
                             CERTIDÃO DE AUTORIZAÇÃO Nº 2026/SP-4589
                           </p>
                           <p>
                             A Secretaria Municipal de Urbanismo e Licenciamento certifica que o projeto técnico referente à obra <strong>"{projects.find(p => p.id === previewDoc.projectId)?.name || 'Obra Comercial'}"</strong> encontra-se devidamente aprovado quanto aos parâmetros edilícios, ambientais e de zoneamento urbano.
                           </p>
-                          <div className="grid grid-cols-2 gap-4 font-mono text-[10px] bg-white p-3 border border-stone-200">
+                          <div className="grid grid-cols-2 gap-4 font-mono text-[length:var(--ui-text-xs)] bg-white p-3 border border-stone-200">
                             <div>
-                              <span className="block text-stone-400 text-[8px] uppercase font-bold">Responsável Técnico</span>
+                              <span className="block text-stone-400 text-[length:var(--ui-text-xs)] uppercase font-bold">Responsável Técnico</span>
                               <strong className="text-stone-800">Eng. Civil Responsável</strong>
                             </div>
                             <div>
-                              <span className="block text-stone-400 text-[8px] uppercase font-bold">Área Total do Lote</span>
+                              <span className="block text-stone-400 text-[length:var(--ui-text-xs)] uppercase font-bold">Área Total do Lote</span>
                               <strong className="text-stone-800">1.480,50 m²</strong>
                             </div>
                             <div>
-                              <span className="block text-stone-400 text-[8px] uppercase font-bold">Número do Processo</span>
+                              <span className="block text-stone-400 text-[length:var(--ui-text-xs)] uppercase font-bold">Número do Processo</span>
                               <strong className="text-stone-800">958.421.2026-SP</strong>
                             </div>
                             <div>
-                              <span className="block text-stone-400 text-[8px] uppercase font-bold">Validade Licença</span>
+                              <span className="block text-stone-400 text-[length:var(--ui-text-xs)] uppercase font-bold">Validade Licença</span>
                               <strong className="text-stone-800">06/07/2028</strong>
                             </div>
                           </div>
-                          <p className="text-[10px] text-stone-500 italic">
+                          <p className="text-[length:var(--ui-text-xs)] text-stone-500 italic">
                             *Esta licença deverá ser mantida em local visível na entrada do canteiro de obras para efeito de fiscalização permanente.
                           </p>
                         </div>
                       )}
 
                       {previewDoc.category === 'rrt' && (
-                        <div className="space-y-4 text-[11px] border border-stone-200 p-4 bg-stone-50">
+                        <div className="space-y-4 text-[length:var(--ui-text-xs)] border border-stone-200 p-4 bg-stone-50">
                           <p className="font-bold text-center uppercase tracking-wide text-stone-900 border-b border-stone-200 pb-2">
                             REGISTRO DE RESPONSABILIDADE TÉCNICA - CAU / CREA
                           </p>
                           <p>
                             Este documento comprova o recolhimento das taxas e o registro formal da autoria e da responsabilidade técnica pelos serviços descritos abaixo:
                           </p>
-                          <div className="space-y-2 font-mono text-[10px]">
+                          <div className="space-y-2 font-mono text-[length:var(--ui-text-xs)]">
                             <p><strong>Profissional:</strong> Dr. Pedro Luiz Chaves Brites Correa</p>
                             <p><strong>Título Profissional:</strong> Engenheiro Civil Sênior & Diretor Técnico</p>
                             <p><strong>Atividade Contratada:</strong> Direção Técnica de Obra, Coordenação de Equipes e Gestão do Cronograma Físico-Financeiro.</p>
@@ -3829,7 +3829,7 @@ export default function AdminDashboard({
                           <p>
                             Resumo consolidado de custos, quantitativos e taxas de BDI (Benefícios e Despesas Indiretas) calculadas para o projeto corrente:
                           </p>
-                          <table className="w-full text-[10px] font-mono border border-stone-200 text-left">
+                          <table className="w-full text-[length:var(--ui-text-xs)] font-mono border border-stone-200 text-left">
                             <thead>
                               <tr className="bg-stone-100 uppercase text-stone-600 border-b border-stone-200">
                                 <th className="p-2 border-r border-stone-200">Item</th>
@@ -3882,12 +3882,12 @@ export default function AdminDashboard({
                     </div>
 
                     {/* Official Signatures section */}
-                    <div className="pt-10 grid grid-cols-2 gap-8 text-center text-[10px] font-sans">
+                    <div className="pt-10 grid grid-cols-2 gap-8 text-center text-[length:var(--ui-text-xs)] font-sans">
                       <div className="space-y-1">
                         <div className="border-t border-stone-400 pt-1 text-stone-700">
                           Assinatura Digitalizada do Gestor
                         </div>
-                        <div className="text-[8px] font-mono text-stone-400">
+                        <div className="text-[length:var(--ui-text-xs)] font-mono text-stone-400">
                           CBC - Departamento de Engenharia
                         </div>
                       </div>
@@ -3895,7 +3895,7 @@ export default function AdminDashboard({
                         <div className="border-t border-stone-400 pt-1 text-stone-700">
                           Visto da Diretoria Técnica
                         </div>
-                        <div className="text-[8px] font-mono text-stone-400">
+                        <div className="text-[length:var(--ui-text-xs)] font-mono text-stone-400">
                           CREA: 489574-SP
                         </div>
                       </div>
