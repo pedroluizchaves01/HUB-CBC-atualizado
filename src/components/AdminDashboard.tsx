@@ -1894,7 +1894,7 @@ export default function AdminDashboard({
                                         setSelectedClassProjectId(p.id);
                                         setActiveTab('classe_administrativo');
                                       }}
-                                      className="mt-3 w-full bg-white hover:bg-stone-100 border border-stone-300 py-1.5 text-[length:var(--ui-text-xs)] font-mono uppercase tracking-wider text-stone-900 text-center font-bold cursor-pointer transition-all"
+                                      className="ui-btn ui-btn-secondary ui-btn-sm mt-3 w-full"
                                     >
                                       Acessar Painel Admin →
                                     </button>
@@ -1918,7 +1918,7 @@ export default function AdminDashboard({
                                         setSelectedClassProjectId(p.id);
                                         setActiveTab('classe_planejamento');
                                       }}
-                                      className="mt-3 w-full bg-white hover:bg-stone-100 border border-stone-300 py-1.5 text-[length:var(--ui-text-xs)] font-mono uppercase tracking-wider text-stone-900 text-center font-bold cursor-pointer transition-all"
+                                      className="ui-btn ui-btn-secondary ui-btn-sm mt-3 w-full"
                                     >
                                       Ver Cronograma →
                                     </button>
@@ -1942,7 +1942,7 @@ export default function AdminDashboard({
                                         setSelectedClassProjectId(p.id);
                                         setActiveTab('classe_acompanhamento');
                                       }}
-                                      className="mt-3 w-full bg-white hover:bg-stone-100 border border-stone-300 py-1.5 text-[length:var(--ui-text-xs)] font-mono uppercase tracking-wider text-stone-900 text-center font-bold cursor-pointer transition-all"
+                                      className="ui-btn ui-btn-secondary ui-btn-sm mt-3 w-full"
                                     >
                                       Diário & Vistoria RDO →
                                     </button>
@@ -1956,7 +1956,7 @@ export default function AdminDashboard({
                                   onClick={() => {
                                     startEditProject(p);
                                   }}
-                                  className="text-[length:var(--ui-text-xs)] font-mono text-[#1E1E1E] uppercase tracking-wider underline hover:text-stone-600 cursor-pointer"
+                                  className="ui-btn ui-btn-ghost ui-btn-sm"
                                 >
                                   Editar Parâmetros →
                                 </button>
@@ -2057,7 +2057,7 @@ export default function AdminDashboard({
                                   onClick={() => {
                                     startEditClient(c);
                                   }}
-                                  className="font-mono text-[#1E1E1E] uppercase tracking-wider underline hover:text-stone-600 cursor-pointer"
+                                  className="ui-btn ui-btn-ghost ui-btn-sm"
                                 >
                                   Editar Credenciais e Cadastro →
                                 </button>
@@ -2186,7 +2186,7 @@ export default function AdminDashboard({
                       <button
                         type="submit"
                         id="client_submit_btn"
-                        className="flex-grow bg-[#1E1E1E] text-white hover:bg-stone-800 py-2.5 px-4 text-xs font-mono uppercase tracking-wider transition-all rounded-none cursor-pointer text-center flex items-center justify-center gap-1.5"
+                        className="ui-btn ui-btn-primary ui-btn-md flex-grow"
                       >
                         <UserCheck size={13} />
                         {editingClient ? 'Salvar Edição' : 'Cadastrar e Liberar'}
@@ -2197,7 +2197,7 @@ export default function AdminDashboard({
                           type="button"
                           id="client_cancel_btn"
                           onClick={cancelEditClient}
-                          className="bg-white border border-stone-200 text-stone-600 hover:text-stone-800 py-2.5 px-3 text-xs font-mono uppercase tracking-wider transition-all rounded-none cursor-pointer"
+                          className="ui-btn ui-btn-secondary ui-btn-md"
                         >
                           Cancelar
                         </button>
@@ -2488,7 +2488,7 @@ export default function AdminDashboard({
                       <button
                         type="submit"
                         id="project_submit_btn"
-                        className="flex-grow bg-[#1E1E1E] text-white hover:bg-stone-800 py-2.5 px-4 text-xs font-mono uppercase tracking-wider transition-all rounded-none cursor-pointer text-center flex items-center justify-center gap-1.5"
+                        className="ui-btn ui-btn-primary ui-btn-md flex-grow"
                       >
                         <Plus size={13} />
                         {editingProject ? 'Salvar Edição' : 'Criar Centro de Custo'}
@@ -2499,7 +2499,7 @@ export default function AdminDashboard({
                           type="button"
                           id="project_cancel_btn"
                           onClick={cancelEditProject}
-                          className="bg-white border border-stone-200 text-stone-600 hover:text-stone-800 py-2.5 px-3 text-xs font-mono uppercase tracking-wider transition-all rounded-none cursor-pointer"
+                          className="ui-btn ui-btn-secondary ui-btn-md"
                         >
                           Cancelar
                         </button>
@@ -2880,7 +2880,8 @@ export default function AdminDashboard({
                               <button
                                 type="button"
                                 onClick={() => setSelectedPdfFile(null)}
-                                className="text-red-600 hover:text-red-800 text-[length:var(--ui-text-xs)] font-mono uppercase font-bold"
+                                className="ui-btn ui-btn-ghost ui-btn-sm"
+                                style={{ color: 'var(--ui-danger-fg)' }}
                               >
                                 Limpar
                               </button>
@@ -2907,14 +2908,14 @@ export default function AdminDashboard({
                             <button
                               type="button"
                               onClick={handleCancelAdminDocEdit}
-                              className="flex-1 bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-700 py-2.5 px-3 text-[length:var(--ui-text-xs)] font-mono uppercase tracking-wider cursor-pointer font-bold transition-all"
+                              className="ui-btn ui-btn-secondary ui-btn-sm flex-1"
                             >
                               Cancelar
                             </button>
                           )}
                           <button
                             type="submit"
-                            className="flex-2 bg-stone-900 text-white hover:bg-stone-800 py-2.5 px-3 text-[length:var(--ui-text-xs)] font-mono uppercase tracking-wider cursor-pointer font-bold transition-all border border-transparent hover:border-stone-900 shadow-sm"
+                            className="ui-btn ui-btn-primary ui-btn-sm flex-2"
                           >
                             {editingAdminDoc ? "Salvar Alterações" : "Salvar e Vincular PDF"}
                           </button>
@@ -3314,7 +3315,7 @@ export default function AdminDashboard({
                       setSaveDocStatus('idle');
                       setSaveDocError(null);
                     }}
-                    className="bg-stone-100 hover:bg-stone-200 text-stone-700 px-4 py-2 border border-stone-300 font-bold cursor-pointer transition-all"
+                    className="ui-btn ui-btn-secondary ui-btn-sm"
                   >
                     Fechar
                   </button>
@@ -3325,7 +3326,7 @@ export default function AdminDashboard({
                       setSaveDocStatus('idle');
                       setSaveDocError(null);
                     }}
-                    className="bg-stone-900 hover:bg-stone-800 text-white px-4 py-2 font-bold cursor-pointer transition-all"
+                    className="ui-btn ui-btn-primary ui-btn-sm"
                   >
                     Tentar Novamente
                   </button>
@@ -3350,7 +3351,7 @@ export default function AdminDashboard({
                   <button
                     type="button"
                     onClick={() => setAdminDocSaveConfirm(null)}
-                    className="bg-stone-100 hover:bg-stone-200 text-stone-700 px-4 py-2 border border-stone-300 font-bold cursor-pointer transition-all"
+                    className="ui-btn ui-btn-secondary ui-btn-sm"
                   >
                     Cancelar
                   </button>
@@ -3425,7 +3426,7 @@ export default function AdminDashboard({
                         setSaveDocError(err.message || 'Erro de rede ou permissão insuficiente ao gravar no Firestore.');
                       }
                     }}
-                    className="bg-stone-900 hover:bg-stone-800 text-white px-4 py-2 font-bold cursor-pointer transition-all"
+                    className="ui-btn ui-btn-primary ui-btn-sm"
                   >
                     Confirmar e Salvar
                   </button>
@@ -3698,7 +3699,7 @@ export default function AdminDashboard({
                             <button
                               type="button"
                               onClick={() => handleDownloadDoc(previewDoc)}
-                              className="bg-stone-900 hover:bg-stone-800 text-white font-mono text-[length:var(--ui-text-xs)] font-bold py-3 px-5 uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer text-center"
+                              className="ui-btn ui-btn-primary ui-btn-md"
                             >
                               <Download size={12} />
                               Baixar Arquivo PDF
