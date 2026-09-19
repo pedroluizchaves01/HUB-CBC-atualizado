@@ -49,6 +49,7 @@ import { PlanningLaborPayments } from './PlanningLaborPayments';
 import AcompanhamentoFinanceiro from './AcompanhamentoFinanceiro';
 import AcompanhamentoFisico from './AcompanhamentoFisico';
 import UnproductiveDaysCard from './UnproductiveDaysCard';
+import { ConfirmDialog } from './ui';
 import QuotationMaps from './QuotationMaps';
 import { OfficeManagement } from './OfficeManagement';
 import { MarketingManagement } from './MarketingManagement';
@@ -1383,7 +1384,7 @@ export default function AdminDashboard({
   };
 
   return (
-    <div className="min-h-screen bg-[#F4F6FA] text-[#0F172A] flex flex-col md:flex-row font-sans selection:bg-[#FF5A35]/15 relative overflow-hidden theme-light">
+    <div className="theme-obras min-h-screen bg-[#F4F6FA] text-[#0F172A] flex flex-col md:flex-row font-sans selection:bg-[#FF5A35]/15 relative overflow-hidden theme-light">
       {/* Motor de automação de Demandas: roda no servidor (src/lib/server/demandAutomation.ts),
           independente de qualquer admin estar logado. Nada a montar aqui no cliente. */}
       <div className="grid-bg"></div>
@@ -3241,41 +3242,20 @@ export default function AdminDashboard({
 
       {/* Custom Overlays/Alert Modals for Document Changes and Deletions */}
       {adminDocDeleteConfirm?.isOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="bg-white border border-stone-200 max-w-md w-full p-6 space-y-4 shadow-xl">
-            <div className="flex items-start gap-3">
-              <span className="p-2 bg-red-100 text-red-800 text-lg font-bold flex-shrink-0">⚠️</span>
-              <div>
-                <h3 className="font-serif text-base font-bold text-stone-900">Confirmar Exclusão de Documento</h3>
-                <p className="text-xs text-stone-500 mt-1 leading-relaxed">
-                  Tem certeza absoluta de que deseja excluir o documento <strong>"{adminDocDeleteConfirm.docName}"</strong> permanentemente? Esta ação removerá o arquivo associado e não poderá ser desfeita.
-                </p>
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 pt-2 font-mono text-[10px] uppercase">
-              <button
-                type="button"
-                onClick={() => setAdminDocDeleteConfirm(null)}
-                className="bg-stone-100 hover:bg-stone-200 text-stone-700 px-4 py-2 border border-stone-300 font-bold cursor-pointer transition-all"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onDeleteDocument(adminDocDeleteConfirm.docId);
-                  if (editingAdminDoc?.id === adminDocDeleteConfirm.docId) {
-                    handleCancelAdminDocEdit();
-                  }
-                  setAdminDocDeleteConfirm(null);
-                }}
-                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 font-bold cursor-pointer transition-all"
-              >
-                Confirmar Exclusão
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          title="Confirmar exclusão de documento"
+          message={<>Tem certeza absoluta de que deseja excluir o documento <strong>"{adminDocDeleteConfirm.docName}"</strong> permanentemente? Esta ação removerá o arquivo associado e não poderá ser desfeita.</>}
+          confirmLabel="Confirmar exclusão"
+          variant="danger"
+          onCancel={() => setAdminDocDeleteConfirm(null)}
+          onConfirm={() => {
+            onDeleteDocument(adminDocDeleteConfirm.docId);
+            if (editingAdminDoc?.id === adminDocDeleteConfirm.docId) {
+              handleCancelAdminDocEdit();
+            }
+            setAdminDocDeleteConfirm(null);
+          }}
+        />
       )}
 
       {adminDocSaveConfirm?.isOpen && (
@@ -3458,112 +3438,70 @@ export default function AdminDashboard({
 
       {/* Custom Overlays/Alert Modals for Planning Phase Changes and Deletions */}
       {phaseSaveConfirm?.isOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="bg-white border border-stone-200 max-w-md w-full p-6 space-y-4 shadow-xl">
-            <div className="flex items-start gap-3">
-              <span className="p-2 bg-stone-100 text-stone-800 text-lg font-bold flex-shrink-0 font-mono">✓</span>
-              <div>
-                <h3 className="font-serif text-base font-bold text-stone-900">
-                  {phaseSaveConfirm.isEdit ? "Confirmar Alterações na Etapa" : "Confirmar Nova Etapa"}
-                </h3>
-                <p className="text-xs text-stone-500 mt-1 leading-relaxed">
-                  {phaseSaveConfirm.isEdit 
-                    ? `Deseja salvar as alterações na etapa de planejamento "${phaseSaveConfirm.payload.name}"?`
-                    : `Deseja cadastrar e adicionar a etapa de planejamento "${phaseSaveConfirm.payload.name}" ao cronograma?`}
-                </p>
-                <div className="mt-3 bg-stone-50 border border-stone-200 p-3 font-mono text-[10px] space-y-1">
-                  <p><strong>Custo Previsto:</strong> {formatCurrency(phaseSaveConfirm.payload.costPrev)}</p>
-                  <p><strong>Custo Realizado:</strong> {formatCurrency(phaseSaveConfirm.payload.costReal)}</p>
-                  <p><strong>Período:</strong> {phaseSaveConfirm.payload.startDate} até {phaseSaveConfirm.payload.endDate}</p>
-                  <p><strong>Progresso Físico Geral:</strong> {phaseSaveConfirm.payload.progress}%</p>
-                </div>
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 pt-2 font-mono text-[10px] uppercase">
-              <button
-                type="button"
-                onClick={() => setPhaseSaveConfirm(null)}
-                className="bg-stone-100 hover:bg-stone-200 text-stone-700 px-4 py-2 border border-stone-300 font-bold cursor-pointer transition-all"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const p = phaseSaveConfirm.payload;
-                  if (phaseSaveConfirm.isEdit) {
-                    setTimelinePhases(prev => prev.map(item => item.id === p.id ? p : item));
-                    setEditingPhase(null);
-                  } else {
-                    setTimelinePhases(prev => [...prev, p]);
-                  }
-                  // Clean form
-                  setPhaseFormError(null);
-                  setPhaseInput({
-                    name: '',
-                    startDate: new Date().toISOString().split('T')[0],
-                    endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                    progress: 0,
-                    costPrev: '',
-                    costReal: '0',
-                    monthlyProgress: {}
-                  });
-                  setPhaseSaveConfirm(null);
-                }}
-                className="bg-[#1E1E1E] hover:bg-stone-800 text-white px-4 py-2 font-bold cursor-pointer transition-all"
-              >
-                Confirmar e Salvar
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          title={phaseSaveConfirm.isEdit ? "Confirmar alterações na etapa" : "Confirmar nova etapa"}
+          confirmLabel="Confirmar e salvar"
+          onCancel={() => setPhaseSaveConfirm(null)}
+          message={
+            <>
+              {phaseSaveConfirm.isEdit
+                ? `Deseja salvar as alterações na etapa de planejamento "${phaseSaveConfirm.payload.name}"?`
+                : `Deseja cadastrar e adicionar a etapa de planejamento "${phaseSaveConfirm.payload.name}" ao cronograma?`}
+              <span style={{ display: 'block', marginTop: 12, background: 'var(--ui-surface-tint)', border: '1px solid var(--ui-border)', borderRadius: 'var(--ui-radius-md)', padding: 12, fontSize: 'var(--ui-text-xs)' }}>
+                <span style={{ display: 'block' }}><strong>Custo previsto:</strong> {formatCurrency(phaseSaveConfirm.payload.costPrev)}</span>
+                <span style={{ display: 'block' }}><strong>Custo realizado:</strong> {formatCurrency(phaseSaveConfirm.payload.costReal)}</span>
+                <span style={{ display: 'block' }}><strong>Período:</strong> {phaseSaveConfirm.payload.startDate} até {phaseSaveConfirm.payload.endDate}</span>
+                <span style={{ display: 'block' }}><strong>Progresso físico geral:</strong> {phaseSaveConfirm.payload.progress}%</span>
+              </span>
+            </>
+          }
+          onConfirm={() => {
+            const p = phaseSaveConfirm.payload;
+            if (phaseSaveConfirm.isEdit) {
+              setTimelinePhases(prev => prev.map(item => item.id === p.id ? p : item));
+              setEditingPhase(null);
+            } else {
+              setTimelinePhases(prev => [...prev, p]);
+            }
+            setPhaseFormError(null);
+            setPhaseInput({
+              name: '',
+              startDate: new Date().toISOString().split('T')[0],
+              endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+              progress: 0,
+              costPrev: '',
+              costReal: '0',
+              monthlyProgress: {}
+            });
+            setPhaseSaveConfirm(null);
+          }}
+        />
       )}
 
       {phaseDeleteConfirm?.isOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="bg-white border border-stone-200 max-w-md w-full p-6 space-y-4 shadow-xl">
-            <div className="flex items-start gap-3">
-              <span className="p-2 bg-red-100 text-red-800 text-lg font-bold flex-shrink-0">⚠️</span>
-              <div>
-                <h3 className="font-serif text-base font-bold text-stone-900">Confirmar Exclusão de Etapa</h3>
-                <p className="text-xs text-stone-500 mt-1 leading-relaxed">
-                  Tem certeza absoluta de que deseja excluir a etapa de planejamento <strong>"{phaseDeleteConfirm.phaseName}"</strong>? Esta ação removerá a etapa do cronograma físico-financeiro analítico e sintético permanentemente e não poderá ser desfeita.
-                </p>
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 pt-2 font-mono text-[10px] uppercase">
-              <button
-                type="button"
-                onClick={() => setPhaseDeleteConfirm(null)}
-                className="bg-stone-100 hover:bg-stone-200 text-stone-700 px-4 py-2 border border-stone-300 font-bold cursor-pointer transition-all"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setTimelinePhases(prev => prev.filter(item => item.id !== phaseDeleteConfirm.phaseId));
-                  if (editingPhase?.id === phaseDeleteConfirm.phaseId) {
-                    setEditingPhase(null);
-                    setPhaseInput({
-                      name: '',
-                      startDate: new Date().toISOString().split('T')[0],
-                      endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                      progress: 0,
-                      costPrev: '',
-                      costReal: '0',
-                      monthlyProgress: {}
-                    });
-                  }
-                  setPhaseDeleteConfirm(null);
-                }}
-                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 font-bold cursor-pointer transition-all"
-              >
-                Confirmar Exclusão
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          title="Confirmar exclusão de etapa"
+          message={<>Tem certeza absoluta de que deseja excluir a etapa de planejamento <strong>"{phaseDeleteConfirm.phaseName}"</strong>? Esta ação removerá a etapa do cronograma físico-financeiro permanentemente e não poderá ser desfeita.</>}
+          confirmLabel="Confirmar exclusão"
+          variant="danger"
+          onCancel={() => setPhaseDeleteConfirm(null)}
+          onConfirm={() => {
+            setTimelinePhases(prev => prev.filter(item => item.id !== phaseDeleteConfirm.phaseId));
+            if (editingPhase?.id === phaseDeleteConfirm.phaseId) {
+              setEditingPhase(null);
+              setPhaseInput({
+                name: '',
+                startDate: new Date().toISOString().split('T')[0],
+                endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                progress: 0,
+                costPrev: '',
+                costReal: '0',
+                monthlyProgress: {}
+              });
+            }
+            setPhaseDeleteConfirm(null);
+          }}
+        />
       )}
 
       {/* 📁 MODAL DE VISUALIZAÇÃO DE ANEXO (DOCUMENT PREVIEW POPUP) */}

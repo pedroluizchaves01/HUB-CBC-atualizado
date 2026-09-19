@@ -812,3 +812,165 @@ div#root:nth-of-type(1) > div#login_container:nth-of-type(1) > div#root:nth-of-t
 
 /* Força bg-white e superfícies claras no tema violeta */
 .projeto-violet .bg-white { background: #ffffff !important; }
+
+/* ============================================================
+   BIBLIOTECA DE COMPONENTES COMPARTILHADA (ui-*)
+   Usada por src/components/ui/*. Separa "forma" (compartilhada
+   por todas as áreas) de "identidade" (cor de marca, por área).
+
+   FORMA — cantos arredondados, sombra suave, escala de texto —
+   é igual em Obras e Projetos (decisão: "mesmo estilo, cores
+   próprias por área"). Definida global, sem escopo de tema.
+
+   IDENTIDADE — cor de marca — muda por tema (.theme-obras,
+   .projeto-violet). Os componentes em src/components/ui/ só
+   leem --ui-*, nunca uma cor literal, para nunca "vazar" a
+   identidade de uma área para outra.
+   ============================================================ */
+
+:root {
+  /* Raio de borda (forma compartilhada) */
+  --ui-radius-sm: 8px;
+  --ui-radius-md: 12px;
+  --ui-radius-lg: 16px;
+  --ui-radius-xl: 22px;
+
+  /* Escala de texto (forma compartilhada) — substitui a bagunça
+     de text-[8px]/[9px]/[10px]/[11px] espalhada pelo código antigo.
+     11px é o menor tamanho aceitável (8-9px são ilegíveis). */
+  --ui-text-xs: 11px;
+  --ui-text-sm: 13px;
+  --ui-text-base: 14px;
+  --ui-text-md: 16px;
+  --ui-text-lg: 20px;
+  --ui-text-xl: 28px;
+
+  /* Espaçamento (forma compartilhada) — ritmo de 4px */
+  --ui-space-1: 4px;
+  --ui-space-2: 8px;
+  --ui-space-3: 12px;
+  --ui-space-4: 16px;
+  --ui-space-5: 20px;
+  --ui-space-6: 24px;
+  --ui-space-8: 32px;
+
+  /* Cores semânticas de status (compartilhadas — sucesso/atenção/erro
+     têm o mesmo significado visual em qualquer área do sistema) */
+  --ui-ok-bg: #e8f7ee;   --ui-ok-fg: #12805a;
+  --ui-warn-bg: #fff2dc; --ui-warn-fg: #b06d05;
+  --ui-danger-bg: #fdecef; --ui-danger-fg: #c2255c;
+  --ui-mute-bg: #f1f0ee; --ui-mute-fg: #6b6863;
+}
+
+/* ---- Tema: Obras/Admin (identidade laranja + quase-preto) ---- */
+.theme-obras {
+  --ui-accent: #FF5A35;
+  --ui-accent-2: #E8590C;
+  --ui-accent-grad: linear-gradient(140deg, #FF7A52, #E8590C);
+  --ui-text: #1E1E1E;
+  --ui-text-soft: #57534e;
+  --ui-text-mute: #8a8580;
+  --ui-surface: #ffffff;
+  --ui-surface-tint: #F4F4F3;
+  --ui-border: rgba(30,30,30,0.10);
+  --ui-shadow: 0 6px 24px rgba(30,20,10,0.08);
+  --ui-shadow-sm: 0 3px 14px rgba(30,20,10,0.06);
+}
+
+/* ---- Tema: Projetos (ponte para as variáveis violeta já existentes,
+   sem duplicar cor — se o violeta mudar, isso acompanha sozinho) ---- */
+.projeto-violet {
+  --ui-accent: var(--v-accent);
+  --ui-accent-2: var(--v-accent-2);
+  --ui-accent-grad: var(--v-accent-grad);
+  --ui-text: var(--v-text);
+  --ui-text-soft: var(--v-text-soft);
+  --ui-text-mute: var(--v-text-mute);
+  --ui-surface: var(--v-surface);
+  --ui-surface-tint: var(--v-surface-tint);
+  --ui-border: var(--v-border);
+  --ui-shadow: var(--v-shadow);
+  --ui-shadow-sm: var(--v-shadow-sm);
+}
+
+/* ---- Classes da biblioteca de componentes (lidas por src/components/ui/) ---- */
+
+/* Botão */
+.ui-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  border-radius: var(--ui-radius-md); font-weight: 700; cursor: pointer;
+  border: 0; transition: transform .12s, box-shadow .12s, background-color .12s, opacity .12s;
+  font-family: inherit; white-space: nowrap;
+}
+.ui-btn:disabled { opacity: .45; cursor: not-allowed; pointer-events: none; }
+.ui-btn:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 2px; }
+.ui-btn-sm { padding: 8px 14px; font-size: var(--ui-text-sm); }
+.ui-btn-md { padding: 11px 20px; font-size: var(--ui-text-base); }
+.ui-btn-primary { background: var(--ui-accent-grad); color: #fff; box-shadow: 0 6px 18px color-mix(in srgb, var(--ui-accent) 35%, transparent); }
+.ui-btn-primary:hover:not(:disabled) { transform: translateY(-1px); }
+.ui-btn-secondary { background: var(--ui-surface); color: var(--ui-text); border: 1px solid var(--ui-border); }
+.ui-btn-secondary:hover:not(:disabled) { background: var(--ui-surface-tint); }
+.ui-btn-ghost { background: transparent; color: var(--ui-text-soft); }
+.ui-btn-ghost:hover:not(:disabled) { background: var(--ui-surface-tint); }
+.ui-btn-danger { background: var(--ui-danger-fg); color: #fff; }
+.ui-btn-danger:hover:not(:disabled) { opacity: .9; }
+.ui-btn-full { width: 100%; }
+
+/* Card */
+.ui-card {
+  background: var(--ui-surface); border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg); box-shadow: var(--ui-shadow);
+  padding: var(--ui-space-5);
+}
+/* !important: existe uma regra global antiga (@media screen, sem escopo)
+   que força cor em todo <span>/<p>/<td>/<th> da aplicação. Sem isso, o
+   título/subtítulo do card sairia com a cor errada, dependendo de onde
+   o Card for usado. Ver achado na auditoria — vale corrigir a raiz depois. */
+.ui-card-title.ui-card-title { font-size: var(--ui-text-md); font-weight: 800; color: var(--ui-text) !important; margin: 0; }
+.ui-card-subtitle.ui-card-subtitle { font-size: var(--ui-text-sm); color: var(--ui-text-soft) !important; margin: 4px 0 0; }
+
+/* Input */
+.ui-field { display: flex; flex-direction: column; gap: 6px; }
+.ui-label { font-size: var(--ui-text-xs); text-transform: uppercase; letter-spacing: .06em; font-weight: 700; color: var(--ui-text-soft); }
+.ui-input, .ui-select, .ui-textarea {
+  width: 100%; font-family: inherit; font-size: var(--ui-text-base); color: var(--ui-text);
+  background: var(--ui-surface); border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md); padding: 10px 14px; transition: border-color .12s;
+}
+.ui-input:focus, .ui-select:focus, .ui-textarea:focus { outline: none; border-color: var(--ui-accent); }
+.ui-input::placeholder, .ui-textarea::placeholder { color: var(--ui-text-mute); }
+/* !important: mesma regra global antiga (ver comentário no Card) —
+   .ui-helper/.ui-error-text renderizam como <span>. */
+.ui-helper.ui-helper { font-size: var(--ui-text-xs); color: var(--ui-text-mute) !important; }
+.ui-error-text.ui-error-text { font-size: var(--ui-text-xs); color: var(--ui-danger-fg) !important; }
+.ui-input-error { border-color: var(--ui-danger-fg); }
+
+/* Badge (chip de status) */
+.ui-badge {
+  display: inline-flex; align-items: center; gap: 4px; padding: 4px 11px;
+  border-radius: 999px; font-size: var(--ui-text-xs); font-weight: 700; line-height: 1.3;
+}
+/* !important nos tons: mesma razão do Card (ver comentário acima) — a
+   regra global antiga em @media screen força cor em todo <span>. */
+.ui-badge-ok.ui-badge-ok { background: var(--ui-ok-bg); color: var(--ui-ok-fg) !important; }
+.ui-badge-warn.ui-badge-warn { background: var(--ui-warn-bg); color: var(--ui-warn-fg) !important; }
+.ui-badge-danger.ui-badge-danger { background: var(--ui-danger-bg); color: var(--ui-danger-fg) !important; }
+.ui-badge-mute.ui-badge-mute { background: var(--ui-mute-bg); color: var(--ui-mute-fg) !important; }
+.ui-badge-accent.ui-badge-accent { background: color-mix(in srgb, var(--ui-accent) 14%, white); color: var(--ui-accent-2) !important; }
+
+/* Modal de confirmação */
+.ui-modal-backdrop {
+  position: fixed; inset: 0; background: rgba(20,15,10,0.55); backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 999;
+}
+.ui-modal-card {
+  background: var(--ui-surface); border-radius: var(--ui-radius-xl); box-shadow: var(--ui-shadow);
+  max-width: 420px; width: 100%; padding: var(--ui-space-6);
+}
+/* !important: o componente não pode depender da proteção acidental que
+   cada tema (.theme-light, .projeto-violet) já tem para h1-h6/p/span —
+   um tema futuro pode esquecer de replicar isso. O modal se protege sozinho. */
+.ui-modal-title.ui-modal-title { font-size: var(--ui-text-md) !important; font-weight: 800; color: var(--ui-text) !important; margin: 0; }
+.ui-modal-message.ui-modal-message { font-size: var(--ui-text-sm) !important; color: var(--ui-text-soft) !important; line-height: 1.6; margin: 0 0 20px; }
+.ui-modal-icon-danger.ui-modal-icon-danger { color: var(--ui-danger-fg) !important; background: var(--ui-danger-bg); }
+.ui-modal-icon-warn.ui-modal-icon-warn { color: var(--ui-warn-fg) !important; background: var(--ui-warn-bg); }
