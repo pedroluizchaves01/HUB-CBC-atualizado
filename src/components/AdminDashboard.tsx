@@ -3121,6 +3121,7 @@ export default function AdminDashboard({
                 <AcompanhamentoFinanceiro
                   projectId={selectedClassProjectId}
                   project={projects.find(p => p.id === selectedClassProjectId)}
+                  projects={projects}
                   transactions={transactions}
                   addTransaction={onAddTransaction}
                   editTransaction={onEditTransaction}

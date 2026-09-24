@@ -18,7 +18,8 @@ import {
   ChevronUp,
   Camera,
   X,
-  Edit2
+  Edit2,
+  ArrowRightLeft
 } from 'lucide-react';
 import { Transaction, TransactionCategory, Project } from '../types';
 import { uploadBase64ToFirebase } from '../lib/firebaseStorage';
@@ -27,6 +28,7 @@ import { getTelegramConfig, buildTelegramFileName } from '../lib/telegramService
 interface AcompanhamentoFinanceiroProps {
   projectId: string;
   project: Project | undefined;
+  projects?: Project[];
   transactions: Transaction[];
   addTransaction: (tx: Transaction) => Promise<void>;
   editTransaction?: (tx: Transaction) => Promise<void>;
@@ -36,6 +38,7 @@ interface AcompanhamentoFinanceiroProps {
 export default function AcompanhamentoFinanceiro({
   projectId,
   project,
+  projects,
   transactions,
   addTransaction,
   editTransaction,
@@ -75,6 +78,60 @@ export default function AcompanhamentoFinanceiro({
     invoiceNumber: '',
   });
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+
+  // Ferramenta permanente: mover lançamento(s) financeiros para outra obra/centro de
+  // custo, para corrigir casos em que o pagamento do cliente foi registrado no lugar
+  // errado. Seleção múltipla no extrato + modal de destino.
+  const [selectedTxIds, setSelectedTxIds] = useState<Set<string>>(new Set());
+  const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
+  const [moveDestProjectId, setMoveDestProjectId] = useState('');
+  const [isMoving, setIsMoving] = useState(false);
+  const [moveError, setMoveError] = useState<string | null>(null);
+
+  const toggleSelectTx = (id: string) => {
+    setSelectedTxIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const openMoveModal = (ids: string[]) => {
+    setSelectedTxIds(new Set(ids));
+    setMoveDestProjectId('');
+    setMoveError(null);
+    setIsMoveModalOpen(true);
+  };
+
+  const destinationProjects = (projects || []).filter(p => p.id !== projectId);
+
+  const handleConfirmMove = async () => {
+    if (!editTransaction) {
+      setMoveError('Funcionalidade de edição indisponível neste contexto.');
+      return;
+    }
+    if (!moveDestProjectId) {
+      setMoveError('Selecione a obra de destino.');
+      return;
+    }
+    setIsMoving(true);
+    setMoveError(null);
+    try {
+      const idsToMove = Array.from(selectedTxIds);
+      const txsToMove = transactions.filter(t => idsToMove.includes(t.id));
+      for (const tx of txsToMove) {
+        await editTransaction({ ...tx, projectId: moveDestProjectId });
+      }
+      setIsMoveModalOpen(false);
+      setSelectedTxIds(new Set());
+    } catch (err) {
+      console.error('Erro ao mover lançamento(s) para outra obra:', err);
+      setMoveError('Não foi possível mover os lançamentos. Tente novamente.');
+    } finally {
+      setIsMoving(false);
+    }
+  };
 
   // Helper utility to compress images using HTML5 canvas
   const compressImage = (base64: string, mimeType: string): Promise<string> => {
@@ -1550,31 +1607,69 @@ export default function AcompanhamentoFinanceiro({
           <h4 className="font-mono text-xs uppercase tracking-wider text-stone-800 font-bold">
             Extrato de Gastos Lançados ({projectTransactions.length})
           </h4>
+          {editTransaction && !!(projects && projects.length > 1) && selectedTxIds.size > 0 && (
+            <button
+              type="button"
+              onClick={() => openMoveModal(Array.from(selectedTxIds))}
+              className="bg-stone-800 hover:bg-stone-900 text-white py-1.5 px-3 text-[10px] font-mono uppercase font-bold inline-flex items-center gap-1.5 cursor-pointer transition-all rounded-none"
+              title="Mover lançamentos selecionados para outra obra"
+            >
+              <ArrowRightLeft size={12} />
+              Mover {selectedTxIds.size} para outra obra
+            </button>
+          )}
         </div>
 
         <div className="overflow-x-auto border border-stone-200">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-stone-50 font-mono text-[9px] uppercase tracking-wider text-stone-500 border-b border-stone-200">
+                {editTransaction && !!(projects && projects.length > 1) && (
+                  <th className="p-3 w-8 text-center">
+                    <input
+                      type="checkbox"
+                      className="cursor-pointer"
+                      checked={sortedProjectTransactions.length > 0 && selectedTxIds.size === sortedProjectTransactions.length}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedTxIds(new Set(sortedProjectTransactions.map(t => t.id)));
+                        } else {
+                          setSelectedTxIds(new Set());
+                        }
+                      }}
+                      title="Selecionar todos"
+                    />
+                  </th>
+                )}
                 <SortableHeader label="Data" sortKeyName="date" type="date" className="p-3 w-28 text-left" {...finSortProps()} />
                 <SortableHeader label="Fornecedor / Prestador" sortKeyName="supplier" type="text" className="p-3 text-left" {...finSortProps()} />
                 <SortableHeader label="Descrição" sortKeyName="description" type="text" className="p-3 text-left" {...finSortProps()} />
                 <SortableHeader label="Categoria" sortKeyName="category" type="text" className="p-3 w-32 text-left" {...finSortProps()} />
                 <SortableHeader label="Valor" sortKeyName="value" type="number" align="right" className="p-3 text-right w-32" {...finSortProps()} />
                 <th className="p-3 text-center w-24">Comprovante</th>
-                <th className="p-3 text-center w-12">Ações</th>
+                <th className="p-3 text-center w-16">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-150 font-sans">
               {sortedProjectTransactions.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-6 text-center text-stone-400 text-xs">
+                  <td colSpan={8} className="p-6 text-center text-stone-400 text-xs">
                     Nenhum pagamento ou gasto registrado para esta obra.
                   </td>
                 </tr>
               ) : (
                 sortedProjectTransactions.map((tx) => (
-                  <tr key={tx.id} className="hover:bg-stone-50/50 align-middle">
+                  <tr key={tx.id} className={`hover:bg-stone-50/50 align-middle ${selectedTxIds.has(tx.id) ? 'bg-amber-50/40' : ''}`}>
+                    {editTransaction && !!(projects && projects.length > 1) && (
+                      <td className="p-3 text-center">
+                        <input
+                          type="checkbox"
+                          className="cursor-pointer"
+                          checked={selectedTxIds.has(tx.id)}
+                          onChange={() => toggleSelectTx(tx.id)}
+                        />
+                      </td>
+                    )}
                     <td className="p-3 font-mono text-[11px] text-stone-500">
                       {formatDateBR(tx.date)}
                     </td>
@@ -1652,6 +1747,16 @@ export default function AcompanhamentoFinanceiro({
                         >
                           <Edit2 size={13} />
                         </button>
+                        {editTransaction && !!(projects && projects.length > 1) && (
+                          <button
+                            type="button"
+                            onClick={() => openMoveModal([tx.id])}
+                            className="text-stone-400 hover:text-amber-700 transition-all cursor-pointer p-1"
+                            title="Mover para outra obra"
+                          >
+                            <ArrowRightLeft size={13} />
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => {
@@ -1757,6 +1862,86 @@ export default function AcompanhamentoFinanceiro({
 
             {/* Hidden Canvas for capture rendering */}
             <canvas ref={canvasRef} className="hidden" />
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Mover lançamento(s) para outra obra/centro de custo */}
+      {isMoveModalOpen && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white w-full max-w-md p-6 space-y-4 rounded-none border border-stone-200">
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="font-serif text-lg text-stone-900 font-bold flex items-center gap-2">
+                  <ArrowRightLeft size={18} className="text-stone-500" />
+                  Mover para outra obra
+                </h3>
+                <p className="text-xs text-stone-500 mt-1">
+                  {selectedTxIds.size === 1
+                    ? '1 lançamento será transferido para o centro de custo escolhido.'
+                    : `${selectedTxIds.size} lançamentos serão transferidos para o centro de custo escolhido.`}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMoveModalOpen(false)}
+                className="text-stone-400 hover:text-stone-700 cursor-pointer p-1"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="border border-stone-200 bg-stone-50 p-3 max-h-32 overflow-y-auto space-y-1">
+              {transactions.filter(t => selectedTxIds.has(t.id)).map(t => (
+                <div key={t.id} className="text-[11px] text-stone-600 flex justify-between gap-2">
+                  <span className="truncate">{formatDateBR(t.date)} · {t.supplier} — {t.description}</span>
+                  <span className="font-mono font-bold text-stone-800 whitespace-nowrap">{formatCurrency(t.value)}</span>
+                </div>
+              ))}
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">
+                Obra / Centro de Custo de Destino
+              </label>
+              <select
+                value={moveDestProjectId}
+                onChange={(e) => setMoveDestProjectId(e.target.value)}
+                className="w-full bg-white border border-stone-300 py-2 px-3 text-xs focus:outline-none focus:border-stone-500 transition-all rounded-none font-sans"
+              >
+                <option value="">Selecione a obra de destino...</option>
+                {destinationProjects.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {moveError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-xs p-2 flex items-center gap-2">
+                <AlertCircle size={14} />
+                {moveError}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsMoveModalOpen(false)}
+                disabled={isMoving}
+                className="text-xs font-mono uppercase text-stone-500 hover:text-stone-800 py-2 px-3 cursor-pointer disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmMove}
+                disabled={isMoving || !moveDestProjectId}
+                className="bg-stone-800 hover:bg-stone-900 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2 px-4 text-xs font-mono uppercase font-bold flex items-center gap-2 cursor-pointer transition-colors"
+              >
+                {isMoving ? <Loader2 size={14} className="animate-spin" /> : <ArrowRightLeft size={14} />}
+                <span>{isMoving ? 'Movendo...' : 'Confirmar Transferência'}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
