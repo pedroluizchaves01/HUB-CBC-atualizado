@@ -176,6 +176,9 @@ export interface QuotationSupplier {
   deliveryFee: number;
   deliveryTime: string;
   itemPrices: Record<string, number>; // itemId -> unit price (number)
+  // itemId -> true quando o item é "Incluso" (R$ 0,00 de propósito, embutido no preço de outro item).
+  // Sem marcação, preço vazio/0 significa "Não cotado".
+  includedItems?: Record<string, boolean>;
 }
 
 export interface QuotationMap {

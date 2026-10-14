@@ -1405,33 +1405,43 @@ export default function QuotationMaps({
   // ----------------------------------------------------
   // CALCULATIONS FOR ACTIVE MAP
   // ----------------------------------------------------
-  // Melhor preço de um item. A escolha automática ignora fornecedores que não cotaram o item
-  // (preço ausente/0 = "Não cotado") — antes, um preço 0 vencia a comparação e o fornecedor
-  // realmente mais barato ficava sem a marcação. Se o arquiteto escolheu manualmente outro
-  // fornecedor para o item (manualItemChoices), a escolha manual prevalece.
+  // Estado de um preço: 'price' (valor > 0), 'included' (R$ 0,00 de propósito — item embutido no
+  // preço de outro item do mesmo fornecedor, marcado como "Incluso") ou 'none' ("Não cotado":
+  // vazio/0 sem marcação). Mapas antigos, que gravavam 0 para "em branco", continuam "Não cotado".
+  const getPriceState = (sup: QuotationSupplier, itemId: string): 'price' | 'included' | 'none' => {
+    const p = Number(sup.itemPrices[itemId]);
+    if (Number.isFinite(p) && p > 0) return 'price';
+    return sup.includedItems?.[itemId] ? 'included' : 'none';
+  };
+
+  // Melhor preço de um item. Participam da escolha automática os fornecedores que cotaram um valor
+  // (> 0) ou marcaram o item como "Incluso" (custo 0); "Não cotado" nunca vence — antes, um preço 0
+  // vencia a comparação e escondia o fornecedor realmente mais barato. Se o arquiteto escolheu
+  // manualmente um fornecedor para o item (manualItemChoices), a escolha manual prevalece — inclusive
+  // sobre células com valor zero / não cotadas (tratadas como R$ 0,00).
   const getCheapestUnitPrice = (map: QuotationMap, itemId: string) => {
     let autoMin = Infinity;
-    let autoSupplierId = '';
     map.suppliers.forEach(sup => {
-      const p = Number(sup.itemPrices[itemId]);
-      if (Number.isFinite(p) && p > 0 && p < autoMin) {
-        autoMin = p;
-        autoSupplierId = sup.id;
-      }
+      const st = getPriceState(sup, itemId);
+      if (st === 'none') return;
+      const p = st === 'included' ? 0 : Number(sup.itemPrices[itemId]);
+      if (p < autoMin) autoMin = p;
     });
 
-    // Empate no menor preço: todos os empatados são "melhor preço". Para a composição de compra,
-    // desempata a favor do fornecedor recomendado (evita dividir a compra e pagar dois fretes à toa).
+    // Empate no menor preço: todos os empatados são "melhor preço". Desempata a favor do fornecedor
+    // recomendado (evita dividir a compra e pagar dois fretes à toa).
+    const priceOf = (sup: QuotationSupplier) => (getPriceState(sup, itemId) === 'included' ? 0 : Number(sup.itemPrices[itemId]));
     const tiedIds = Number.isFinite(autoMin)
-      ? map.suppliers.filter(s => Number(s.itemPrices[itemId]) === autoMin).map(s => s.id)
+      ? map.suppliers.filter(s => getPriceState(s, itemId) !== 'none' && priceOf(s) === autoMin).map(s => s.id)
       : [];
     const recommendedId = getBestSupplierGlobal(map)?.id;
-    const autoPickId = recommendedId && tiedIds.includes(recommendedId) ? recommendedId : autoSupplierId;
+    const autoPickId = recommendedId && tiedIds.includes(recommendedId) ? recommendedId : (tiedIds[0] || '');
 
     const manualId = map.manualItemChoices?.[itemId];
     const manualSup = manualId ? map.suppliers.find(s => s.id === manualId) : undefined;
-    const manualPrice = manualSup ? Number(manualSup.itemPrices[itemId]) : 0;
-    if (manualSup && Number.isFinite(manualPrice) && manualPrice > 0) {
+    if (manualSup) {
+      const st = getPriceState(manualSup, itemId);
+      const manualPrice = st === 'price' ? Number(manualSup.itemPrices[itemId]) : 0;
       return {
         minPrice: manualPrice,
         bestSupplierId: manualSup.id,
@@ -1460,12 +1470,12 @@ export default function QuotationMaps({
     let minTotal = Infinity;
     let bestSupplier: QuotationSupplier | null = null;
     map.suppliers.forEach(sup => {
-      // Elegível apenas o fornecedor que cotou TODOS os itens (preço > 0).
+      // Elegível apenas o fornecedor que cotou TODOS os itens (preço > 0 ou marcado como "Incluso").
       // Fornecedores com itens não cotados (preço 0/ausente) ficam incompletos e nunca são recomendados.
-      const cotouTodos = map.items.length > 0 && map.items.every(item => {
-        const p = Number(sup.itemPrices[item.id]);
-        return Number.isFinite(p) && p > 0;
-      });
+      // "Incluso" conta como cotado (o item está embutido no preço de outro); precisa ter ao menos um preço real.
+      const cotouTodos = map.items.length > 0
+        && map.items.every(item => getPriceState(sup, item.id) !== 'none')
+        && map.items.some(item => getPriceState(sup, item.id) === 'price');
       if (!cotouTodos) return;
       const { total } = getSupplierTotal(map, sup);
       if (total < minTotal) {
@@ -1488,8 +1498,18 @@ export default function QuotationMaps({
   // Composição de compra pelos melhores preços: cada item é comprado do fornecedor eleito
   // (automático ou manual). O frete de um fornecedor entra uma única vez, se ele fornecer algo.
   const getChosenComposition = (map: QuotationMap) => {
-    const bySupplier = new Map<string, { supplier: QuotationSupplier; items: { item: QuotationItem; unit: number; total: number; isManual: boolean }[]; subtotal: number }>();
+    const bySupplier = new Map<string, { supplier: QuotationSupplier; items: { item: QuotationItem; unit: number; total: number; isManual: boolean; included: boolean }[]; subtotal: number }>();
     const unquoted: QuotationItem[] = [];
+    const add = (item: QuotationItem, sup: QuotationSupplier, unit: number, isManual: boolean, included: boolean) => {
+      const entry = bySupplier.get(sup.id) || { supplier: sup, items: [], subtotal: 0 };
+      const total = unit * item.quantity;
+      entry.items.push({ item, unit, total, isManual, included });
+      entry.subtotal += total;
+      bySupplier.set(sup.id, entry);
+    };
+    // Passo 2 (itens "Incluso" eleitos automaticamente) só vale se o fornecedor já fornece outro item;
+    // senão o "incluso" não tem onde estar embutido e o item volta ao menor preço real.
+    const deferredIncluded: { item: QuotationItem; sup: QuotationSupplier }[] = [];
     map.items.forEach(item => {
       const { bestSupplierId, minPrice, isManual } = getCheapestUnitPrice(map, item.id);
       const sup = map.suppliers.find(s => s.id === bestSupplierId);
@@ -1497,11 +1517,27 @@ export default function QuotationMaps({
         unquoted.push(item);
         return;
       }
-      const entry = bySupplier.get(sup.id) || { supplier: sup, items: [], subtotal: 0 };
-      const total = minPrice * item.quantity;
-      entry.items.push({ item, unit: minPrice, total, isManual });
-      entry.subtotal += total;
-      bySupplier.set(sup.id, entry);
+      const included = getPriceState(sup, item.id) !== 'price';
+      if (included && !isManual) {
+        deferredIncluded.push({ item, sup });
+        return;
+      }
+      add(item, sup, minPrice, isManual, included);
+    });
+    deferredIncluded.forEach(({ item, sup }) => {
+      if (bySupplier.has(sup.id)) {
+        add(item, sup, 0, false, true);
+        return;
+      }
+      // fallback: menor preço real entre os demais fornecedores
+      let alt: QuotationSupplier | undefined;
+      let altPrice = Infinity;
+      for (const s of map.suppliers) {
+        const p = Number(s.itemPrices[item.id]);
+        if (getPriceState(s, item.id) === 'price' && p < altPrice) { altPrice = p; alt = s; }
+      }
+      if (alt) add(item, alt, altPrice, false, false);
+      else unquoted.push(item);
     });
     const groups = Array.from(bySupplier.values()).map(g => ({
       ...g,
@@ -1551,19 +1587,40 @@ export default function QuotationMaps({
     setFormSuppliers(prev => prev.map(sup => {
       const updatedPrices = { ...sup.itemPrices };
       delete updatedPrices[itemId];
-      return { ...sup, itemPrices: updatedPrices };
+      const updatedIncluded = { ...(sup.includedItems || {}) };
+      delete updatedIncluded[itemId];
+      return { ...sup, itemPrices: updatedPrices, includedItems: updatedIncluded };
     }));
   };
 
   const handlePriceChange = (supplierId: string, itemId: string, price: number) => {
     setFormSuppliers(prev => prev.map(sup => {
       if (sup.id === supplierId) {
+        // Digitar um valor real desmarca "Incluso" (o item passou a ter preço próprio).
+        const included = { ...(sup.includedItems || {}) };
+        if (price > 0) delete included[itemId];
         return {
           ...sup,
-          itemPrices: { ...sup.itemPrices, [itemId]: price }
+          itemPrices: { ...sup.itemPrices, [itemId]: price },
+          includedItems: included
         };
       }
       return sup;
+    }));
+  };
+
+  // Marca/desmarca "Incluso": o item custa R$ 0,00 de propósito (embutido no preço de outro item do
+  // fornecedor, ex.: bomba de concreto já inclusa no concreto) — diferente de "Não cotado".
+  const handleToggleIncluded = (supplierId: string, itemId: string) => {
+    setFormSuppliers(prev => prev.map(sup => {
+      if (sup.id !== supplierId) return sup;
+      const included = { ...(sup.includedItems || {}) };
+      if (included[itemId]) {
+        delete included[itemId];
+        return { ...sup, includedItems: included };
+      }
+      included[itemId] = true;
+      return { ...sup, itemPrices: { ...sup.itemPrices, [itemId]: 0 }, includedItems: included };
     }));
   };
 
@@ -1935,19 +1992,22 @@ export default function QuotationMaps({
         ];
         
         selectedMap.suppliers.forEach((sup) => {
-          const { bestSupplierId } = getCheapestUnitPrice(selectedMap, item.id);
+          const { bestSupplierIds, isManual } = getCheapestUnitPrice(selectedMap, item.id);
           const price = sup.itemPrices[item.id] || 0;
           const totalItem = price * item.quantity;
-          const isCheapest = sup.id === bestSupplierId;
+          const isCheapest = bestSupplierIds.includes(sup.id);
+          const priceState = getPriceState(sup, item.id);
           
           let text = '';
-          if (price > 0) {
+          if (priceState === 'price') {
             text = `${formatCurrency(price)}\nTotal: ${formatCurrency(totalItem)}`;
             if (isCheapest) {
-              text += '\n(Melhor Preço)';
+              text += isManual ? '\n(Escolha Manual)' : '\n(Melhor Preço)';
             }
+          } else if (priceState === 'included') {
+            text = `Incluso (R$ 0,00)${isCheapest ? (isManual ? '\n(Escolha Manual)' : '\n(Incluso no valor)') : ''}`;
           } else {
-            text = 'Não cotado';
+            text = isCheapest ? 'Não cotado\n(Escolha Manual - R$ 0,00)' : 'Não cotado';
           }
           row.push(text);
         });
@@ -2019,9 +2079,8 @@ export default function QuotationMaps({
           if (data.row.index < selectedMap.items.length && data.column.index > 0) {
             const item = selectedMap.items[data.row.index];
             const supplier = selectedMap.suppliers[data.column.index - 1];
-            const price = supplier.itemPrices[item.id] || 0;
             const { bestSupplierIds } = getCheapestUnitPrice(selectedMap, item.id);
-            if (bestSupplierIds.includes(supplier.id) && price > 0) {
+            if (bestSupplierIds.includes(supplier.id)) {
               data.cell.styles.fillColor = [209, 250, 229]; // light emerald-100
               data.cell.styles.textColor = [6, 78, 59]; // dark emerald-900
             }
@@ -2075,8 +2134,8 @@ export default function QuotationMaps({
               g.supplier.name,
               `${it.item.name}${it.isManual ? ' (manual)' : ''}`,
               `${it.item.quantity} ${it.item.unit}`,
-              formatCurrency(it.unit),
-              formatCurrency(it.total),
+              it.included ? 'Incluso' : formatCurrency(it.unit),
+              it.included ? 'R$ 0,00' : formatCurrency(it.total),
             ]);
           });
           compRows.push([
@@ -2653,8 +2712,22 @@ export default function QuotationMaps({
                                 value={sup.itemPrices[item.id] || ''}
                                 onChange={(e) => handlePriceChange(sup.id, item.id, Number(e.target.value))}
                                 className="w-20 bg-white border border-stone-200 py-0.5 px-1 font-mono text-xs text-center focus:outline-none focus:border-stone-400"
-                                placeholder="0,00"
+                                placeholder={sup.includedItems?.[item.id] ? 'Incluso' : 'N/C'}
                               />
+                            </div>
+                            <div className="flex justify-center mt-1">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleIncluded(sup.id, item.id)}
+                                title="Marque quando o item já está embutido no preço de outro item deste fornecedor (R$ 0,00). Em branco = Não cotado."
+                                className={`text-[8px] font-mono uppercase font-bold px-1.5 py-0.5 border cursor-pointer ${
+                                  sup.includedItems?.[item.id]
+                                    ? 'bg-sky-100 text-sky-800 border-sky-300'
+                                    : 'bg-white text-stone-400 border-stone-200 hover:border-stone-400'
+                                }`}
+                              >
+                                {sup.includedItems?.[item.id] ? '✓ Incluso (R$ 0)' : 'Marcar incluso'}
+                              </button>
                             </div>
                           </td>
                         ))}
@@ -3280,36 +3353,42 @@ export default function QuotationMaps({
                               {selectedMap.suppliers.map((sup) => {
                                 const price = sup.itemPrices[item.id] || 0;
                                 const totalItem = price * item.quantity;
+                                const priceState = getPriceState(sup, item.id);
                                 const isCheapest = bestSupplierIds.includes(sup.id);
                                 const isManualPick = isCheapest && isManualChoice;
-                                const canPick = canEditChoices && price > 0;
+                                // O arquiteto pode eleger qualquer célula, inclusive "Incluso" e "Não cotado" (R$ 0,00).
+                                const canPick = canEditChoices;
 
                                 return (
                                   <td
                                     key={sup.id}
                                     onClick={canPick ? () => handleSetItemChoice(item.id, sup.id) : undefined}
-                                    title={canPick ? (isCheapest ? 'Melhor preço deste item. Clique para voltar à escolha automática.' : 'Clique para eleger este fornecedor como melhor preço deste item.') : undefined}
+                                    title={canPick ? (isCheapest ? 'Escolhido para este item. Clique para voltar à escolha automática.' : 'Clique para eleger este fornecedor para este item.') : undefined}
                                     className={`p-3 text-center border-r border-stone-200 last:border-r-0 transition-colors ${
                                       isManualPick ? 'bg-sky-50' : isCheapest ? 'bg-emerald-50/70' : ''
                                     } ${canPick ? 'cursor-pointer hover:bg-stone-100' : ''}`}
                                   >
                                     <div className="space-y-0.5">
-                                      <span className={`block font-mono text-xs font-bold ${isManualPick ? 'text-sky-800' : isCheapest ? 'text-emerald-800' : 'text-stone-700'}`}>
-                                        {price > 0 ? formatCurrency(price) : 'Não cotado'}
+                                      <span className={`block font-mono text-xs font-bold ${isManualPick ? 'text-sky-800' : isCheapest ? 'text-emerald-800' : priceState === 'none' ? 'text-stone-400' : 'text-stone-700'}`}>
+                                        {priceState === 'price'
+                                          ? formatCurrency(price)
+                                          : priceState === 'included'
+                                          ? 'Incluso (R$ 0,00)'
+                                          : 'Não cotado'}
                                       </span>
-                                      {price > 0 && (
+                                      {priceState === 'price' && (
                                         <span className="block font-mono text-[9px] text-stone-400">
                                           Total: {formatCurrency(totalItem)}
                                         </span>
                                       )}
-                                      {isCheapest && price > 0 && (
+                                      {isCheapest && (
                                         isManualPick ? (
                                           <span className="inline-flex items-center gap-0.5 text-sky-800 text-[8px] font-mono uppercase font-bold bg-sky-100 px-1 py-0.2">
-                                            <Check size={8} /> Escolha Manual
+                                            <Check size={8} /> Escolha Manual{priceState !== 'price' ? ' (R$ 0)' : ''}
                                           </span>
                                         ) : (
                                           <span className="inline-flex items-center gap-0.5 text-emerald-700 text-[8px] font-mono uppercase font-bold bg-emerald-100/60 px-1 py-0.2">
-                                            <Check size={8} /> Melhor Preço
+                                            <Check size={8} /> {priceState === 'included' ? 'Incluso no valor' : 'Melhor Preço'}
                                           </span>
                                         )
                                       )}
@@ -3433,7 +3512,7 @@ export default function QuotationMaps({
                                       {it.item.name} <span className="text-stone-400">({it.item.quantity} {it.item.unit})</span>
                                       {it.isManual && <span className="ml-1 text-sky-700 font-mono text-[8px] uppercase font-bold">manual</span>}
                                     </span>
-                                    <span className="font-mono whitespace-nowrap">{formatCurrency(it.unit)} → {formatCurrency(it.total)}</span>
+                                    <span className="font-mono whitespace-nowrap">{it.included ? 'Incluso (R$ 0,00)' : `${formatCurrency(it.unit)} → ${formatCurrency(it.total)}`}</span>
                                   </li>
                                 ))}
                               </ul>
