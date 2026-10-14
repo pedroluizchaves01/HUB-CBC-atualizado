@@ -1,10 +1,16 @@
 import React, { useMemo, useState } from 'react';
 import {
   FileSignature, Plus, Download, Trash2, X, User, Building, Search,
-  ClipboardList, Calendar, DollarSign, CheckCircle2, Edit3, Save, ExternalLink, Loader2
+  ClipboardList, Calendar, DollarSign, CheckCircle2, Edit3, Save, ExternalLink, Loader2, Wand2, AlertTriangle
 } from 'lucide-react';
-import { Client, Contract, ContractFormData, ContractPersonData, ContractStatus, ContractType, Project } from '../types';
-import { CONTRACT_TYPE_LABELS, emptyContractFormData } from '../lib/contractTemplates';
+import {
+  Client, Contract, ContractFormData, ContractPayment, ContractPersonData, ContractStatus, ContractType, PaymentTrigger, Project
+} from '../types';
+import {
+  CONTRACT_TYPE_LABELS, emptyContractFormData, escopoPadraoProjeto, getEtapasContrato, somaPagamentosCents,
+  sugerirParcelas, sugerirPrazoDias, validateContract,
+} from '../lib/contractTemplates';
+import { formatCents, parseBRLToCents, prazoDiasPorExtenso } from '../lib/extenso';
 import { downloadContractPdf, saveContractPdfToSystem } from '../lib/contractPdf';
 
 interface ContractGenerationProps {
@@ -27,10 +33,19 @@ const inputClass =
   'w-full bg-stone-50 border border-stone-200 text-xs py-2.5 px-3 focus:outline-hidden focus:border-[#FF5A35] focus:bg-white transition-all font-mono';
 const labelClass = 'block text-[10px] font-bold uppercase tracking-wider text-stone-500 mb-1';
 
-function personToLabel(p?: ContractPersonData): string {
-  if (!p || !p.name) return '';
-  return p.cpfCnpj ? `${p.name} — ${p.cpfCnpj}` : p.name;
+const TRIGGER_LABELS: Record<PaymentTrigger, string> = {
+  assinatura: 'Na assinatura',
+  etapa_aprovada: 'Aprovação da etapa',
+  etapa_entregue: 'Entrega da etapa',
+  data: 'Data fixa',
+};
+
+// Qualificação civil montada a partir do cadastro do cliente: "brasileiro, casado, arquiteto".
+function qualificationFromClient(c: Client): string {
+  return [c.nationality, c.maritalStatus, c.profession].map((x) => (x || '').trim()).filter(Boolean).join(', ');
 }
+
+const emptyPersonData = (): ContractPersonData => ({ name: '', cpfCnpj: '', address: '' });
 
 export default function ContractGeneration({
   clients,
@@ -42,11 +57,11 @@ export default function ContractGeneration({
 }: ContractGenerationProps) {
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [type, setType] = useState<ContractType>('gerenciamento_obra');
+  const [type, setType] = useState<ContractType>('projeto_arquitetura_interiores');
   const [projectId, setProjectId] = useState('');
   const [useExistingClient, setUseExistingClient] = useState(true);
   const [selectedClientId, setSelectedClientId] = useState('');
-  const [form, setForm] = useState<ContractFormData>(emptyContractFormData('gerenciamento_obra'));
+  const [form, setForm] = useState<ContractFormData>(emptyContractFormData('projeto_arquitetura_interiores'));
   const [filterProject, setFilterProject] = useState('');
   const [savingToSystem, setSavingToSystem] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -62,7 +77,7 @@ export default function ContractGeneration({
       .sort((a, b) => b.number - a.number);
   }, [contracts, filterProject]);
 
-  const resetForm = (t: ContractType = 'gerenciamento_obra') => {
+  const resetForm = (t: ContractType = 'projeto_arquitetura_interiores') => {
     setType(t);
     setForm(emptyContractFormData(t));
     setProjectId('');
@@ -72,7 +87,7 @@ export default function ContractGeneration({
   };
 
   const openNew = () => {
-    resetForm('gerenciamento_obra');
+    resetForm('projeto_arquitetura_interiores');
     setFormOpen(true);
   };
 
@@ -91,10 +106,13 @@ export default function ContractGeneration({
     const proj = projectById.get(id);
     if (proj) {
       const client = clientById.get(proj.clientId);
+      const temLocal = !!proj.location && proj.location.trim().toLowerCase() !== 'não informada';
       setForm((f) => ({
         ...f,
-        localObjeto: f.localObjeto || proj.location || '',
-        areaM2: f.areaM2 || (proj.area ? String(proj.area) : ''),
+        localObjeto: temLocal ? proj.location : f.localObjeto,
+        cepObjeto: proj.cep || f.cepObjeto || '',
+        areaM2: proj.area ? String(proj.area) : f.areaM2,
+        areaInterioresM2: proj.areaInteriores ? String(proj.areaInteriores) : f.areaInterioresM2,
       }));
       if (client && useExistingClient) {
         applyClient(client.id);
@@ -109,7 +127,17 @@ export default function ContractGeneration({
     setForm((f) => ({
       ...f,
       contratanteId: client.id,
-      contratante: { ...f.contratante, name: client.name },
+      contratante: {
+        ...f.contratante,
+        name: client.name,
+        cpfCnpj: client.cpfCnpj || f.contratante.cpfCnpj,
+        address: client.address
+          ? `${client.address}${client.cep ? `, CEP ${client.cep}` : ''}`
+          : f.contratante.address,
+        qualification: qualificationFromClient(client) || f.contratante.qualification,
+        email: client.email || f.contratante.email,
+        phone: client.phone || f.contratante.phone,
+      },
     }));
   };
 
@@ -132,6 +160,8 @@ export default function ContractGeneration({
         localObjeto: prev.localObjeto,
         cepObjeto: prev.cepObjeto,
         areaM2: prev.areaM2,
+        areaInterioresM2: prev.areaInterioresM2 ?? fresh.areaInterioresM2,
+        valorTotal: prev.valorTotal,
         descricaoImovel: prev.descricaoImovel,
         localAssinatura: prev.localAssinatura,
         dataAssinatura: prev.dataAssinatura,
@@ -139,7 +169,68 @@ export default function ContractGeneration({
     });
   };
 
-  const canSubmit = projectId && form.contratante.name.trim().length > 0;
+  // ----- Projeto de Arquitetura e Interiores: serviços, prazo e parcelas -----
+  const isNovo = type === 'projeto_arquitetura_interiores';
+  const validation = useMemo(() => validateContract(type, form), [type, form]);
+  const servicos = form.servicosIncluidos || [];
+  const etapasContrato = useMemo(() => getEtapasContrato(servicos), [servicos]);
+  const totalCents = parseBRLToCents(form.valorTotal);
+  const somaCents = somaPagamentosCents(form.pagamentos);
+
+  const toggleServico = (s: 'arquitetonico' | 'interiores', checked: boolean) => {
+    setForm((f) => {
+      const atual = f.servicosIncluidos || [];
+      const proximo = checked ? Array.from(new Set([...atual, s])) : atual.filter((x) => x !== s);
+      // só reescreve o objeto se o usuário ainda não o personalizou
+      const eraPadrao = !f.escopoServicos || f.escopoServicos === escopoPadraoProjeto(atual);
+      return {
+        ...f,
+        servicosIncluidos: proximo,
+        escopoServicos: eraPadrao ? escopoPadraoProjeto(proximo) : f.escopoServicos,
+      };
+    });
+  };
+
+  const setPrazoDias = (raw: string) => {
+    const digits = raw.replace(/\D/g, '');
+    const n = parseInt(digits, 10);
+    setForm((f) => ({ ...f, prazoDias: digits, prazoExecucao: n > 0 ? prazoDiasPorExtenso(n) : '' }));
+  };
+
+  const updatePagamento = (id: string, patch: Partial<ContractPayment>) => {
+    setForm((f) => ({ ...f, pagamentos: (f.pagamentos || []).map((p) => (p.id === id ? { ...p, ...patch } : p)) }));
+  };
+  const addPagamento = () => {
+    setForm((f) => ({
+      ...f,
+      pagamentos: [
+        ...(f.pagamentos || []),
+        { id: `pg-${Date.now()}-${(f.pagamentos || []).length}`, descricao: `Parcela ${(f.pagamentos || []).length + 1}`, valor: '', gatilho: 'data' as PaymentTrigger },
+      ],
+    }));
+  };
+  const removePagamento = (id: string) => {
+    setForm((f) => ({ ...f, pagamentos: (f.pagamentos || []).filter((p) => p.id !== id) }));
+  };
+  const handleSugerirParcelas = () => {
+    if (totalCents === null || totalCents <= 0) {
+      alert('Informe primeiro o valor total do contrato.');
+      return;
+    }
+    if ((form.pagamentos || []).length > 0 && !confirm('Substituir as parcelas atuais pela sugestão (50% de sinal + etapas)?')) return;
+    setForm((f) => ({ ...f, pagamentos: sugerirParcelas(totalCents, f.servicosIncluidos || []) }));
+  };
+
+  const updateTestemunha = (index: number, patch: Partial<ContractPersonData>) => {
+    setForm((f) => {
+      const lista = [...(f.testemunhas || [])];
+      while (lista.length < 2) lista.push(emptyPersonData());
+      lista[index] = { ...lista[index], ...patch };
+      return { ...f, testemunhas: lista };
+    });
+  };
+
+  const canSubmit = !!projectId && form.contratante.name.trim().length > 0 && validation.errors.length === 0;
 
   const buildContractFromForm = (): Contract => {
     const existing = editingId ? contracts.find((c) => c.id === editingId) : undefined;
@@ -333,7 +424,7 @@ export default function ContractGeneration({
               {/* Tipo de contrato */}
               <div>
                 <label className={labelClass}>Tipo de Contrato</label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                   {(Object.keys(CONTRACT_TYPE_LABELS) as ContractType[]).map((t) => (
                     <button
                       key={t}
@@ -360,6 +451,28 @@ export default function ContractGeneration({
                   ))}
                 </select>
               </div>
+
+              {/* Serviços incluídos (somente Projeto de Arquitetura e Interiores) */}
+              {isNovo && (
+                <div className="border border-stone-200 p-3 space-y-3">
+                  <label className={labelClass + ' mb-0'}>Serviços contratados</label>
+                  <div className="flex flex-wrap gap-4 text-xs">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={servicos.includes('arquitetonico')} onChange={(e) => toggleServico('arquitetonico', e.target.checked)} />
+                      Projeto arquitetônico
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={servicos.includes('interiores')} onChange={(e) => toggleServico('interiores', e.target.checked)} />
+                      Projeto de interiores
+                    </label>
+                  </div>
+                  {etapasContrato.length > 0 && (
+                    <p className="text-[10px] text-stone-500">
+                      Etapas do cronograma: {etapasContrato.map((e) => `${e.numero}. ${e.titulo}`).join(' • ')}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Contratante */}
               <div className="border border-stone-200 p-3 space-y-3">
@@ -415,6 +528,23 @@ export default function ContractGeneration({
                       onChange={(e) => updatePerson('contratante', { address: e.target.value })}
                     />
                   </div>
+                  <div>
+                    <label className={labelClass}>E-mail</label>
+                    <input
+                      type="email"
+                      className={inputClass}
+                      value={form.contratante.email || ''}
+                      onChange={(e) => updatePerson('contratante', { email: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Telefone</label>
+                    <input
+                      className={inputClass}
+                      value={form.contratante.phone || ''}
+                      onChange={(e) => updatePerson('contratante', { phone: e.target.value })}
+                    />
+                  </div>
                   <div className="col-span-2">
                     <label className={labelClass}>Qualificação civil (opcional)</label>
                     <input
@@ -458,9 +588,26 @@ export default function ContractGeneration({
                   <input className={inputClass} value={form.cepObjeto || ''} onChange={(e) => setForm({ ...form, cepObjeto: e.target.value })} />
                 </div>
                 <div>
-                  <label className={labelClass}>Área (m²)</label>
+                  <label className={labelClass}>{isNovo ? 'Área do projeto arquitetônico (m²)' : 'Área (m²)'}</label>
                   <input className={inputClass} value={form.areaM2} onChange={(e) => setForm({ ...form, areaM2: e.target.value })} />
                 </div>
+                {isNovo && servicos.includes('interiores') && (
+                  <>
+                    <div>
+                      <label className={labelClass}>Área do projeto de interiores (m²)</label>
+                      <input className={inputClass} value={form.areaInterioresM2 || ''} onChange={(e) => setForm({ ...form, areaInterioresM2: e.target.value })} />
+                    </div>
+                    <div className="col-span-2">
+                      <label className={labelClass}>Ambientes do projeto de interiores</label>
+                      <input
+                        className={inputClass}
+                        placeholder="Sala de Estar, Cozinha, Suíte Master, Banheiro da Suíte Master e Escritório"
+                        value={form.ambientesInteriores || ''}
+                        onChange={(e) => setForm({ ...form, ambientesInteriores: e.target.value })}
+                      />
+                    </div>
+                  </>
+                )}
                 <div className="col-span-2">
                   <label className={labelClass}>Descrição do imóvel / especificações (opcional)</label>
                   <textarea
@@ -514,17 +661,113 @@ export default function ContractGeneration({
                     </div>
                   )}
                 </div>
+
+                {isNovo && (
+                  <div className="space-y-2 pt-2 border-t border-stone-100">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <label className={labelClass + ' mb-0'}>Parcelas (viram as cobranças)</label>
+                      <div className="flex gap-2">
+                        <button type="button" onClick={handleSugerirParcelas} className="flex items-center gap-1 text-[10px] font-bold uppercase px-2.5 py-1.5 border border-stone-300 text-stone-600 hover:border-[#FF5A35] hover:text-[#FF5A35] cursor-pointer">
+                          <Wand2 size={11} /> Sugerir parcelas
+                        </button>
+                        <button type="button" onClick={addPagamento} className="flex items-center gap-1 text-[10px] font-bold uppercase px-2.5 py-1.5 bg-stone-900 text-white hover:bg-[#FF5A35] cursor-pointer">
+                          <Plus size={11} /> Parcela
+                        </button>
+                      </div>
+                    </div>
+
+                    {(form.pagamentos || []).length === 0 && (
+                      <p className="text-[11px] text-stone-400">Nenhuma parcela. Use "Sugerir parcelas" (50% de sinal + etapas) ou adicione manualmente.</p>
+                    )}
+
+                    {(form.pagamentos || []).map((p) => (
+                      <div key={p.id} className="grid grid-cols-12 gap-2 items-center">
+                        <input className={inputClass + ' col-span-12 sm:col-span-3'} value={p.descricao} onChange={(e) => updatePagamento(p.id, { descricao: e.target.value })} placeholder="Descrição" />
+                        <input className={inputClass + ' col-span-5 sm:col-span-2'} value={p.valor} onChange={(e) => updatePagamento(p.id, { valor: e.target.value })} placeholder="0,00" />
+                        <select
+                          className={inputClass + ' col-span-7 sm:col-span-3'}
+                          value={p.gatilho}
+                          onChange={(e) => {
+                            const gatilho = e.target.value as PaymentTrigger;
+                            updatePagamento(p.id, {
+                              gatilho,
+                              etapaKey: gatilho === 'etapa_aprovada' || gatilho === 'etapa_entregue' ? (p.etapaKey || etapasContrato[0]?.key) : undefined,
+                              dataVencimento: gatilho === 'data' ? p.dataVencimento : undefined,
+                            });
+                          }}
+                        >
+                          {(Object.keys(TRIGGER_LABELS) as PaymentTrigger[]).map((g) => (
+                            <option key={g} value={g}>{TRIGGER_LABELS[g]}</option>
+                          ))}
+                        </select>
+                        <div className="col-span-10 sm:col-span-3">
+                          {(p.gatilho === 'etapa_aprovada' || p.gatilho === 'etapa_entregue') && (
+                            <select className={inputClass} value={p.etapaKey || ''} onChange={(e) => updatePagamento(p.id, { etapaKey: e.target.value })}>
+                              <option value="">Etapa...</option>
+                              {etapasContrato.map((e) => (
+                                <option key={e.key} value={e.key}>Etapa {e.numero} – {e.titulo}</option>
+                              ))}
+                            </select>
+                          )}
+                          {p.gatilho === 'data' && (
+                            <input type="date" className={inputClass} value={p.dataVencimento || ''} onChange={(e) => updatePagamento(p.id, { dataVencimento: e.target.value })} />
+                          )}
+                        </div>
+                        <button type="button" onClick={() => removePagamento(p.id)} className="col-span-2 sm:col-span-1 p-2 text-stone-400 hover:text-red-500 cursor-pointer justify-self-end" title="Remover parcela">
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    ))}
+
+                    {(form.pagamentos || []).length > 0 && (
+                      <div className={`text-[11px] font-mono flex justify-between flex-wrap gap-2 pt-1 ${totalCents !== null && somaCents === totalCents ? 'text-emerald-600' : 'text-red-600'}`}>
+                        <span>Soma das parcelas: R$ {formatCents(somaCents)}</span>
+                        <span>Total do contrato: R$ {totalCents !== null ? formatCents(totalCents) : '—'}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Prazo e escopo */}
-              <div>
-                <label className={labelClass + ' flex items-center gap-1.5'}><Calendar size={12} /> Prazo de execução</label>
-                <input className={inputClass} value={form.prazoExecucao} onChange={(e) => setForm({ ...form, prazoExecucao: e.target.value })} placeholder="10 (dez) meses" />
-              </div>
-              <div>
-                <label className={labelClass + ' flex items-center gap-1.5'}><ClipboardList size={12} /> Escopo dos serviços / objeto (editável)</label>
-                <textarea rows={4} className={inputClass} value={form.escopoServicos} onChange={(e) => setForm({ ...form, escopoServicos: e.target.value })} />
-              </div>
+              {isNovo ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelClass + ' flex items-center gap-1.5'}><Calendar size={12} /> Prazo total (dias ininterruptos)</label>
+                    <input className={inputClass} value={form.prazoDias || ''} onChange={(e) => setPrazoDias(e.target.value)} placeholder="150" />
+                    <p className="text-[10px] text-stone-400 mt-1">
+                      {form.prazoExecucao ? `No contrato: ${form.prazoExecucao}. ` : ''}
+                      Pelo cronograma das etapas: ~{sugerirPrazoDias(servicos)} dias.
+                    </p>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Prazo de aprovação de cada etapa (dias)</label>
+                    <input
+                      className={inputClass}
+                      value={form.diasAprovacaoTacita || ''}
+                      onChange={(e) => setForm({ ...form, diasAprovacaoTacita: e.target.value.replace(/\D/g, '') })}
+                      placeholder="7"
+                    />
+                    <p className="text-[10px] text-stone-400 mt-1">Depois disso a etapa é considerada aprovada (cláusula 2.4).</p>
+                  </div>
+                  <div className="col-span-2">
+                    <label className={labelClass + ' flex items-center gap-1.5'}><ClipboardList size={12} /> Objeto (cláusula 1.1) — editável</label>
+                    <textarea rows={2} className={inputClass} value={form.escopoServicos} onChange={(e) => setForm({ ...form, escopoServicos: e.target.value })} />
+                    <p className="text-[10px] text-stone-400 mt-1">Os entregáveis detalhados (cláusula 1.2) e o cronograma são gerados pelo modelo conforme os serviços marcados.</p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label className={labelClass + ' flex items-center gap-1.5'}><Calendar size={12} /> Prazo de execução</label>
+                    <input className={inputClass} value={form.prazoExecucao} onChange={(e) => setForm({ ...form, prazoExecucao: e.target.value })} placeholder="10 (dez) meses" />
+                  </div>
+                  <div>
+                    <label className={labelClass + ' flex items-center gap-1.5'}><ClipboardList size={12} /> Escopo dos serviços / objeto (editável)</label>
+                    <textarea rows={4} className={inputClass} value={form.escopoServicos} onChange={(e) => setForm({ ...form, escopoServicos: e.target.value })} />
+                  </div>
+                </>
+              )}
 
               {type === 'empreitada_mao_de_obra' && (
                 <>
@@ -555,6 +798,36 @@ export default function ContractGeneration({
                   <input type="date" className={inputClass} value={form.dataAssinatura} onChange={(e) => setForm({ ...form, dataAssinatura: e.target.value })} />
                 </div>
               </div>
+
+              {isNovo && (
+                <div className="border border-stone-200 p-3 space-y-3">
+                  <label className={labelClass + ' mb-0'}>Testemunhas (opcional — entram no PDF e como assinantes)</label>
+                  {[0, 1].map((i) => (
+                    <div key={i} className="grid grid-cols-3 gap-2">
+                      <input placeholder={`Testemunha ${i + 1} — nome`} className={inputClass} value={form.testemunhas?.[i]?.name || ''} onChange={(e) => updateTestemunha(i, { name: e.target.value })} />
+                      <input placeholder="CPF/RG" className={inputClass} value={form.testemunhas?.[i]?.cpfCnpj || ''} onChange={(e) => updateTestemunha(i, { cpfCnpj: e.target.value })} />
+                      <input placeholder="E-mail" type="email" className={inputClass} value={form.testemunhas?.[i]?.email || ''} onChange={(e) => updateTestemunha(i, { email: e.target.value })} />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {(validation.errors.length > 0 || validation.warnings.length > 0) && (
+                <div className="space-y-2">
+                  {validation.errors.length > 0 && (
+                    <div className="border border-red-200 bg-red-50 p-3 text-[11px] text-red-700 space-y-1">
+                      <div className="font-bold uppercase flex items-center gap-1.5"><AlertTriangle size={12} /> Corrija para gerar o contrato</div>
+                      {validation.errors.map((e, i) => <div key={i}>• {e}</div>)}
+                    </div>
+                  )}
+                  {validation.warnings.length > 0 && (
+                    <div className="border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-800 space-y-1">
+                      <div className="font-bold uppercase">Atenção (não impede a geração)</div>
+                      {validation.warnings.map((w, i) => <div key={i}>• {w}</div>)}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="p-4 border-t border-stone-200 bg-stone-50 flex items-center justify-end gap-2.5">

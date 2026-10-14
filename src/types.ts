@@ -16,6 +16,13 @@ export interface Client {
   phone: string;
   username: string; // Matches user.username
   createdAt: string;
+  // Dados para contrato (preenchem automaticamente a qualificação do CONTRATANTE)
+  cpfCnpj?: string;
+  address?: string;       // endereço residencial/sede em uma linha (rua, nº, bairro, cidade - UF)
+  cep?: string;
+  nationality?: string;   // ex.: "brasileiro", "brasileira"
+  maritalStatus?: string; // ex.: "casado(a)", "solteiro(a)", "união estável"
+  profession?: string;
 }
 
 export type ProjectType = 'obra' | 'projeto';
@@ -32,7 +39,9 @@ export interface Project {
   startDate: string;
   endDate?: string;
   location: string;
-  area?: number; // m²
+  area?: number; // m² (área do projeto arquitetônico / da obra)
+  areaInteriores?: number; // m² (área do projeto de interiores, quando diferente da arquitetônica)
+  cep?: string;
   description: string;
 }
 
@@ -262,7 +271,11 @@ export interface MarketingSettings {
 
 // ============ CONTRATOS ============
 
-export type ContractType = 'gerenciamento_obra' | 'projeto_arquitetura' | 'empreitada_mao_de_obra';
+export type ContractType =
+  | 'gerenciamento_obra'
+  | 'projeto_arquitetura'
+  | 'projeto_arquitetura_interiores'
+  | 'empreitada_mao_de_obra';
 
 export type ContractStatus = 'rascunho' | 'gerado' | 'assinado' | 'cancelado';
 
@@ -271,6 +284,23 @@ export interface ContractPersonData {
   cpfCnpj: string;
   address: string;
   qualification?: string; // ex: "brasileiro, casado" — texto livre extra de qualificação civil
+  email?: string; // usado no contrato e, futuramente, como destinatário da assinatura eletrônica
+  phone?: string;
+}
+
+// Quando uma parcela do contrato deve ser cobrada.
+//  - assinatura: no ato da assinatura do contrato
+//  - etapa_aprovada / etapa_entregue: marco de uma etapa do projeto (etapaKey)
+//  - data: vencimento em data pré-estabelecida
+export type PaymentTrigger = 'assinatura' | 'etapa_aprovada' | 'etapa_entregue' | 'data';
+
+export interface ContractPayment {
+  id: string;
+  descricao: string;        // rótulo livre, ex.: "Sinal / Parcela 1"
+  valor: string;            // reais formatados, ex.: "9.660,00"
+  gatilho: PaymentTrigger;
+  etapaKey?: string;        // chave da etapa (mesmas chaves de phaseTemplates) quando o gatilho é de etapa
+  dataVencimento?: string;  // YYYY-MM-DD quando o gatilho é 'data'
 }
 
 // Campos de formulário preenchidos pelo usuário para gerar o contrato.
@@ -316,6 +346,15 @@ export interface ContractFormData {
   dataAssinatura: string; // YYYY-MM-DD
 
   observacoes?: string;
+
+  // Específico — Projeto de Arquitetura e Interiores
+  servicosIncluidos?: ('arquitetonico' | 'interiores')[]; // define quais blocos de escopo e etapas entram
+  areaInterioresM2?: string;
+  ambientesInteriores?: string; // ex.: "Sala de Estar, Cozinha, Suíte Master..."
+  prazoDias?: string; // número de dias ininterruptos (gera o texto de prazoExecucao)
+  diasAprovacaoTacita?: string; // dias corridos para aprovar/revisar cada etapa (padrão 7)
+  pagamentos?: ContractPayment[]; // parcelas estruturadas (base para cobranças automáticas)
+  testemunhas?: ContractPersonData[]; // até 2 testemunhas (opcional; entram como assinantes)
 }
 
 export interface Contract {

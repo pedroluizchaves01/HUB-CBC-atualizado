@@ -756,13 +756,21 @@ export default function AdminDashboard({
 
   // Client CRUD State
   const [editingClient, setEditingClient] = useState<Client | null>(null);
-  const [clientForm, setClientForm] = useState({
+  const EMPTY_CLIENT_FORM = {
     name: '',
     email: '',
     phone: '',
     username: '',
-    password: ''
-  });
+    password: '',
+    // dados para contrato
+    cpfCnpj: '',
+    address: '',
+    cep: '',
+    nationality: '',
+    maritalStatus: '',
+    profession: ''
+  };
+  const [clientForm, setClientForm] = useState(EMPTY_CLIENT_FORM);
   const [clientError, setClientError] = useState<string | null>(null);
   const [clientSuccess, setClientSuccess] = useState<string | null>(null);
 
@@ -777,7 +785,9 @@ export default function AdminDashboard({
     budget: '',
     startDate: '',
     location: '',
+    cep: '',
     area: '',
+    areaInteriores: '',
     description: ''
   });
 
@@ -1064,7 +1074,15 @@ export default function AdminDashboard({
     setClientError(null);
     setClientSuccess(null);
 
-    const { name, email, phone, username, password } = clientForm;
+    const { name, email, phone, username, password, cpfCnpj, address, cep, nationality, maritalStatus, profession } = clientForm;
+    const dadosContrato = {
+      cpfCnpj: cpfCnpj.trim() || undefined,
+      address: address.trim() || undefined,
+      cep: cep.trim() || undefined,
+      nationality: nationality.trim() || undefined,
+      maritalStatus: maritalStatus.trim() || undefined,
+      profession: profession.trim() || undefined
+    };
 
     if (!name.trim() || !email.trim() || !username.trim()) {
       setClientError('Preencha os campos obrigatórios (Nome, E-mail e Usuário).');
@@ -1084,7 +1102,8 @@ export default function AdminDashboard({
           name: name.trim(),
           email: email.trim(),
           phone: phone.trim(),
-          username: username.trim()
+          username: username.trim(),
+          ...dadosContrato
         };
         await onEditClient(updated, password);
         setClientSuccess(`Cliente "${name}" atualizado com sucesso.`);
@@ -1097,14 +1116,15 @@ export default function AdminDashboard({
           email: email.trim(),
           phone: phone.trim(),
           username: username.trim().toLowerCase(),
-          createdAt: new Date().toISOString().split('T')[0]
+          createdAt: new Date().toISOString().split('T')[0],
+          ...dadosContrato
         };
         await onAddClient(newClient, password);
         setClientSuccess(`Cliente "${name}" cadastrado e liberado para login.`);
       }
 
       // Reset Form
-      setClientForm({ name: '', email: '', phone: '', username: '', password: '' });
+      setClientForm(EMPTY_CLIENT_FORM);
     } catch (err) {
       if (err instanceof Error) {
         setClientError(err.message);
@@ -1122,7 +1142,13 @@ export default function AdminDashboard({
       email: c.email,
       phone: c.phone,
       username: c.username,
-      password: '' // leave empty to not change, or enter new
+      password: '', // leave empty to not change, or enter new
+      cpfCnpj: c.cpfCnpj || '',
+      address: c.address || '',
+      cep: c.cep || '',
+      nationality: c.nationality || '',
+      maritalStatus: c.maritalStatus || '',
+      profession: c.profession || ''
     });
     setActiveTab('clientes');
     setClientError(null);
@@ -1131,13 +1157,13 @@ export default function AdminDashboard({
 
   const cancelEditClient = () => {
     setEditingClient(null);
-    setClientForm({ name: '', email: '', phone: '', username: '', password: '' });
+    setClientForm(EMPTY_CLIENT_FORM);
   };
 
   // Project Submit
   const handleProjectSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { name, clientId, clientIds, type, status, budget, startDate, location, area, description } = projectForm;
+    const { name, clientId, clientIds, type, status, budget, startDate, location, cep, area, areaInteriores, description } = projectForm;
     // donos adicionais, sem duplicar o principal
     const donosAdicionais = (clientIds || []).filter(cid => cid && cid !== clientId);
 
@@ -1165,6 +1191,8 @@ export default function AdminDashboard({
           startDate,
           location: location.trim() || 'Não informada',
           area: area ? parseFloat(area) : undefined,
+          areaInteriores: areaInteriores ? parseFloat(areaInteriores) : undefined,
+          cep: cep.trim() || undefined,
           description: description.trim()
         };
         await onEditProject(updated);
@@ -1181,6 +1209,8 @@ export default function AdminDashboard({
           startDate,
           location: location.trim() || 'Não informada',
           area: area ? parseFloat(area) : undefined,
+          areaInteriores: areaInteriores ? parseFloat(areaInteriores) : undefined,
+          cep: cep.trim() || undefined,
           description: description.trim()
         };
         await onAddProject(newProj);
@@ -1196,7 +1226,9 @@ export default function AdminDashboard({
         budget: '',
         startDate: '',
         location: '',
+        cep: '',
         area: '',
+        areaInteriores: '',
         description: ''
       });
     } catch (err) {
@@ -1216,7 +1248,9 @@ export default function AdminDashboard({
       budget: p.budget.toString(),
       startDate: p.startDate,
       location: p.location,
+      cep: p.cep || '',
       area: p.area ? p.area.toString() : '',
+      areaInteriores: p.areaInteriores ? p.areaInteriores.toString() : '',
       description: p.description
     });
     setTxForm(prev => ({ ...prev, projectId: p.id })); // auto-select project in transaction tab
@@ -1234,7 +1268,9 @@ export default function AdminDashboard({
       budget: '',
       startDate: '',
       location: '',
+      cep: '',
       area: '',
+      areaInteriores: '',
       description: ''
     });
   };
@@ -1693,13 +1729,7 @@ export default function AdminDashboard({
                   <button
                     onClick={() => {
                       setEditingClient(null);
-                      setClientForm({
-                        name: '',
-                        email: '',
-                        phone: '',
-                        username: '',
-                        password: ''
-                      });
+                      setClientForm(EMPTY_CLIENT_FORM);
                       setClientError(null);
                       setClientSuccess(null);
                       setActiveTab('clientes');
@@ -1720,7 +1750,9 @@ export default function AdminDashboard({
                         budget: '',
                         startDate: '',
                         location: '',
+                        cep: '',
                         area: '',
+                        areaInteriores: '',
                         description: ''
                       });
                       setActiveTab('projetos');
@@ -2152,6 +2184,74 @@ export default function AdminDashboard({
                     </div>
 
                     <div className="border-t border-stone-100 pt-4 space-y-4">
+                      <span className="text-[length:var(--ui-text-xs)] font-mono text-stone-400 uppercase tracking-widest block">Dados para Contrato</span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest text-stone-500 mb-1">CPF / CNPJ</label>
+                          <input
+                            type="text"
+                            className="w-full bg-[#F4F4F3] border border-stone-200 py-2 px-3 text-xs focus:outline-none focus:border-stone-400 focus:bg-white rounded-none font-mono"
+                            placeholder="000.000.000-00"
+                            value={clientForm.cpfCnpj}
+                            onChange={(e) => setClientForm({ ...clientForm, cpfCnpj: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest text-stone-500 mb-1">CEP</label>
+                          <input
+                            type="text"
+                            className="w-full bg-[#F4F4F3] border border-stone-200 py-2 px-3 text-xs focus:outline-none focus:border-stone-400 focus:bg-white rounded-none font-mono"
+                            placeholder="00000-000"
+                            value={clientForm.cep}
+                            onChange={(e) => setClientForm({ ...clientForm, cep: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest text-stone-500 mb-1">Endereço residencial / sede</label>
+                        <input
+                          type="text"
+                          className="w-full bg-[#F4F4F3] border border-stone-200 py-2 px-3 text-xs focus:outline-none focus:border-stone-400 focus:bg-white rounded-none"
+                          placeholder="Rua, nº, bairro, cidade - UF"
+                          value={clientForm.address}
+                          onChange={(e) => setClientForm({ ...clientForm, address: e.target.value })}
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest text-stone-500 mb-1">Nacionalidade</label>
+                          <input
+                            type="text"
+                            className="w-full bg-[#F4F4F3] border border-stone-200 py-2 px-3 text-xs focus:outline-none focus:border-stone-400 focus:bg-white rounded-none"
+                            placeholder="brasileiro(a)"
+                            value={clientForm.nationality}
+                            onChange={(e) => setClientForm({ ...clientForm, nationality: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest text-stone-500 mb-1">Estado civil</label>
+                          <input
+                            type="text"
+                            className="w-full bg-[#F4F4F3] border border-stone-200 py-2 px-3 text-xs focus:outline-none focus:border-stone-400 focus:bg-white rounded-none"
+                            placeholder="casado(a)"
+                            value={clientForm.maritalStatus}
+                            onChange={(e) => setClientForm({ ...clientForm, maritalStatus: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest text-stone-500 mb-1">Profissão</label>
+                          <input
+                            type="text"
+                            className="w-full bg-[#F4F4F3] border border-stone-200 py-2 px-3 text-xs focus:outline-none focus:border-stone-400 focus:bg-white rounded-none"
+                            placeholder="opcional"
+                            value={clientForm.profession}
+                            onChange={(e) => setClientForm({ ...clientForm, profession: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-stone-100 pt-4 space-y-4">
                       <span className="text-[length:var(--ui-text-xs)] font-mono text-stone-400 uppercase tracking-widest block">Credenciais de Login</span>
                       
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -2446,6 +2546,29 @@ export default function AdminDashboard({
                           placeholder="Ex: 350"
                           value={projectForm.area}
                           onChange={(e) => setProjectForm({ ...projectForm, area: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest text-stone-500 mb-1">Área de Interiores (m²)</label>
+                        <input
+                          type="number"
+                          className="w-full bg-[#F4F4F3] border border-stone-200 py-2 px-3 text-xs focus:outline-none focus:border-stone-400 focus:bg-white rounded-none font-mono"
+                          placeholder="Se diferente da área do projeto"
+                          value={projectForm.areaInteriores}
+                          onChange={(e) => setProjectForm({ ...projectForm, areaInteriores: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest text-stone-500 mb-1">CEP da Obra</label>
+                        <input
+                          type="text"
+                          className="w-full bg-[#F4F4F3] border border-stone-200 py-2 px-3 text-xs focus:outline-none focus:border-stone-400 focus:bg-white rounded-none font-mono"
+                          placeholder="00000-000"
+                          value={projectForm.cep}
+                          onChange={(e) => setProjectForm({ ...projectForm, cep: e.target.value })}
                         />
                       </div>
                     </div>
