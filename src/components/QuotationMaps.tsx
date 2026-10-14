@@ -1395,21 +1395,52 @@ export default function QuotationMaps({
   };
 
   const selectedMap = maps.find(m => m.id === selectedMapId);
+  // Só o arquiteto (não o cliente) pode corrigir a recomendação, e não após a liquidação (pago).
+  const canEditChoices = !readOnly && !!selectedMap && selectedMap.status !== 'pago';
+  const hasManualChoices = !!selectedMap && (
+    !!selectedMap.manualRecommendedSupplierId ||
+    Object.keys(selectedMap.manualItemChoices || {}).length > 0
+  );
 
   // ----------------------------------------------------
   // CALCULATIONS FOR ACTIVE MAP
   // ----------------------------------------------------
+  // Melhor preço de um item. A escolha automática ignora fornecedores que não cotaram o item
+  // (preço ausente/0 = "Não cotado") — antes, um preço 0 vencia a comparação e o fornecedor
+  // realmente mais barato ficava sem a marcação. Se o arquiteto escolheu manualmente outro
+  // fornecedor para o item (manualItemChoices), a escolha manual prevalece.
   const getCheapestUnitPrice = (map: QuotationMap, itemId: string) => {
-    let minPrice = Infinity;
-    let bestSupplierId = '';
+    let autoMin = Infinity;
+    let autoSupplierId = '';
     map.suppliers.forEach(sup => {
-      const p = sup.itemPrices[itemId];
-      if (p !== undefined && p < minPrice) {
-        minPrice = p;
-        bestSupplierId = sup.id;
+      const p = Number(sup.itemPrices[itemId]);
+      if (Number.isFinite(p) && p > 0 && p < autoMin) {
+        autoMin = p;
+        autoSupplierId = sup.id;
       }
     });
-    return { minPrice, bestSupplierId };
+
+    // Empate no menor preço: todos os empatados são "melhor preço". Para a composição de compra,
+    // desempata a favor do fornecedor recomendado (evita dividir a compra e pagar dois fretes à toa).
+    const tiedIds = Number.isFinite(autoMin)
+      ? map.suppliers.filter(s => Number(s.itemPrices[itemId]) === autoMin).map(s => s.id)
+      : [];
+    const recommendedId = getBestSupplierGlobal(map)?.id;
+    const autoPickId = recommendedId && tiedIds.includes(recommendedId) ? recommendedId : autoSupplierId;
+
+    const manualId = map.manualItemChoices?.[itemId];
+    const manualSup = manualId ? map.suppliers.find(s => s.id === manualId) : undefined;
+    const manualPrice = manualSup ? Number(manualSup.itemPrices[itemId]) : 0;
+    if (manualSup && Number.isFinite(manualPrice) && manualPrice > 0) {
+      return {
+        minPrice: manualPrice,
+        bestSupplierId: manualSup.id,
+        bestSupplierIds: [manualSup.id],
+        autoSupplierId: autoPickId,
+        isManual: manualSup.id !== autoPickId,
+      };
+    }
+    return { minPrice: autoMin, bestSupplierId: autoPickId, bestSupplierIds: tiedIds, autoSupplierId: autoPickId, isManual: false };
   };
 
   const getSupplierTotal = (map: QuotationMap, supplier: QuotationSupplier) => {
@@ -1424,15 +1455,16 @@ export default function QuotationMaps({
     };
   };
 
-  const getBestSupplierGlobal = (map: QuotationMap) => {
+  // Recomendação automática (menor custo global entre fornecedores que cotaram TODOS os itens).
+  const getAutoBestSupplierGlobal = (map: QuotationMap): QuotationSupplier | null => {
     let minTotal = Infinity;
     let bestSupplier: QuotationSupplier | null = null;
     map.suppliers.forEach(sup => {
       // Elegível apenas o fornecedor que cotou TODOS os itens (preço > 0).
       // Fornecedores com itens não cotados (preço 0/ausente) ficam incompletos e nunca são recomendados.
       const cotouTodos = map.items.length > 0 && map.items.every(item => {
-        const p = sup.itemPrices[item.id];
-        return p !== undefined && p > 0;
+        const p = Number(sup.itemPrices[item.id]);
+        return Number.isFinite(p) && p > 0;
       });
       if (!cotouTodos) return;
       const { total } = getSupplierTotal(map, sup);
@@ -1442,6 +1474,42 @@ export default function QuotationMaps({
       }
     });
     return bestSupplier;
+  };
+
+  // Recomendação efetiva: a escolha manual do arquiteto (se houver) prevalece sobre a automática.
+  const getBestSupplierGlobal = (map: QuotationMap): QuotationSupplier | null => {
+    if (map.manualRecommendedSupplierId) {
+      const manual = map.suppliers.find(s => s.id === map.manualRecommendedSupplierId);
+      if (manual) return manual;
+    }
+    return getAutoBestSupplierGlobal(map);
+  };
+
+  // Composição de compra pelos melhores preços: cada item é comprado do fornecedor eleito
+  // (automático ou manual). O frete de um fornecedor entra uma única vez, se ele fornecer algo.
+  const getChosenComposition = (map: QuotationMap) => {
+    const bySupplier = new Map<string, { supplier: QuotationSupplier; items: { item: QuotationItem; unit: number; total: number; isManual: boolean }[]; subtotal: number }>();
+    const unquoted: QuotationItem[] = [];
+    map.items.forEach(item => {
+      const { bestSupplierId, minPrice, isManual } = getCheapestUnitPrice(map, item.id);
+      const sup = map.suppliers.find(s => s.id === bestSupplierId);
+      if (!sup || !Number.isFinite(minPrice)) {
+        unquoted.push(item);
+        return;
+      }
+      const entry = bySupplier.get(sup.id) || { supplier: sup, items: [], subtotal: 0 };
+      const total = minPrice * item.quantity;
+      entry.items.push({ item, unit: minPrice, total, isManual });
+      entry.subtotal += total;
+      bySupplier.set(sup.id, entry);
+    });
+    const groups = Array.from(bySupplier.values()).map(g => ({
+      ...g,
+      deliveryFee: g.supplier.deliveryFee || 0,
+      total: g.subtotal + (g.supplier.deliveryFee || 0),
+    }));
+    const grandTotal = groups.reduce((acc, g) => acc + g.total, 0);
+    return { groups, unquoted, grandTotal };
   };
 
   // ----------------------------------------------------
@@ -1618,6 +1686,38 @@ export default function QuotationMaps({
     if (selectedMapId === mapId) {
       setSelectedMapId(updated.length > 0 ? updated[0].id : null);
     }
+  };
+
+  // Escolha manual do melhor preço de UM item (sobrepõe a automática). Clicar de novo no
+  // fornecedor já escolhido manualmente volta o item para a escolha automática.
+  const handleSetItemChoice = (itemId: string, supplierId: string) => {
+    if (!selectedMap || readOnly || selectedMap.status === 'pago') return;
+    const current = selectedMap.manualItemChoices || {};
+    const next = { ...current };
+    if (current[itemId] === supplierId) delete next[itemId];
+    else next[itemId] = supplierId;
+    setMaps(maps.map(m => m.id === selectedMap.id ? { ...m, manualItemChoices: next } : m));
+  };
+
+  // Escolha manual do fornecedor "Recomendado" (custo global). Clicar de novo volta ao automático.
+  const handleSetRecommendedSupplier = (supplierId: string) => {
+    if (!selectedMap || readOnly || selectedMap.status === 'pago') return;
+    const isSame = selectedMap.manualRecommendedSupplierId === supplierId;
+    setMaps(maps.map(m => {
+      if (m.id !== selectedMap.id) return m;
+      const { manualRecommendedSupplierId: _drop, ...rest } = m;
+      return isSame ? rest : { ...rest, manualRecommendedSupplierId: supplierId };
+    }));
+  };
+
+  // Descarta TODAS as escolhas manuais e volta à recomendação automática.
+  const handleResetManualChoices = () => {
+    if (!selectedMap || readOnly || selectedMap.status === 'pago') return;
+    setMaps(maps.map(m => {
+      if (m.id !== selectedMap.id) return m;
+      const { manualItemChoices: _a, manualRecommendedSupplierId: _b, ...rest } = m;
+      return rest;
+    }));
   };
 
   const handleAuthorizePurchase = (supplierId: string) => {
@@ -1920,8 +2020,8 @@ export default function QuotationMaps({
             const item = selectedMap.items[data.row.index];
             const supplier = selectedMap.suppliers[data.column.index - 1];
             const price = supplier.itemPrices[item.id] || 0;
-            const { bestSupplierId } = getCheapestUnitPrice(selectedMap, item.id);
-            if (supplier.id === bestSupplierId && price > 0) {
+            const { bestSupplierIds } = getCheapestUnitPrice(selectedMap, item.id);
+            if (bestSupplierIds.includes(supplier.id) && price > 0) {
               data.cell.styles.fillColor = [209, 250, 229]; // light emerald-100
               data.cell.styles.textColor = [6, 78, 59]; // dark emerald-900
             }
@@ -1959,6 +2059,44 @@ export default function QuotationMaps({
           }
         }
       });
+
+      // Composição de compra pelos melhores preços (item a item), refletindo escolhas manuais
+      const comp = getChosenComposition(selectedMap);
+      if (comp.groups.length > 0) {
+        const afterMatrixY = ((doc as any).lastAutoTable?.finalY ?? 60) + 8;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.setTextColor(41, 37, 36);
+        doc.text('COMPOSIÇÃO DE COMPRA PELOS MELHORES PREÇOS (ITEM A ITEM)', 14, afterMatrixY);
+        const compRows: any[] = [];
+        comp.groups.forEach(g => {
+          g.items.forEach(it => {
+            compRows.push([
+              g.supplier.name,
+              `${it.item.name}${it.isManual ? ' (manual)' : ''}`,
+              `${it.item.quantity} ${it.item.unit}`,
+              formatCurrency(it.unit),
+              formatCurrency(it.total),
+            ]);
+          });
+          compRows.push([
+            { content: `${g.supplier.name} — itens ${formatCurrency(g.subtotal)} + frete ${g.deliveryFee > 0 ? formatCurrency(g.deliveryFee) : 'grátis'}`, colSpan: 4, styles: { fontStyle: 'bold', fillColor: [245, 245, 244] } },
+            { content: formatCurrency(g.total), styles: { fontStyle: 'bold', fillColor: [245, 245, 244] } },
+          ]);
+        });
+        compRows.push([
+          { content: 'TOTAL DA COMPOSIÇÃO', colSpan: 4, styles: { fontStyle: 'bold', fillColor: [41, 37, 36], textColor: [255, 255, 255] } },
+          { content: formatCurrency(comp.grandTotal), styles: { fontStyle: 'bold', fillColor: [41, 37, 36], textColor: [255, 255, 255] } },
+        ]);
+        autoTable(doc, {
+          startY: afterMatrixY + 3,
+          head: [['Fornecedor', 'Item', 'Qtd', 'Preço unit.', 'Total']],
+          body: compRows,
+          theme: 'grid',
+          styles: { fontSize: 7.5, cellPadding: 1.8, lineColor: [214, 211, 209], lineWidth: 0.1 },
+          headStyles: { fillColor: [41, 37, 36], textColor: [255, 255, 255], fontStyle: 'bold' },
+        });
+      }
 
       // Save PDF
       doc.save(`${clientName} - Mapa de Cotação ${selectedMap.number.toString().padStart(2, '0')}.pdf`);
@@ -3072,6 +3210,26 @@ export default function QuotationMaps({
                     )}
                   </div>
 
+                  {/* CORREÇÃO MANUAL DA RECOMENDAÇÃO (somente arquiteto; fora do JPEG/impressão) */}
+                  {canEditChoices && (
+                    <div data-html2canvas-ignore="true" className="print:hidden relative z-10 bg-sky-50 border border-sky-200 p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <p className="text-[11px] text-sky-900 leading-snug">
+                        <strong>Ajuste manual:</strong> clique no preço de um fornecedor para elegê-lo como o <strong>melhor preço do item</strong>,
+                        ou no valor total de um fornecedor para marcá-lo como <strong>recomendado</strong>. Clique de novo para voltar ao automático.
+                      </p>
+                      {hasManualChoices && (
+                        <button
+                          type="button"
+                          onClick={handleResetManualChoices}
+                          className="shrink-0 bg-white hover:bg-sky-100 text-sky-900 border border-sky-300 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider font-bold cursor-pointer flex items-center gap-1.5"
+                        >
+                          <RefreshCw size={11} />
+                          Restaurar automático
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   {/* CENTRAL MATRIX COMPARISON TABLE */}
                   <div className="border border-stone-300 overflow-x-auto relative z-10 bg-white">
                     <table className="w-full text-left text-xs border-collapse">
@@ -3082,9 +3240,10 @@ export default function QuotationMaps({
                           </th>
                           {selectedMap.suppliers.map((sup, idx) => {
                             const isRecommended = getBestSupplierGlobal(selectedMap)?.id === sup.id;
+                            const isManualRec = isRecommended && selectedMap.manualRecommendedSupplierId === sup.id;
                             return (
-                              <th 
-                                key={sup.id} 
+                              <th
+                                key={sup.id}
                                 className={`p-3 text-center border-r border-stone-250 last:border-r-0 ${
                                   isRecommended ? 'bg-amber-50/50' : 'bg-stone-50'
                                 }`}
@@ -3095,7 +3254,7 @@ export default function QuotationMaps({
                                 </span>
                                 {isRecommended && (
                                   <span className="inline-block bg-amber-100 text-amber-800 border border-amber-200 text-[7px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.2 mt-0.5">
-                                    Custo Global Min
+                                    {isManualRec ? 'Escolha Manual' : 'Custo Global Min'}
                                   </span>
                                 )}
                               </th>
@@ -3105,8 +3264,8 @@ export default function QuotationMaps({
                       </thead>
                       <tbody className="divide-y divide-stone-250 font-sans">
                         {selectedMap.items.map((item) => {
-                          const { bestSupplierId } = getCheapestUnitPrice(selectedMap, item.id);
-                          
+                          const { bestSupplierIds, isManual: isManualChoice } = getCheapestUnitPrice(selectedMap, item.id);
+
                           return (
                             <tr key={item.id} className="hover:bg-stone-50/40">
                               <td className="p-3 border-r border-stone-200">
@@ -3121,17 +3280,21 @@ export default function QuotationMaps({
                               {selectedMap.suppliers.map((sup) => {
                                 const price = sup.itemPrices[item.id] || 0;
                                 const totalItem = price * item.quantity;
-                                const isCheapest = sup.id === bestSupplierId;
+                                const isCheapest = bestSupplierIds.includes(sup.id);
+                                const isManualPick = isCheapest && isManualChoice;
+                                const canPick = canEditChoices && price > 0;
 
                                 return (
-                                  <td 
-                                    key={sup.id} 
+                                  <td
+                                    key={sup.id}
+                                    onClick={canPick ? () => handleSetItemChoice(item.id, sup.id) : undefined}
+                                    title={canPick ? (isCheapest ? 'Melhor preço deste item. Clique para voltar à escolha automática.' : 'Clique para eleger este fornecedor como melhor preço deste item.') : undefined}
                                     className={`p-3 text-center border-r border-stone-200 last:border-r-0 transition-colors ${
-                                      isCheapest ? 'bg-emerald-50/70' : ''
-                                    }`}
+                                      isManualPick ? 'bg-sky-50' : isCheapest ? 'bg-emerald-50/70' : ''
+                                    } ${canPick ? 'cursor-pointer hover:bg-stone-100' : ''}`}
                                   >
                                     <div className="space-y-0.5">
-                                      <span className={`block font-mono text-xs font-bold ${isCheapest ? 'text-emerald-800' : 'text-stone-700'}`}>
+                                      <span className={`block font-mono text-xs font-bold ${isManualPick ? 'text-sky-800' : isCheapest ? 'text-emerald-800' : 'text-stone-700'}`}>
                                         {price > 0 ? formatCurrency(price) : 'Não cotado'}
                                       </span>
                                       {price > 0 && (
@@ -3140,8 +3303,19 @@ export default function QuotationMaps({
                                         </span>
                                       )}
                                       {isCheapest && price > 0 && (
-                                        <span className="inline-flex items-center gap-0.5 text-emerald-700 text-[8px] font-mono uppercase font-bold bg-emerald-100/60 px-1 py-0.2">
-                                          <Check size={8} /> Melhor Preço
+                                        isManualPick ? (
+                                          <span className="inline-flex items-center gap-0.5 text-sky-800 text-[8px] font-mono uppercase font-bold bg-sky-100 px-1 py-0.2">
+                                            <Check size={8} /> Escolha Manual
+                                          </span>
+                                        ) : (
+                                          <span className="inline-flex items-center gap-0.5 text-emerald-700 text-[8px] font-mono uppercase font-bold bg-emerald-100/60 px-1 py-0.2">
+                                            <Check size={8} /> Melhor Preço
+                                          </span>
+                                        )
+                                      )}
+                                      {canPick && !isCheapest && (
+                                        <span data-html2canvas-ignore="true" className="block text-[7px] font-mono uppercase text-stone-300 print:hidden">
+                                          clique p/ eleger
                                         </span>
                                       )}
                                     </div>
@@ -3187,17 +3361,20 @@ export default function QuotationMaps({
                             const { total } = getSupplierTotal(selectedMap, sup);
                             const isBest = getBestSupplierGlobal(selectedMap)?.id === sup.id;
                             const isAuthorized = selectedMap.selectedSupplierId === sup.id;
+                            const isManualRec = isBest && selectedMap.manualRecommendedSupplierId === sup.id;
 
                             return (
-                              <td 
-                                key={sup.id} 
+                              <td
+                                key={sup.id}
+                                onClick={canEditChoices ? () => handleSetRecommendedSupplier(sup.id) : undefined}
+                                title={canEditChoices ? (isBest ? 'Fornecedor recomendado. Clique para voltar à recomendação automática.' : 'Clique para marcar este fornecedor como recomendado.') : undefined}
                                 className={`p-3 text-center border-r border-stone-800 last:border-r-0 relative overflow-hidden ${
-                                  isAuthorized 
-                                    ? 'bg-emerald-800 text-white' 
-                                    : isBest 
-                                    ? 'bg-[#2A2A28] text-white' 
+                                  isAuthorized
+                                    ? 'bg-emerald-800 text-white'
+                                    : isBest
+                                    ? 'bg-[#2A2A28] text-white'
                                     : ''
-                                }`}
+                                } ${canEditChoices ? 'cursor-pointer hover:bg-stone-700' : ''}`}
                               >
                                 <span className="block text-[13px] font-black tracking-tight">{formatCurrency(total)}</span>
                                 {isAuthorized ? (
@@ -3206,7 +3383,11 @@ export default function QuotationMaps({
                                   </span>
                                 ) : isBest ? (
                                   <span className="block text-[7px] font-mono uppercase font-black text-amber-400 tracking-widest mt-0.5">
-                                    RECOMENDADO
+                                    {isManualRec ? 'RECOMENDADO (MANUAL)' : 'RECOMENDADO'}
+                                  </span>
+                                ) : canEditChoices ? (
+                                  <span data-html2canvas-ignore="true" className="block text-[7px] font-mono uppercase text-stone-500 mt-0.5 print:hidden">
+                                    clique p/ recomendar
                                   </span>
                                 ) : null}
                               </td>
@@ -3216,6 +3397,64 @@ export default function QuotationMaps({
                       </tbody>
                     </table>
                   </div>
+
+                  {/* COMPOSIÇÃO DE COMPRA PELOS MELHORES PREÇOS (item a item) */}
+                  {(() => {
+                    const comp = getChosenComposition(selectedMap);
+                    if (comp.groups.length === 0) return null;
+                    const bestSingle = getBestSupplierGlobal(selectedMap);
+                    const singleTotal = bestSingle ? getSupplierTotal(selectedMap, bestSingle).total : null;
+                    const diff = singleTotal !== null ? singleTotal - comp.grandTotal : null;
+                    return (
+                      <div className="relative z-10 border border-stone-300 bg-white">
+                        <div className="bg-stone-100 border-b border-stone-300 px-3 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                          <span className="font-mono text-[10px] uppercase font-bold text-stone-800">
+                            Composição de compra pelos melhores preços (item a item)
+                          </span>
+                          <span className="font-mono text-[11px] font-black text-stone-900">
+                            Total: {formatCurrency(comp.grandTotal)}
+                          </span>
+                        </div>
+                        <div className="divide-y divide-stone-200">
+                          {comp.groups.map(g => (
+                            <div key={g.supplier.id} className="px-3 py-2 text-[11px]">
+                              <div className="flex justify-between items-baseline gap-2">
+                                <strong className="font-sans text-stone-900">{g.supplier.name}</strong>
+                                <span className="font-mono text-[10px] text-stone-600">
+                                  Itens {formatCurrency(g.subtotal)}
+                                  {' + '}Frete {g.deliveryFee > 0 ? formatCurrency(g.deliveryFee) : 'Grátis'}
+                                  {' = '}<strong className="text-stone-900">{formatCurrency(g.total)}</strong>
+                                </span>
+                              </div>
+                              <ul className="mt-1 text-stone-600 space-y-0.5">
+                                {g.items.map(it => (
+                                  <li key={it.item.id} className="flex justify-between gap-2">
+                                    <span className="truncate">
+                                      {it.item.name} <span className="text-stone-400">({it.item.quantity} {it.item.unit})</span>
+                                      {it.isManual && <span className="ml-1 text-sky-700 font-mono text-[8px] uppercase font-bold">manual</span>}
+                                    </span>
+                                    <span className="font-mono whitespace-nowrap">{formatCurrency(it.unit)} → {formatCurrency(it.total)}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))}
+                          {comp.unquoted.length > 0 && (
+                            <div className="px-3 py-2 text-[11px] text-red-700">
+                              Sem cotação: {comp.unquoted.map(i => i.name).join(', ')}
+                            </div>
+                          )}
+                        </div>
+                        {diff !== null && comp.unquoted.length === 0 && (
+                          <div className={`px-3 py-2 border-t border-stone-200 text-[10.5px] font-mono ${diff > 0 ? 'text-emerald-800 bg-emerald-50' : 'text-stone-600 bg-stone-50'}`}>
+                            {diff > 0
+                              ? `Comprando cada item no melhor preço você economiza ${formatCurrency(diff)} em relação a comprar tudo de ${bestSingle?.name} (${formatCurrency(singleTotal!)}).`
+                              : `Comprar tudo de ${bestSingle?.name} (${formatCurrency(singleTotal!)}) custa o mesmo ou menos que dividir a compra por item.`}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* SUPPLIER DETAILS GRID CARD INFO */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1 relative z-10">

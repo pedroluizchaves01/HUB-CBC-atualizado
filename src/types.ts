@@ -188,6 +188,11 @@ export interface QuotationMap {
   items: QuotationItem[];
   suppliers: QuotationSupplier[];
   selectedSupplierId?: string;
+  // Escolhas manuais do arquiteto que sobrepõem a recomendação automática:
+  //  - manualItemChoices: itemId -> supplierId eleito como "melhor preço" daquele item
+  //  - manualRecommendedSupplierId: fornecedor eleito como "recomendado" (menor custo global)
+  manualItemChoices?: Record<string, string>;
+  manualRecommendedSupplierId?: string;
   authorizedAt?: string;
   authorizedBy?: string;
   observations?: string;
