@@ -73,6 +73,8 @@ function stripSecrets(collection: string, doc: any): any {
     const {
       botToken,
       evolutionApiKey, cloudAccessToken, twilioAuthToken,
+      clicksignAccessToken, clicksignWebhookSecret,
+      coraCertPem, coraKeyPem, coraWebhookToken,
       ...safe
     } = doc;
     return {
@@ -81,6 +83,11 @@ function stripSecrets(collection: string, doc: any): any {
       evolutionApiKeySet: !!evolutionApiKey,
       cloudAccessTokenSet: !!cloudAccessToken,
       twilioAuthTokenSet: !!twilioAuthToken,
+      clicksignAccessTokenSet: !!clicksignAccessToken,
+      clicksignWebhookSecretSet: !!clicksignWebhookSecret,
+      coraCertSet: !!coraCertPem,
+      coraKeySet: !!coraKeyPem,
+      coraWebhookTokenSet: !!coraWebhookToken,
     };
   }
   return doc;

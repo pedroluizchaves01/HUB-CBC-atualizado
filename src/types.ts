@@ -277,7 +277,46 @@ export type ContractType =
   | 'projeto_arquitetura_interiores'
   | 'empreitada_mao_de_obra';
 
-export type ContractStatus = 'rascunho' | 'gerado' | 'assinado' | 'cancelado';
+export type ContractStatus = 'rascunho' | 'gerado' | 'enviado_assinatura' | 'assinado' | 'cancelado';
+
+// Situação do envelope de assinatura eletrônica (ClickSign).
+//  - running: enviado, aguardando assinaturas
+//  - closed: todas as assinaturas concluídas
+//  - canceled: envio cancelado
+//  - expired: prazo de assinatura esgotado
+export type ContractSignatureStatus = 'running' | 'closed' | 'canceled' | 'expired';
+
+export interface ContractSignerState {
+  key: string;            // identificador estável no HUB (ex.: contratante, cbc, testemunha-1)
+  papel: string;          // rótulo exibido (ex.: "Contratante", "Testemunha")
+  name: string;
+  email: string;
+  signerId?: string;      // id do signatário no ClickSign
+  signed: boolean;
+  signedAt?: string;      // ISO
+  refused?: boolean;
+  refusedAt?: string;
+}
+
+// Registro da assinatura eletrônica. Preenchido APENAS pelo servidor (envio + webhook);
+// a gravação genérica de contratos preserva este bloco (ver PUT /api/data/contracts).
+export interface ContractSignature {
+  provider: 'clicksign';
+  environment: 'sandbox' | 'production';
+  envelopeId: string;
+  documentId: string;
+  status: ContractSignatureStatus;
+  sentAt: string;
+  sentBy?: string;
+  pdfSha256?: string;       // hash do PDF enviado (trilha de auditoria)
+  signers: ContractSignerState[];
+  closedAt?: string;
+  lastEventAt?: string;
+  signedPdfUrl?: string;    // cópia arquivada no HUB (após a conclusão)
+  signedPdfFileName?: string;
+  archiveError?: string;
+  processedEvents?: string[]; // chaves de eventos já tratados (idempotência do webhook)
+}
 
 export interface ContractPersonData {
   name: string;
@@ -357,6 +396,42 @@ export interface ContractFormData {
   testemunhas?: ContractPersonData[]; // até 2 testemunhas (opcional; entram como assinantes)
 }
 
+// Situação de uma parcela do contrato na cobrança pelo Cora.
+export type ChargeStatus =
+  | 'aguardando_gatilho'     // ainda não chegou a hora (assinatura/etapa/data)
+  | 'aguardando_confirmacao' // etapa atingida: o admin precisa confirmar a emissão
+  | 'emitindo'               // emissão em andamento (reserva anti-duplicidade)
+  | 'emitida'
+  | 'paga'
+  | 'vencida'
+  | 'cancelada'
+  | 'erro';
+
+// Cobrança de UMA parcela (ContractPayment). Gerida pelo servidor (emissão, webhook, varredura).
+export interface ContractCharge {
+  paymentId: string;          // id da parcela em data.pagamentos
+  descricao: string;
+  valorCents: number;
+  gatilho: PaymentTrigger;
+  etapaKey?: string;
+  dataVencimento?: string;    // YYYY-MM-DD combinado no contrato (gatilho 'data')
+  status: ChargeStatus;
+  gatilhoAtingidoEm?: string; // quando a etapa foi atingida
+  dueDate?: string;           // vencimento do boleto emitido (YYYY-MM-DD)
+  coraInvoiceId?: string;
+  environment?: 'stage' | 'production';
+  boletoUrl?: string;
+  linhaDigitavel?: string;
+  pixEmv?: string;            // Pix copia e cola
+  emitidaEm?: string;
+  pagaEm?: string;
+  valorPagoCents?: number;
+  canceladaEm?: string;
+  enviadaWhatsAppEm?: string;
+  lastError?: string;
+  lastCheckAt?: string;
+}
+
 export interface Contract {
   id: string;
   projectId: string;
@@ -371,6 +446,12 @@ export interface Contract {
   pdfUrl?: string;
   pdfFileName?: string;
   pdfSavedAt?: string; // ISO date do último salvamento
+
+  // Assinatura eletrônica (ClickSign) — gerida pelo servidor
+  signature?: ContractSignature;
+
+  // Cobranças das parcelas (Banco Cora) — geridas pelo servidor
+  charges?: ContractCharge[];
 }
 
 

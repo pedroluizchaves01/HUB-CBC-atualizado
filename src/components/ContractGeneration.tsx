@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import {
   FileSignature, Plus, Download, Trash2, X, User, Building, Search,
-  ClipboardList, Calendar, DollarSign, CheckCircle2, Edit3, Save, ExternalLink, Loader2, Wand2, AlertTriangle
+  ClipboardList, Calendar, DollarSign, CheckCircle2, Edit3, Save, ExternalLink, Loader2, Wand2, AlertTriangle,
+  Send, RefreshCw, Settings, Ban, FileCheck2, Wallet
 } from 'lucide-react';
 import {
   Client, Contract, ContractFormData, ContractPayment, ContractPersonData, ContractStatus, ContractType, PaymentTrigger, Project
@@ -12,6 +13,9 @@ import {
 } from '../lib/contractTemplates';
 import { formatCents, parseBRLToCents, prazoDiasPorExtenso } from '../lib/extenso';
 import { downloadContractPdf, saveContractPdfToSystem } from '../lib/contractPdf';
+import { apiSend } from '../lib/apiClient';
+import { SendSignatureModal, SignatureConfigModal, SignatureProgress } from './ContractSignature';
+import { BillingConfigModal, ChargesModal, ChargesSummary } from './ContractBilling';
 
 interface ContractGenerationProps {
   clients: Client[];
@@ -23,10 +27,11 @@ interface ContractGenerationProps {
 }
 
 const STATUS_LABELS: Record<ContractStatus, { label: string; color: string }> = {
-  rascunho: { label: 'Rascunho', color: 'bg-stone-200 text-stone-700' },
-  gerado: { label: 'PDF Gerado', color: 'bg-blue-100 text-blue-700' },
-  assinado: { label: 'Assinado', color: 'bg-emerald-100 text-emerald-700' },
-  cancelado: { label: 'Cancelado', color: 'bg-red-100 text-red-700' },
+  rascunho: { label: 'Rascunho', color: 'bg-stone-200 text-stone-700!' },
+  gerado: { label: 'PDF Gerado', color: 'bg-blue-100 text-blue-700!' },
+  enviado_assinatura: { label: 'Aguardando assinaturas', color: 'bg-amber-100 text-amber-800!' },
+  assinado: { label: 'Assinado', color: 'bg-emerald-100 text-emerald-700!' },
+  cancelado: { label: 'Cancelado', color: 'bg-red-100 text-red-700!' },
 };
 
 const inputClass =
@@ -65,6 +70,12 @@ export default function ContractGeneration({
   const [filterProject, setFilterProject] = useState('');
   const [savingToSystem, setSavingToSystem] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [signingContract, setSigningContract] = useState<Contract | null>(null);
+  const [configOpen, setConfigOpen] = useState(false);
+  const [billingConfigOpen, setBillingConfigOpen] = useState(false);
+  const [chargesContract, setChargesContract] = useState<Contract | null>(null);
+  const [sigBusyId, setSigBusyId] = useState<string | null>(null);
+  const [sigNotice, setSigNotice] = useState<{ ok: boolean; text: string } | null>(null);
 
   const projectById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
   const clientById = useMemo(() => new Map(clients.map((c) => [c.id, c])), [clients]);
@@ -239,7 +250,9 @@ export default function ContractGeneration({
       projectId,
       type,
       number: editingId ? (existing?.number ?? nextNumber) : nextNumber,
-      status: 'gerado',
+      // Envio/assinatura é controlado pelo servidor; a edição nunca rebaixa esse status.
+      status: existing && (existing.status === 'enviado_assinatura' || existing.status === 'assinado') ? existing.status : 'gerado',
+      signature: existing?.signature,
       createdAt: editingId ? (existing?.createdAt ?? new Date().toISOString()) : new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       data: form,
@@ -286,6 +299,36 @@ export default function ContractGeneration({
     }
   };
 
+  const isLocked = (c: Contract) => c.status === 'enviado_assinatura' || c.status === 'assinado';
+  const canSendForSignature = (c: Contract) => !isLocked(c) && c.status !== 'cancelado';
+
+  const handleRefreshSignature = async (c: Contract) => {
+    setSigBusyId(c.id);
+    setSigNotice(null);
+    try {
+      await apiSend(`/api/contracts/${encodeURIComponent(c.id)}/signature/refresh`, 'POST', {});
+      setSigNotice({ ok: true, text: 'Status atualizado com o ClickSign.' });
+    } catch (e) {
+      setSigNotice({ ok: false, text: e instanceof Error ? e.message : 'Falha ao atualizar o status.' });
+    } finally {
+      setSigBusyId(null);
+    }
+  };
+
+  const handleCancelSignature = async (c: Contract) => {
+    if (!window.confirm(`Cancelar o envio do contrato nº ${String(c.number).padStart(2, '0')}? Os signatários deixam de poder assinar este envelope.`)) return;
+    setSigBusyId(c.id);
+    setSigNotice(null);
+    try {
+      await apiSend(`/api/contracts/${encodeURIComponent(c.id)}/signature/cancel`, 'POST', {});
+      setSigNotice({ ok: true, text: 'Envio cancelado. O contrato voltou para "PDF Gerado" e pode ser editado e reenviado.' });
+    } catch (e) {
+      setSigNotice({ ok: false, text: e instanceof Error ? e.message : 'Falha ao cancelar o envio.' });
+    } finally {
+      setSigBusyId(null);
+    }
+  };
+
   const handleDownloadExisting = (contract: Contract) => {
     downloadContractPdf(contract, projectById.get(contract.projectId));
   };
@@ -315,13 +358,36 @@ export default function ContractGeneration({
             <p className="text-[11px] text-stone-500">Gere contratos em PDF a partir dos modelos oficiais da CBC.</p>
           </div>
         </div>
-        <button
-          onClick={openNew}
-          className="flex items-center gap-2 bg-[#FF5A35] text-white px-4 py-2.5 text-xs font-bold uppercase tracking-wider hover:bg-[#e64d29] transition-colors cursor-pointer"
-        >
-          <Plus size={14} /> Novo Contrato
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setConfigOpen(true)}
+            className="flex items-center gap-2 border border-stone-300 text-stone-600 px-3 py-2.5 text-xs font-bold uppercase tracking-wider hover:border-[#FF5A35] hover:text-[#FF5A35] transition-colors cursor-pointer"
+            title="Configurar a assinatura eletrônica (ClickSign)"
+          >
+            <Settings size={14} /> Assinatura eletrônica
+          </button>
+          <button
+            onClick={() => setBillingConfigOpen(true)}
+            className="flex items-center gap-2 border border-stone-300 text-stone-600 px-3 py-2.5 text-xs font-bold uppercase tracking-wider hover:border-[#FF5A35] hover:text-[#FF5A35] transition-colors cursor-pointer"
+            title="Configurar a cobrança pelo Banco Cora"
+          >
+            <Wallet size={14} /> Cobrança (Cora)
+          </button>
+          <button
+            onClick={openNew}
+            className="flex items-center gap-2 bg-[#FF5A35] text-white px-4 py-2.5 text-xs font-bold uppercase tracking-wider hover:bg-[#e64d29] transition-colors cursor-pointer"
+          >
+            <Plus size={14} /> Novo Contrato
+          </button>
+        </div>
       </div>
+
+      {sigNotice && (
+        <div className={`text-xs font-bold p-3 border flex items-start justify-between gap-3 ${sigNotice.ok ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-red-700 bg-red-50 border-red-200'}`}>
+          <span>{sigNotice.text}</span>
+          <button onClick={() => setSigNotice(null)} className="shrink-0 cursor-pointer"><X size={14} /></button>
+        </div>
+      )}
 
       <div className="flex items-center gap-2">
         <Search size={13} className="text-stone-400" />
@@ -360,12 +426,64 @@ export default function ContractGeneration({
                     <CheckCircle2 size={11} /> PDF salvo no sistema
                   </div>
                 )}
+                <SignatureProgress contract={c} />
+                <ChargesSummary contract={c} />
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
+                {canSendForSignature(c) && (
+                  <button
+                    onClick={() => { setSigNotice(null); setSigningContract(c); }}
+                    className="p-2 text-stone-400 hover:text-[#FF5A35] hover:bg-stone-100 transition-colors cursor-pointer"
+                    title="Enviar para assinatura eletrônica"
+                  >
+                    <Send size={14} />
+                  </button>
+                )}
+                {c.status === 'enviado_assinatura' && (
+                  <>
+                    <button
+                      onClick={() => handleRefreshSignature(c)}
+                      disabled={sigBusyId === c.id}
+                      className="p-2 text-stone-400 hover:text-[#FF5A35] hover:bg-stone-100 transition-colors cursor-pointer disabled:opacity-50"
+                      title="Atualizar status com o ClickSign"
+                    >
+                      {sigBusyId === c.id ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                    </button>
+                    <button
+                      onClick={() => handleCancelSignature(c)}
+                      disabled={sigBusyId === c.id}
+                      className="p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-50"
+                      title="Cancelar o envio para assinatura"
+                    >
+                      <Ban size={14} />
+                    </button>
+                  </>
+                )}
+                {c.status === 'assinado' && (
+                  <button
+                    onClick={() => setChargesContract(c)}
+                    className="p-2 text-stone-400 hover:text-[#FF5A35] hover:bg-stone-100 transition-colors cursor-pointer"
+                    title="Parcelas e cobranças (boleto/Pix)"
+                  >
+                    <Wallet size={14} />
+                  </button>
+                )}
+                {c.status === 'assinado' && (
+                  <a
+                    href={c.signature?.signedPdfUrl || `/api/contracts/${encodeURIComponent(c.id)}/signed-pdf`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2 text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer"
+                    title="Abrir o PDF assinado"
+                  >
+                    <FileCheck2 size={14} />
+                  </a>
+                )}
                 <button
                   onClick={() => openEdit(c)}
-                  className="p-2 text-stone-400 hover:text-[#FF5A35] hover:bg-stone-100 transition-colors cursor-pointer"
-                  title="Editar"
+                  disabled={isLocked(c)}
+                  className="p-2 text-stone-400 hover:text-[#FF5A35] hover:bg-stone-100 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-stone-400"
+                  title={isLocked(c) ? 'Contrato enviado para assinatura não pode ser editado (cancele o envio primeiro)' : 'Editar'}
                 >
                   <Edit3 size={14} />
                 </button>
@@ -397,8 +515,9 @@ export default function ContractGeneration({
                 )}
                 <button
                   onClick={() => onDeleteContract(c.id)}
-                  className="p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
-                  title="Excluir"
+                  disabled={isLocked(c)}
+                  className="p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-stone-400"
+                  title={isLocked(c) ? 'Contrato enviado para assinatura não pode ser excluído' : 'Excluir'}
                 >
                   <Trash2 size={14} />
                 </button>
@@ -407,6 +526,18 @@ export default function ContractGeneration({
           );
         })}
       </div>
+
+      {configOpen && <SignatureConfigModal onClose={() => setConfigOpen(false)} />}
+      {billingConfigOpen && <BillingConfigModal onClose={() => setBillingConfigOpen(false)} />}
+      {chargesContract && <ChargesModal contract={chargesContract} onClose={() => setChargesContract(null)} />}
+      {signingContract && (
+        <SendSignatureModal
+          contract={signingContract}
+          project={projectById.get(signingContract.projectId)}
+          onClose={() => setSigningContract(null)}
+          onSent={() => setSigNotice({ ok: true, text: `Contrato nº ${String(signingContract.number).padStart(2, '0')} enviado: os signatários receberam o e-mail do ClickSign.` })}
+        />
+      )}
 
       {formOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 overflow-y-auto">
