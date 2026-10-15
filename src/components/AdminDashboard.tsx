@@ -59,6 +59,7 @@ import { getTelegramConfig, buildTelegramFileName } from '../lib/telegramService
 import { TelegramSettings } from './TelegramSettings';
 import WhatsAppSettings from './WhatsAppSettings';
 import ContractGeneration from './ContractGeneration';
+import DemoObraPanel from './DemoObraPanel';
 import Demandas from './Demandas';
 import NotificationBell from './NotificationBell';
 
@@ -2414,6 +2415,8 @@ export default function AdminDashboard({
                   <p className="text-xs text-stone-500 mt-1">Configuração de novos canteiros de obra, contratos técnicos e orçamentos gerais</p>
                 </div>
               </div>
+
+              {role === 'admin' && <DemoObraPanel />}
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 

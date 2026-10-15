@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Calendar, 
   Sliders, 
@@ -55,6 +55,8 @@ export const PlanningSchedule: React.FC<PlanningScheduleProps> = ({
   const [planningViewMode, setPlanningViewMode] = useState<'analytical' | 'synthetic'>('analytical');
   const [isFullScreenEditOpen, setIsFullScreenEditOpen] = useState(false);
   const [bufferSlider, setBufferSlider] = useState<number>(10); // Default 10% safety buffer
+  // Obra demonstrativa (ids "demo-…"): a obra já está concluída, sem reserva de imprevistos a mostrar.
+  useEffect(() => { if (String(cronogramaProjectId || '').startsWith('demo-')) setBufferSlider(0); }, [cronogramaProjectId]);
 
   // Print states
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);

@@ -786,7 +786,8 @@ export default function ClientDashboard({ client, projects, transactions, docume
                           const totalSpent = projectTransactions.reduce((acc, t) => acc + t.value, 0);
                           const bufferVal = (budget * bufferSlider) / 100;
                           const currentBalance = budget - totalSpent;
-                          const isWarning = currentBalance < bufferVal;
+                          const isClosed = selectedProject.status === 'concluido';
+                          const isWarning = !isClosed && currentBalance < bufferVal;
 
                           return (
                             <div className="space-y-4">
@@ -805,7 +806,14 @@ export default function ClientDashboard({ client, projects, transactions, docume
                                 </div>
                               </div>
 
-                              {isWarning ? (
+                              {isClosed && currentBalance >= 0 ? (
+                                <div className="border border-emerald-200 bg-emerald-50 p-3 text-emerald-900 text-[length:var(--ui-text-xs)] leading-relaxed flex gap-1.5">
+                                  <CheckCircle2 size={14} className="text-emerald-600 flex-shrink-0 mt-0.5" />
+                                  <p>
+                                    <strong>Obra encerrada dentro do orçamento:</strong> custo final {budget > 0 ? ((currentBalance / budget) * 100).toFixed(1).replace('.', ',') : '0'}% abaixo do valor contratado (economia de {formatCurrency(currentBalance)}).
+                                  </p>
+                                </div>
+                              ) : isWarning ? (
                                 <div className="border border-red-200 bg-red-50 p-3 text-red-900 text-[length:var(--ui-text-xs)] leading-relaxed flex gap-1.5">
                                   <Info size={14} className="text-red-600 flex-shrink-0 mt-0.5" />
                                   <p>
