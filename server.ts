@@ -23,6 +23,9 @@ import { isDbConfigured, ensureSchema } from "./src/lib/server/db";
 import { startDemandAutomationScheduler } from "./src/lib/server/demandAutomation";
 import { notifyChange } from "./src/lib/server/notificationService";
 import * as whatsapp from "./src/lib/server/whatsappServer";
+import * as clicksign from "./src/lib/server/clicksignServer";
+import * as cora from "./src/lib/server/coraServer";
+import * as demoObra from "./src/lib/server/demoObraServer";
 import { startAgendaReminderScheduler, runAgendaReminderCycle } from "./src/lib/server/agendaReminders";
 import { normalizePhoneBR } from "./src/lib/agenda";
 
@@ -76,6 +79,8 @@ const ROTAS_ARQUIVO_GRANDE = [
   '/api/acompanhamento/',
   '/api/quotations/',
   '/api/office/',
+  '/api/contracts/', // envio de PDF para assinatura (base64)
+  '/api/webhooks/',  // webhooks precisam do corpo BRUTO para validar o HMAC
 ];
 const jsonPequeno = express.json({ limit: "1mb" });
 app.use((req, res, next) => {
@@ -217,7 +222,19 @@ app.put("/api/data/:collection/:id", requireAuth, fileUploadJson, async (req, re
       { role: u.role, clientId: u.clientId }, payload,
     );
     const existing = await dataService.getDocById(req.params.collection, req.params.id).catch(() => null);
+    // Contratos: o bloco de assinatura eletrônica e o status de envio/assinatura pertencem ao
+    // servidor (envio + webhook do ClickSign). A gravação genérica não pode sobrescrevê-los
+    // com uma cópia antiga do navegador.
+    if (req.params.collection === "contracts" && existing && payload && typeof payload === "object") {
+      if (existing.signature) payload.signature = existing.signature;
+      if (existing.charges) payload.charges = existing.charges; // cobranças: só o servidor altera
+      if (existing.status === "enviado_assinatura" || existing.status === "assinado") {
+        payload.status = existing.status; // cancelar o envio é feito pela rota própria
+      }
+    }
     await dataService.setDocById(req.params.collection, req.params.id, payload);
+    // Etapa de projeto mudou (aprovada/entregue)? Reavalia na hora as cobranças que dependem dela.
+    if (req.params.collection === "arch_projects") void cora.runBillingSweep();
     void writeAuditLog({
       actorId: u.id, actorRole: u.role, action: existing ? "update" : "create",
       collection: req.params.collection, docId: req.params.id, ip: req.ip,
@@ -244,6 +261,9 @@ app.delete("/api/data/:collection/:id", requireAuth, async (req, res) => {
       { role: u.role, clientId: u.clientId },
     );
     const existing = await dataService.getDocById(req.params.collection, req.params.id).catch(() => null);
+    if (req.params.collection === "contracts" && existing?.signature && existing.signature.status !== "canceled" && existing.signature.status !== "expired") {
+      return res.status(409).json({ error: "Contrato enviado para assinatura (ou já assinado) não pode ser excluído. Cancele o envio primeiro, se for o caso." });
+    }
     await dataService.deleteDocById(req.params.collection, req.params.id);
     void writeAuditLog({
       actorId: u.id, actorRole: u.role, action: "delete",
@@ -1454,6 +1474,231 @@ app.post("/api/telegram/test", requireAuth, requireRole("admin"), async (req, re
 });
 
 // ---------------------------------------------------------------------------
+// Assinatura eletrônica de contratos (ClickSign)
+// ---------------------------------------------------------------------------
+
+// ==========================================
+// OBRA DEMONSTRATIVA (cliente + centro de custo fictícios para apresentações)
+// Tudo que é criado tem id "demo-…"; a remoção apaga só isso. Apenas admin.
+// ==========================================
+app.get("/api/demo/obra", requireAuth, requireRole("admin"), async (_req, res) => {
+  try { return res.json(await demoObra.demoStatus()); }
+  catch (e: any) { return res.status(500).json({ error: e.message || "Erro ao consultar a obra demonstrativa." }); }
+});
+
+app.post("/api/demo/obra", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const r = await demoObra.loadDemo();
+    void writeAuditLog({ actorId: req.sessionUser!.id, actorRole: req.sessionUser!.role, action: "create", collection: "projects", docId: "demo-obra-albuquerque", ip: req.ip });
+    return res.json({ success: true, ...r });
+  } catch (e: any) { return res.status(500).json({ error: e.message || "Erro ao carregar a obra demonstrativa." }); }
+});
+
+app.delete("/api/demo/obra", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const r = await demoObra.removeDemo();
+    void writeAuditLog({ actorId: req.sessionUser!.id, actorRole: req.sessionUser!.role, action: "delete", collection: "projects", docId: "demo-obra-albuquerque", ip: req.ip });
+    return res.json({ success: true, ...r });
+  } catch (e: any) { return res.status(500).json({ error: e.message || "Erro ao remover a obra demonstrativa." }); }
+});
+
+// Erros do ClickSign viram 502 (falha do serviço externo); validações nossas viram 400.
+const csErr = (e: any, fallback: string) => ({
+  status: e instanceof clicksign.ClicksignError ? 502 : 400,
+  error: e?.message || fallback,
+});
+
+app.get("/api/clicksign/config", requireAuth, requireRole("admin"), async (_req, res) => {
+  try { return res.json(await clicksign.getMaskedClicksignConfig()); }
+  catch (e: any) { return res.status(500).json({ error: e.message || "Erro ao ler configuração do ClickSign." }); }
+});
+
+app.post("/api/clicksign/config", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    await clicksign.saveClicksignConfig(req.body || {});
+    return res.json({ success: true, config: await clicksign.getMaskedClicksignConfig() });
+  } catch (e: any) { return res.status(400).json({ error: e.message || "Erro ao salvar configuração do ClickSign." }); }
+});
+
+app.post("/api/clicksign/test", requireAuth, requireRole("admin"), async (_req, res) => {
+  try {
+    const r = await clicksign.testConnection();
+    return res.json({ success: true, environment: r.environment, message: "Conexão com o ClickSign OK." });
+  } catch (e: any) { const r = csErr(e, "Falha ao testar o ClickSign."); return res.status(r.status).json({ error: r.error }); }
+});
+
+app.post("/api/clicksign/register-webhook", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const publicUrl = String(req.body?.publicUrl || process.env.APP_PUBLIC_URL || `${req.protocol}://${req.get("host")}`);
+    const r = await clicksign.registerWebhook(publicUrl);
+    return res.json({ success: true, ...r, config: await clicksign.getMaskedClicksignConfig() });
+  } catch (e: any) { const r = csErr(e, "Falha ao cadastrar o webhook."); return res.status(r.status).json({ error: r.error }); }
+});
+
+// Webhook do ClickSign — PÚBLICO (sem sessão): a autenticidade vem do HMAC do corpo bruto.
+app.post("/api/webhooks/clicksign", express.raw({ type: "*/*", limit: "1mb" }), async (req, res) => {
+  try {
+    const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.from(typeof req.body === "string" ? req.body : JSON.stringify(req.body || {}));
+    const r = await clicksign.handleWebhook(raw, req.headers as any);
+    return res.status(r.status).json(r.body);
+  } catch (e: any) {
+    console.error("[clicksign] Erro no webhook:", e?.message || e);
+    return res.status(500).json({ error: "Falha ao processar o webhook." }); // 5xx → o ClickSign tenta de novo
+  }
+});
+
+// Pré-visualização do envio: quem vai assinar, erros e avisos (a UI mostra antes de confirmar).
+app.post("/api/contracts/:id/signature/preview", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const preview = await clicksign.previewSignature(req.params.id);
+    if (!preview) return res.status(404).json({ error: "Contrato não encontrado." });
+    return res.json(preview);
+  } catch (e: any) { return res.status(500).json({ error: e.message || "Erro ao preparar o envio." }); }
+});
+
+app.post("/api/contracts/:id/signature/send", requireAuth, requireRole("admin"), largeJson, async (req, res) => {
+  try {
+    const pdfBase64 = String(req.body?.pdfBase64 || "");
+    if (!pdfBase64) return res.status(400).json({ error: "PDF do contrato ausente." });
+    const signature = await clicksign.sendContractForSignature({
+      contractId: req.params.id, pdfBase64, actorName: req.sessionUser!.name,
+    });
+    void writeAuditLog({
+      actorId: req.sessionUser!.id, actorRole: req.sessionUser!.role, action: "update",
+      collection: "contracts", docId: req.params.id, ip: req.ip,
+    });
+    return res.json({ success: true, signature });
+  } catch (e: any) { const r = csErr(e, "Falha ao enviar para assinatura."); return res.status(r.status).json({ error: r.error }); }
+});
+
+app.post("/api/contracts/:id/signature/refresh", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const contract = await clicksign.refreshSignature(req.params.id);
+    return res.json({ success: true, status: contract.status, signature: contract.signature });
+  } catch (e: any) { const r = csErr(e, "Falha ao atualizar o status."); return res.status(r.status).json({ error: r.error }); }
+});
+
+app.post("/api/contracts/:id/signature/cancel", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    await clicksign.cancelSignature(req.params.id);
+    void writeAuditLog({
+      actorId: req.sessionUser!.id, actorRole: req.sessionUser!.role, action: "update",
+      collection: "contracts", docId: req.params.id, ip: req.ip,
+    });
+    return res.json({ success: true });
+  } catch (e: any) { const r = csErr(e, "Falha ao cancelar o envio."); return res.status(r.status).json({ error: r.error }); }
+});
+
+app.get("/api/contracts/:id/signed-pdf", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const { buffer, fileName } = await clicksign.getSignedPdf(req.params.id);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${fileName.replace(/"/g, "")}"`);
+    return res.send(buffer);
+  } catch (e: any) { const r = csErr(e, "Falha ao obter o PDF assinado."); return res.status(r.status).send(r.error); }
+});
+
+// ---------------------------------------------------------------------------
+// Cobrança dos contratos (Banco Cora)
+// ---------------------------------------------------------------------------
+
+const coraErr = (e: any, fallback: string) => ({
+  status: e instanceof cora.CoraError ? 502 : 400,
+  error: e?.message || fallback,
+});
+const auditContract = (req: any, id: string) => void writeAuditLog({
+  actorId: req.sessionUser!.id, actorRole: req.sessionUser!.role, action: "update",
+  collection: "contracts", docId: id, ip: req.ip,
+});
+
+app.get("/api/cora/config", requireAuth, requireRole("admin"), async (_req, res) => {
+  try { return res.json(await cora.getMaskedCoraConfig()); }
+  catch (e: any) { return res.status(500).json({ error: e.message || "Erro ao ler configuração do Cora." }); }
+});
+
+app.post("/api/cora/config", requireAuth, requireRole("admin"), largeJson, async (req, res) => {
+  try {
+    await cora.saveCoraConfig(req.body || {});
+    return res.json({ success: true, config: await cora.getMaskedCoraConfig() });
+  } catch (e: any) { return res.status(400).json({ error: e.message || "Erro ao salvar configuração do Cora." }); }
+});
+
+app.post("/api/cora/test", requireAuth, requireRole("admin"), async (_req, res) => {
+  try {
+    const r = await cora.testConnection();
+    return res.json({ success: true, environment: r.environment, message: "Autenticação com o Cora OK." });
+  } catch (e: any) { const r = coraErr(e, "Falha ao testar o Cora."); return res.status(r.status).json({ error: r.error }); }
+});
+
+app.post("/api/cora/register-webhook", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const publicUrl = String(req.body?.publicUrl || process.env.APP_PUBLIC_URL || `${req.protocol}://${req.get("host")}`);
+    const r = await cora.registerWebhook(publicUrl);
+    return res.json({ success: true, ...r, config: await cora.getMaskedCoraConfig() });
+  } catch (e: any) { const r = coraErr(e, "Falha ao cadastrar o webhook."); return res.status(r.status).json({ error: r.error }); }
+});
+
+// Aviso de pagamento do Cora — PÚBLICO. O token na URL é o segredo; o status real é sempre reconsultado no Cora.
+app.post("/api/webhooks/cora/:token", async (req, res) => {
+  try {
+    const r = await cora.handleWebhook(req.params.token, req.headers as any);
+    return res.status(r.status).json(r.body);
+  } catch (e: any) {
+    console.error("[cora] Erro no webhook:", e?.message || e);
+    return res.status(500).json({ error: "Falha ao processar o webhook." });
+  }
+});
+
+app.get("/api/contracts/:id/charges", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const existing = await dataService.getDocById("contracts", req.params.id);
+    if (!existing) return res.status(404).json({ error: "Contrato não encontrado." });
+    if (existing.status === "assinado") await cora.initCharges(req.params.id);
+    const view = await cora.chargesView(req.params.id);
+    return res.json({ ...view, signed: existing.status === "assinado" });
+  } catch (e: any) { const r = coraErr(e, "Erro ao carregar as cobranças."); return res.status(r.status).json({ error: r.error }); }
+});
+
+app.post("/api/contracts/:id/charges/:paymentId/emit", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const dueDate = req.body?.dueDate ? String(req.body.dueDate) : undefined;
+    const charge = await cora.emitCharge(req.params.id, req.params.paymentId, { dueDate, actorName: req.sessionUser!.name, origem: "manual" });
+    auditContract(req, req.params.id);
+    return res.json({ success: true, charge });
+  } catch (e: any) { const r = coraErr(e, "Falha ao emitir a cobrança."); return res.status(r.status).json({ error: r.error }); }
+});
+
+app.post("/api/contracts/:id/charges/:paymentId/cancel", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    await cora.cancelCharge(req.params.id, req.params.paymentId);
+    auditContract(req, req.params.id);
+    return res.json({ success: true });
+  } catch (e: any) { const r = coraErr(e, "Falha ao cancelar a cobrança."); return res.status(r.status).json({ error: r.error }); }
+});
+
+app.post("/api/contracts/:id/charges/:paymentId/reopen", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    await cora.reopenCharge(req.params.id, req.params.paymentId);
+    auditContract(req, req.params.id);
+    return res.json({ success: true });
+  } catch (e: any) { const r = coraErr(e, "Falha ao reabrir a cobrança."); return res.status(r.status).json({ error: r.error }); }
+});
+
+app.post("/api/contracts/:id/charges/:paymentId/refresh", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const charge = await cora.reconcileCharge(req.params.id, req.params.paymentId);
+    return res.json({ success: true, charge });
+  } catch (e: any) { const r = coraErr(e, "Falha ao consultar o Cora."); return res.status(r.status).json({ error: r.error }); }
+});
+
+app.post("/api/contracts/:id/charges/:paymentId/whatsapp", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    await cora.sendChargeWhatsApp(req.params.id, req.params.paymentId);
+    return res.json({ success: true });
+  } catch (e: any) { return res.status(400).json({ error: e?.message || "Falha ao enviar por WhatsApp." }); }
+});
+
+// ---------------------------------------------------------------------------
 // WhatsApp / Agenda
 // ---------------------------------------------------------------------------
 
@@ -1564,6 +1809,16 @@ async function startServer() {
     }
   } catch (e: any) {
     console.error("[agendaReminders] Falha ao iniciar o agendador:", e?.message || e);
+  }
+
+  // Cobranças dos contratos (Cora): emite parcelas por data, avisa etapas atingidas e confere pagamentos.
+  try {
+    if (await isDbConfigured()) {
+      cora.startBillingScheduler(10);
+      clicksign.setSignedHook(() => { void cora.runBillingSweep(); });
+    }
+  } catch (e: any) {
+    console.error("[cora] Falha ao iniciar o agendador:", e?.message || e);
   }
 
   app.listen(PORT, "0.0.0.0", () => {
