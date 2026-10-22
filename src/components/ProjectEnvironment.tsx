@@ -21,7 +21,7 @@ import {
   Sun, Wind, Thermometer, Droplets, Compass as CompassIcon, ClipboardList,
   Home, Menu, BookOpen, Leaf, Building2,
   MapPin, Palette, Users, Wallet, Sparkles,
-  Search, Bell, MessageSquare, SlidersHorizontal, Calendar, Check, XCircle, RotateCcw, Zap, Pen, FolderLock,
+  Search, Bell, MessageSquare, SlidersHorizontal, Calendar, Check, XCircle, RotateCcw, Zap, Pen, FolderLock, Sofa,
 } from 'lucide-react';
 import { subscribeCollection, saveDoc, removeDoc } from '../lib/firebaseDb';
 import { PROJECT_BG } from '../lib/projectBackground';
@@ -35,6 +35,8 @@ import { openBriefingReport } from '../lib/briefingReportHtml';
 import { CATALOGO_ETAPAS, montarEtapas, type PhaseTemplate, type ServicoId } from '../lib/phaseTemplates';
 import { THEMATIC_BRIEFINGS, briefingsDaEtapa, type ThematicBriefing } from '../lib/thematicBriefings';
 import PlanMarkupEditor from './PlanMarkupEditor';
+import InteriorBriefingPage from './InteriorBriefing';
+import { normalizeBriefing, progressOf as briefingProgressOf, type InteriorBriefingData } from '../lib/interiorBriefing';
 import { openProjectReport, type ProjectReportData } from '../lib/projectReportHtml';
 
 interface Props {
@@ -276,6 +278,8 @@ interface ArchProject {
   // Briefings temáticos (elétrica, hidráulica…) liberados por etapa.
   // Chave = id do briefing temático (ex.: 'brief_eletrica').
   thematicBriefings?: Record<string, { answers: BriefingAnswer[]; done: boolean; doneAt?: string }>;
+  // Briefing de Interiores (estruturado), liberado com a etapa 'concepcao_interiores'.
+  interiorBriefing?: InteriorBriefingData;
   // Mural de recados do projeto (troca cliente ↔ arquiteto, não preso a fase)
   mural?: MuralMessage[];
   // Documentos oficiais do projeto (contrato, ART/RRT, procuração...).
@@ -689,6 +693,7 @@ function ProjectShell({
     { kind: 'etapa', label: 'Início', sub: 'Visão geral', page: 'inicio' },
     { kind: 'etapa', label: 'Conforto Térmico', sub: 'Estudo técnico', page: 'termico' },
     { kind: 'etapa', label: 'Briefing de Premissas', sub: 'Programa do cliente', page: 'briefing' },
+    ...(project.phases.some(p => p.key === 'concepcao_interiores') ? [{ kind: 'etapa' as const, label: 'Briefing de Interiores', sub: 'Estilo, ambientes e marcenaria', page: 'brief-interiores' as PageId }] : []),
     ...project.phases.map((ph, i) => ({ kind: 'etapa' as const, label: ph.name, sub: STATE_META[ph.state].label, page: `fase-${i}` as PageId })),
     ...project.phases.flatMap((ph, i) => (ph.files || []).map(f => ({ kind: 'arquivo' as const, label: f.name, sub: `em ${ph.name}`, page: `fase-${i}` as PageId }))),
   ];
@@ -715,6 +720,19 @@ function ProjectShell({
   });
   const briefingTematicoStatus = (id: string) => project.thematicBriefings?.[id];
 
+  // Briefing de Interiores: existe quando o projeto tem a etapa de Concepção de Interiores.
+  // A equipe vê sempre (para configurar os ambientes); o cliente, só depois da liberação.
+  const faseInteriores = project.phases.find(p => p.key === 'concepcao_interiores');
+  const interioresLiberado = !!faseInteriores && faseInteriores.state !== 'bloqueada';
+  const interiorBrief = normalizeBriefing(project.interiorBriefing);
+  const mostraBriefInteriores = !!faseInteriores && (isAdmin || interioresLiberado);
+  if (interioresLiberado && interiorBrief.status !== 'enviado') {
+    notifications.push({ text: isAdmin ? 'Briefing de interiores aguardando o cliente' : 'Seu briefing de interiores está disponível', page: 'brief-interiores', kind: 'info' });
+  }
+  if (isAdmin && faseInteriores && !interiorBrief.config.confirmed && interiorBrief.status !== 'enviado') {
+    notifications.push({ text: 'Confirme os ambientes do briefing de interiores', page: 'brief-interiores', kind: 'warn' });
+  }
+
   // Itens do menu lateral.
   const navItems: { id: PageId; label: string; Icon: React.ComponentType<any>; badge?: string; locked?: boolean }[] = [
     { id: 'inicio', label: 'Início', Icon: Home },
@@ -728,6 +746,12 @@ function ProjectShell({
       Icon: tb.id === 'brief_eletrica' ? Zap : tb.id === 'brief_hidraulica' ? Droplets : ClipboardList,
       badge: briefingTematicoStatus(tb.id)?.done ? '✓' : '!',
     })),
+    ...(mostraBriefInteriores ? [{
+      id: 'brief-interiores' as PageId,
+      label: 'Briefing de Interiores',
+      Icon: Sofa,
+      badge: interiorBrief.status === 'enviado' ? '✓' : interioresLiberado ? `${briefingProgressOf(interiorBrief).pct}%` : undefined,
+    }] : []),
     { id: 'mural', label: 'Mural de Recados', Icon: MessageSquare, badge: (project.mural?.length || 0) > 0 ? String(project.mural!.length) : undefined },
     { id: 'documentos', label: 'Documentos Oficiais', Icon: FolderLock, badge: (project.officialDocuments?.length || 0) > 0 ? String(project.officialDocuments!.length) : undefined },
     ...project.phases.map((ph, i) => ({
@@ -912,6 +936,23 @@ function ProjectPage({ page, project, isAdmin, userName, role, onPersist, onNavi
   if (page === 'briefing') return <PageBriefing project={project} isAdmin={isAdmin} userName={userName} role={role} onPersist={onPersist} />;
   if (page === 'mural') return <PageMural project={project} isAdmin={isAdmin} userName={userName} role={role} onPersist={onPersist} />;
   if (page === 'documentos') return <PageDocumentosOficiais project={project} isAdmin={isAdmin} userName={userName} onPersist={onPersist} />;
+  if (page === 'brief-interiores') {
+    const fase = project.phases.find(p => p.key === 'concepcao_interiores');
+    const released = !!fase && fase.state !== 'bloqueada';
+    if (!fase || (!isAdmin && !released)) return null;
+    return (
+      <InteriorBriefingPage
+        key={project.id}
+        data={project.interiorBriefing}
+        isAdmin={isAdmin}
+        released={released}
+        projectName={project.name}
+        clientName={project.clientName}
+        userName={userName}
+        onSave={d => onPersist({ ...project, interiorBriefing: d })}
+      />
+    );
+  }
   if (page.startsWith('brief-')) {
     const tbId = page.replace('brief-', '');
     const tb = THEMATIC_BRIEFINGS.find(b => b.id === tbId);

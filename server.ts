@@ -232,6 +232,13 @@ app.put("/api/data/:collection/:id", requireAuth, fileUploadJson, async (req, re
         payload.status = existing.status; // cancelar o envio é feito pela rota própria
       }
     }
+    // Briefing de Interiores: o cliente responde, mas não altera os ambientes definidos pela
+    // equipe nem um briefing já enviado (só a equipe reabre).
+    if (req.params.collection === "arch_projects" && u.role === "client" && existing?.interiorBriefing && payload && typeof payload === "object") {
+      const prev = existing.interiorBriefing;
+      if (prev.status === "enviado") payload.interiorBriefing = prev;
+      else if (payload.interiorBriefing) payload.interiorBriefing = { ...payload.interiorBriefing, config: prev.config, reopenedAt: prev.reopenedAt };
+    }
     await dataService.setDocById(req.params.collection, req.params.id, payload);
     // Etapa de projeto mudou (aprovada/entregue)? Reavalia na hora as cobranças que dependem dela.
     if (req.params.collection === "arch_projects") void cora.runBillingSweep();

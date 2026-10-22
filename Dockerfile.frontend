@@ -12,6 +12,10 @@ RUN npm ci
 # Copia todo o código-fonte
 COPY . .
 
+# Baixa as imagens de referência do Briefing de Interiores (Pexels) para public/.
+# Não bloqueia o build: se falhar, o app mostra ilustrações no lugar das fotos.
+RUN npx tsx scripts/fetch-briefing-images.ts || echo "Aviso: imagens do briefing não baixadas; o app usará ilustrações."
+
 # Compila o frontend (salva na pasta dist/)
 RUN npm run build
 
