@@ -813,6 +813,16 @@ div#root:nth-of-type(1) > div#login_container:nth-of-type(1) > div#root:nth-of-t
 /* Força bg-white e superfícies claras no tema violeta */
 .projeto-violet .bg-white { background: #ffffff !important; }
 
+/* Briefing de Interiores: caixas de aviso/confirmação (texto e filhos herdam a cor) */
+.projeto-violet .ib-warn { background: var(--v-warn-bg) !important; }
+.projeto-violet .ib-warn, .projeto-violet .ib-warn *, .projeto-violet .ib-warn-text, .projeto-violet .ib-warn-text * { color: #8a4f00 !important; }
+.projeto-violet .ib-ok { background: var(--v-ok-bg) !important; }
+.projeto-violet .ib-ok, .projeto-violet .ib-ok *, .projeto-violet .ib-ok-text { color: var(--v-ok-fg) !important; }
+/* Botões do briefing: o tema escuro global pinta texto de botões claros de branco */
+.projeto-violet .ib-root button:not(.v-grad):not(.v-btn):not(.v-nav-active):not(.ib-warn-text) { color: var(--v-text) !important; }
+.projeto-violet .ib-hover:hover { background: rgba(108,77,246,0.06) !important; }
+.projeto-violet .ib-range { accent-color: var(--v-accent); height: 32px; border: 0 !important; background: transparent !important; }
+
 /* ============================================================
    BIBLIOTECA DE COMPONENTES COMPARTILHADA (ui-*)
    Usada por src/components/ui/*. Separa "forma" (compartilhada
