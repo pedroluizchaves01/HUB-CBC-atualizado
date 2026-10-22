@@ -87,7 +87,7 @@ export const STYLES: Record<string, { name: string; desc: string }> = {
   escandinavo: { name: 'Escandinavo', desc: 'Luz, branco, madeira clara e aconchego funcional.' },
   classico: { name: 'Clássico', desc: 'Molduras, simetria, metais nobres e elegância atemporal.' },
   tropical: { name: 'Tropical contemporâneo', desc: 'Plantas, fibras e madeira, com a casa aberta para fora.' },
-  boho: { name: 'Boho', desc: 'Texturas, cor e objetos com memória, numa casa cheia de vida.' },
+  rustico: { name: 'Rústico contemporâneo', desc: 'Pedra, madeira e fibras naturais com acabamento atual.' },
   minimal: { name: 'Minimalista', desc: 'Superfícies limpas, tudo fechado e silêncio visual.' },
 };
 
@@ -100,21 +100,18 @@ export const STYLE_PALETTES: Record<string, StylePalette> = {
   escandinavo: { wall: '#F7F7F4', floor: '#E2D3BB', sofa: '#B9C3C9', seat: '#A9B4BB', rug: '#EDE8E0', art: '#D9DDE0', plant: '#7E9474' },
   classico: { wall: '#EDE4D8', floor: '#B08A62', sofa: '#7D8B74', seat: '#6F7D67', rug: '#C9B8A0', art: '#B8963E', plant: '#6B7D5E' },
   tropical: { wall: '#E6DCCB', floor: '#A47B55', sofa: '#E9E1D2', seat: '#DDD3C1', rug: '#CDB48C', art: '#4F6B3E', plant: '#4F6B3E' },
-  boho: { wall: '#D9A47E', floor: '#C59B6D', sofa: '#E6D3B3', seat: '#D9C39F', rug: '#B5523B', art: '#2E4F5E', plant: '#5F7550' },
+  rustico: { wall: '#C9BBA6', floor: '#8C6A4A', sofa: '#A0663F', seat: '#8A5734', rug: '#B9A68A', art: '#5E5A52', plant: '#5F7550' },
   minimal: { wall: '#F2F1EE', floor: '#D4D0C8', sofa: '#8E8A84', seat: '#7F7B75', rug: '#E6E3DE', art: '#BDB8AF', plant: '#9A9A8E' },
 };
 
 /**
- * Imagens de referência. Fotos do Pexels (licença Pexels: uso comercial livre,
- * sem obrigação de atribuição). Ficam em /public/briefing-interiores — baixe com
- * `npx tsx scripts/fetch-briefing-images.ts`. Se o arquivo não existir, a tela
- * mostra a ilustração da paleta do estilo. Substitua pelas fotos dos projetos da
- * CBC sempre que possível: basta manter o mesmo nome de arquivo.
+ * Imagens de referência: renders de projetos da própria CBC, otimizados (1200 × 900)
+ * e versionados em /public/briefing-interiores. Para trocar uma foto, salve outra
+ * com o mesmo nome de arquivo. Se um arquivo faltar, a tela mostra a ilustração
+ * na paleta do estilo.
  */
-export interface RefImage { file: string; pexelsId: number; source: string }
-const pexels = (file: string, pexelsId: number, slug: string): RefImage => ({
-  file: `/briefing-interiores/${file}.jpg`, pexelsId, source: `https://www.pexels.com/photo/${slug}-${pexelsId}/`,
-});
+export interface RefImage { file: string }
+const cbc = (file: string): RefImage => ({ file: `/briefing-interiores/${file}.jpg` });
 
 export interface StyleCard {
   id: string;
@@ -125,22 +122,22 @@ export interface StyleCard {
 }
 
 export const STYLE_CARDS: StyleCard[] = [
-  { id: 'japandi-1', style: 'japandi', tags: { japandi: 1, minimal: 0.3 }, caption: 'Sala aconchegante, madeira clara e poucos objetos', image: pexels('estilo-japandi-1', 29383009, 'cozy-japandi-living-room-with-modern-design') },
-  { id: 'modernobr-1', style: 'modernobr', tags: { modernobr: 1 }, caption: 'Madeira escura, linhas retas e móveis de design', image: pexels('estilo-modernobr-1', 18657168, 'modern-design-of-living-room') },
-  { id: 'industrial-1', style: 'industrial', tags: { industrial: 1 }, caption: 'Loft com materiais aparentes e janelas amplas', image: pexels('estilo-industrial-1', 2459, 'gray-couch-beside-window') },
-  { id: 'escandinavo-1', style: 'escandinavo', tags: { escandinavo: 1, minimal: 0.2 }, caption: 'Ambiente claro, branco e madeira natural', image: pexels('estilo-escandinavo-1', 9565782, 'scandinavian-interior-of-a-living-room') },
-  { id: 'classico-1', style: 'classico', tags: { classico: 1 }, caption: 'Lareira, poltronas e mobiliário clássico', image: pexels('estilo-classico-1', 4192783, 'interior-of-elegant-living-room-with-fireplace-and-vintage-furniture') },
-  { id: 'tropical-1', style: 'tropical', tags: { tropical: 1, industrial: 0.2 }, caption: 'Plantas grandes ao lado do sofá', image: pexels('estilo-tropical-1', 10163243, 'large-monstera-plant-next-to-sofa') },
-  { id: 'boho-1', style: 'boho', tags: { boho: 1 }, caption: 'Texturas, fibras e objetos com personalidade', image: pexels('estilo-boho-1', 8112348, 'cosy-boho-style-interior-design') },
-  { id: 'minimal-1', style: 'minimal', tags: { minimal: 1, japandi: 0.2 }, caption: 'Superfícies limpas e tons neutros', image: pexels('estilo-minimal-1', 28991200, 'modern-minimalist-living-room-interior-design') },
-  { id: 'japandi-2', style: 'japandi', tags: { japandi: 1, escandinavo: 0.2 }, caption: 'Tons naturais, luz suave e calma', image: pexels('estilo-japandi-2', 12285892, 'minimal-cozy-living-room-interior-design') },
-  { id: 'modernobr-2', style: 'modernobr', tags: { modernobr: 0.8, classico: 0.3 }, caption: 'Sofá de couro, tons quentes e peças com história', image: pexels('estilo-modernobr-2', 4133725, 'low-angle-shot-of-black-couch-in-a-living-room') },
-  { id: 'industrial-2', style: 'industrial', tags: { industrial: 1 }, caption: 'Tijolo aparente e sofá cinza em L', image: pexels('estilo-industrial-2', 6970027, 'gray-sofa-beside-brown-brick-wall') },
-  { id: 'escandinavo-2', style: 'escandinavo', tags: { escandinavo: 1, tropical: 0.2 }, caption: 'Madeira clara, luz natural e muitas plantas', image: pexels('estilo-escandinavo-2', 28744513, 'cozy-scandinavian-living-room-with-plants') },
-  { id: 'classico-2', style: 'classico', tags: { classico: 1, boho: 0.2 }, caption: 'Peças de época e decoração tradicional', image: pexels('estilo-classico-2', 5461565, 'vintage-living-room-design') },
-  { id: 'tropical-2', style: 'tropical', tags: { tropical: 1, modernobr: 0.3 }, caption: 'Casa aberta para o jardim, muito verde', image: pexels('estilo-tropical-2', 4917176, 'interior-of-typical-villa-located-in-lush-tropical-garden') },
-  { id: 'boho-2', style: 'boho', tags: { boho: 1, tropical: 0.2 }, caption: 'Rattan, madeira rústica e aconchego', image: pexels('estilo-boho-2', 8112338, 'rattan-furniture-in-rustic-home-interior-design') },
-  { id: 'minimal-2', style: 'minimal', tags: { minimal: 1 }, caption: 'Paredes texturizadas e quase nada à mostra', image: pexels('estilo-minimal-2', 29298710, 'minimalist-living-room-with-textured-walls') },
+  { id: 'japandi-1', style: 'japandi', tags: { japandi: 1, minimal: 0.3 }, caption: 'Quarto em madeira clara, linho e luz suave', image: cbc('estilo-japandi-1') },
+  { id: 'modernobr-1', style: 'modernobr', tags: { modernobr: 1 }, caption: 'Painel de freijó, poltrona de madeira e arte', image: cbc('estilo-modernobr-1') },
+  { id: 'industrial-1', style: 'industrial', tags: { industrial: 1 }, caption: 'Marcenaria preta, nichos expostos e luz de efeito', image: cbc('estilo-industrial-1') },
+  { id: 'escandinavo-1', style: 'escandinavo', tags: { escandinavo: 1, minimal: 0.2 }, caption: 'Branco, madeira e cabeceira ripada', image: cbc('estilo-escandinavo-1') },
+  { id: 'classico-1', style: 'classico', tags: { classico: 1 }, caption: 'Molduras nas paredes, simetria e mesa de jantar', image: cbc('estilo-classico-1') },
+  { id: 'tropical-1', style: 'tropical', tags: { tropical: 1, modernobr: 0.2 }, caption: 'Pé-direito alto, pedra e plantas', image: cbc('estilo-tropical-1') },
+  { id: 'rustico-1', style: 'rustico', tags: { rustico: 1 }, caption: 'Pedra, gabião, forno a lenha e madeira', image: cbc('estilo-rustico-1') },
+  { id: 'minimal-1', style: 'minimal', tags: { minimal: 1, japandi: 0.2 }, caption: 'Linhas retas, tons neutros e tudo no lugar', image: cbc('estilo-minimal-1') },
+  { id: 'japandi-2', style: 'japandi', tags: { japandi: 1, escandinavo: 0.2 }, caption: 'Cozinha clara, ripados e madeira natural', image: cbc('estilo-japandi-2') },
+  { id: 'modernobr-2', style: 'modernobr', tags: { modernobr: 1, tropical: 0.2 }, caption: 'Madeira, couro e escada escultural', image: cbc('estilo-modernobr-2') },
+  { id: 'industrial-2', style: 'industrial', tags: { industrial: 1 }, caption: 'Ambiente escuro, metal e iluminação técnica', image: cbc('estilo-industrial-2') },
+  { id: 'escandinavo-2', style: 'escandinavo', tags: { escandinavo: 1 }, caption: 'Revestimento claro, linho e tons neutros', image: cbc('estilo-escandinavo-2') },
+  { id: 'classico-2', style: 'classico', tags: { classico: 1, modernobr: 0.2 }, caption: 'Portas com moldura e marcenaria tradicional', image: cbc('estilo-classico-2') },
+  { id: 'tropical-2', style: 'tropical', tags: { tropical: 1 }, caption: 'Casa aberta para a piscina e o jardim', image: cbc('estilo-tropical-2') },
+  { id: 'rustico-2', style: 'rustico', tags: { rustico: 1, modernobr: 0.3 }, caption: 'Forro de madeira, pedra e mesa comprida', image: cbc('estilo-rustico-2') },
+  { id: 'minimal-2', style: 'minimal', tags: { minimal: 1 }, caption: 'Revestimento neutro e superfícies limpas', image: cbc('estilo-minimal-2') },
 ];
 
 export const TVS: { inches: number; widthM: number }[] = [
@@ -162,10 +159,10 @@ export const BASES: { id: BaseId; label: string; heightCm: number }[] = [
   { id: 'marcenaria', label: 'Cama de marcenaria', heightCm: 28 },
 ];
 export const KID_BEDS: { id: KidBedId; label: string; hint: string; image?: RefImage }[] = [
-  { id: 'comum', label: 'Cama comum', hint: 'Solteiro tradicional', image: pexels('cama-infantil-comum', 15625991, 'kids-bedroom-interior') },
-  { id: 'evolutiva', label: 'Cama evolutiva', hint: 'Baixa, montessoriana ou casinha', image: pexels('cama-infantil-evolutiva', 19889143, 'child-furniture-in-a-room') },
+  { id: 'comum', label: 'Cama comum', hint: 'Solteiro tradicional', image: cbc('cama-infantil-comum') },
+  { id: 'evolutiva', label: 'Cama evolutiva', hint: 'Baixa, montessoriana ou casinha' },
   { id: 'bicama', label: 'Bicama', hint: 'Cama extra para visitas' },
-  { id: 'beliche', label: 'Beliche', hint: 'Duas camas sobrepostas', image: pexels('cama-infantil-beliche', 4221413, 'brown-wooden-bunk-bed') },
+  { id: 'beliche', label: 'Beliche', hint: 'Duas camas sobrepostas', image: cbc('cama-infantil-beliche') },
 ];
 
 export const DORM_TYPES: { id: DormType; label: string; long: string; defaultBed: BedId; defaultMattress: number }[] = [
