@@ -1,0 +1,71 @@
+# ---------------------------------------------------------------------------
+# AMBIENTE DE TESTE (staging) — branch `teste`
+#
+# Serve para visualizar alterações de design/funcionalidade antes de irem para
+# a produção (branch `main`). Diferenças em relação ao docker-compose.yml:
+#   • Banco Postgres PRÓPRIO (staging-db) — nunca toca nos dados reais.
+#   • Sem Evolution API / WhatsApp — nenhum lembrete real é disparado.
+#   • ClickSign e Cora desligados — nenhum contrato/boleto real é gerado.
+#   • Sem container_name fixo — não colide com os containers da produção.
+# ---------------------------------------------------------------------------
+
+services:
+  crm-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    expose:
+      - "3000"
+    environment:
+      - NODE_ENV=production
+      - 'DATABASE_URL=postgresql://hub:${STAGING_DB_PASSWORD}@staging-db:5432/hub'
+      - DATABASE_SSL=false
+      - 'SESSION_SECRET=${SESSION_SECRET}'
+      - 'GEMINI_API_KEY=${GEMINI_API_KEY:-}'
+      - CLICKSIGN_ENABLED=false
+      - CORA_ENABLED=false
+      - WHATSAPP_PROVIDER=none
+    depends_on:
+      - staging-db
+    restart: always
+
+  staging-db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=hub
+      - 'POSTGRES_PASSWORD=${STAGING_DB_PASSWORD}'
+      - POSTGRES_DB=hub
+    volumes:
+      - staging_db:/var/lib/postgresql/data
+    restart: always
+
+  # Popula o banco de teste com os dados de exemplo e os usuários (idempotente:
+  # só grava o que ainda não existe). Roda uma vez a cada deploy e encerra.
+  staging-seed:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    environment:
+      - 'DATABASE_URL=postgresql://hub:${STAGING_DB_PASSWORD}@staging-db:5432/hub'
+      - DATABASE_SSL=false
+      - 'ADMIN_PEDRO_PASSWORD=${STAGING_ADMIN_PASSWORD}'
+    command: >
+      sh -c "sleep 20;
+             until npx -y tsx scripts/seed-data.ts; do echo 'aguardando banco...'; sleep 10; done;
+             npx -y tsx scripts/seed-users.ts"
+    depends_on:
+      - crm-api
+    restart: "no"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    expose:
+      - "80"
+    depends_on:
+      - crm-api
+    restart: always
+
+volumes:
+  staging_db:

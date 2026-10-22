@@ -37,7 +37,9 @@ function getPool(): Pool {
   pool = new Pool({
     connectionString: url,
     // Supabase exige TLS; não validamos a CA (o pooler usa cert gerenciado).
-    ssl: { rejectUnauthorized: false },
+    // DATABASE_SSL=false desliga o TLS — usado só no ambiente de teste, cujo Postgres
+    // roda na rede interna do compose, sem certificado.
+    ssl: process.env.DATABASE_SSL === "false" ? false : { rejectUnauthorized: false },
     max: 8,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 15_000,
