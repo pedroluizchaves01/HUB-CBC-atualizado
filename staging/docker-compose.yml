@@ -1,4 +1,6 @@
 # ---------------------------------------------------------------------------
+# Fica nesta pasta para o Coolify (Base Directory = /staging) ler este compose
+# no lugar do docker-compose.yml da produção. Os builds usam a raiz do repo (..).
 # AMBIENTE DE TESTE (staging) — branch `teste`
 #
 # Serve para visualizar alterações de design/funcionalidade antes de irem para
@@ -12,7 +14,7 @@
 services:
   crm-api:
     build:
-      context: .
+      context: ..
       dockerfile: Dockerfile.backend
     expose:
       - "3000"
@@ -43,7 +45,7 @@ services:
   # só grava o que ainda não existe). Roda uma vez a cada deploy e encerra.
   staging-seed:
     build:
-      context: .
+      context: ..
       dockerfile: Dockerfile.backend
     environment:
       - 'DATABASE_URL=postgresql://hub:${STAGING_DB_PASSWORD}@staging-db:5432/hub'
@@ -59,7 +61,7 @@ services:
 
   frontend:
     build:
-      context: .
+      context: ..
       dockerfile: Dockerfile.frontend
     expose:
       - "80"
