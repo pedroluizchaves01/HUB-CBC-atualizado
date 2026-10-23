@@ -18,12 +18,12 @@ import {
 import {
   ACCEPT_TEXT, BASES, BEDS, DORM_TYPES, HABIT_OPTIONS, KID_BEDS, KITCHEN_ITEMS, OFFICE_ITEMS, OFFICE_USES,
   PET_OPTIONS, PRIORITY_OPTIONS, SMALL_APPLIANCES, VOLTAGES, CABINET_TONES, STONE_TONES, STONE_FINISHES, FINISH_COMBOS, FINISH_AREAS,
-  emptyFinish, finishAreasOf, kitchenLabel, voltageLabel, STYLES, STYLE_CARDS, STYLE_PALETTES, TVS, TV_EXTRAS,
+  emptyFinish, finishAreasOf, kitchenLabel, voltageLabel, refsFor, dormRefRoom, chosenRefs, COVER_IMAGE, STYLES, STYLE_CARDS, STYLE_PALETTES, TVS, TV_EXTRAS,
   WARDROBE_ITEMS, bedTopCm, blockSummary, buildBlocks, computeAlerts, computePendencias, computeProfile,
   dinnerTable, dormAnswer, dormTypeMeta, fmt1, normalizeBriefing, officeDeskCm, progressOf, tvRange, tvStatus,
   wardrobeEstimate,
   type IBAnswers, type IBBlock, type IBConfig, type IBDorm, type IBDormAnswer, type InteriorBriefingData,
-  type RefImage, type StylePalette, type Vote, type WardrobeCounts, type IBKitchenItem, type Voltage, type FinishArea, type IBFinish, type FinishCombo,
+  type RefImage, type RefRoom, type StylePalette, type Vote, type WardrobeCounts, type IBKitchenItem, type Voltage, type FinishArea, type IBFinish, type FinishCombo,
 } from '../lib/interiorBriefing';
 import { openInteriorBriefingReport } from '../lib/interiorBriefingReportHtml';
 
@@ -251,7 +251,11 @@ function Intro({ clientName, blocks, onStart, onMap, compact }: { clientName: st
   const minutes = blocks.reduce((s, b) => s + b.minutes, 0);
   return (
     <div className="v-card-border overflow-hidden">
-      {!compact && <HeroIllustration />}
+      {!compact && (
+        <div className="relative h-44 sm:h-60 overflow-hidden" style={{ background: '#ece7fd' }}>
+          <img src={COVER_IMAGE.file} alt="" aria-hidden="true" className="absolute inset-0 w-full h-full object-cover" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+        </div>
+      )}
       <div className="p-6 sm:p-8 flex flex-col gap-5">
         <div className="flex flex-col gap-2">
           <p className="text-[13px] text-vsoft">Olá, {clientName.split(' ')[0] || 'tudo bem'}</p>
@@ -424,16 +428,56 @@ function RefPhoto({ image, palette, alt, className = '' }: { image?: RefImage; p
   );
 }
 
-function HeroIllustration() {
+
+// ---------------------------------------------------------------------------
+// Galeria de referências (projetos da CBC)
+// ---------------------------------------------------------------------------
+
+function RefGallery({ room, value, onChange, title = 'Quais destas referências agradam vocês?' }: {
+  room: RefRoom; value: string[]; onChange: (v: string[]) => void; title?: string;
+}) {
+  const refs = refsFor(room);
+  const [zoom, setZoom] = useState<string | null>(null);
+  const zoomed = refs.find(r => r.id === zoom);
+  if (!refs.length) return null;
+  const toggle = (id: string) => onChange(value.includes(id) ? value.filter(x => x !== id) : [...value, id]);
   return (
-    <div className="relative h-44 sm:h-52 overflow-hidden" aria-hidden="true" style={{ background: '#ece7fd' }}>
-      <div className="absolute" style={{ right: '8%', top: 22, width: 110, height: 170, borderRadius: '55px 55px 0 0', background: '#f7f5fe' }} />
-      <div className="absolute left-0 right-0 bottom-0" style={{ height: 52, background: '#d9d1f7' }} />
-      <div className="absolute" style={{ left: '8%', bottom: 40, width: 190, height: 48, borderRadius: '18px 18px 6px 6px', background: '#5a3ee0' }} />
-      <div className="absolute" style={{ left: 'calc(8% - 6px)', bottom: 32, width: 202, height: 22, borderRadius: 8, background: '#4f2fd4' }} />
-      <div className="absolute" style={{ left: 'calc(8% + 40px)', top: 30, width: 72, height: 48, borderRadius: 3, background: '#b9a8f5' }} />
-      <div className="absolute" style={{ right: 'calc(8% + 130px)', bottom: 48, width: 42, height: 78, borderRadius: '50%', background: '#7d9a77' }} />
-    </div>
+    <Section title={title} hint="Projetos da Chaves Brites Correa. Marque quantas quiser; toque na foto para ampliar.">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5">
+        {refs.map(r => {
+          const sel = value.includes(r.id);
+          return (
+            <div key={r.id} className="relative rounded-2xl overflow-hidden bg-white flex flex-col"
+              style={{ border: sel ? '2px solid #6c4df6' : '1px solid rgba(108,77,246,0.15)', boxShadow: sel ? '0 6px 18px rgba(108,77,246,0.22)' : undefined }}>
+              <button type="button" onClick={() => setZoom(r.id)} aria-label={`Ampliar: ${r.caption}`} className="block p-0 border-0 bg-transparent">
+                <RefPhoto image={r.image} palette={STYLE_PALETTES.modernobr} alt={r.caption} className="aspect-[4/3]" />
+              </button>
+              <button type="button" onClick={() => toggle(r.id)} aria-pressed={sel} aria-label={sel ? `Desmarcar: ${r.caption}` : `Gostei: ${r.caption}`}
+                className={`absolute top-2 right-2 w-11 h-11 rounded-full flex items-center justify-center ${sel ? 'v-grad' : 'bg-white'}`}
+                style={{ boxShadow: '0 2px 10px rgba(0,0,0,0.18)' }}>
+                <Heart size={18} fill={sel ? 'currentColor' : 'none'} />
+              </button>
+              <p className="px-3 py-2 m-0 text-[12px] leading-snug" style={{ fontWeight: 500 }}>{r.caption}</p>
+            </div>
+          );
+        })}
+      </div>
+      {value.length > 0 && <p className="text-[12px] text-vsoft m-0">{value.length} referência{value.length === 1 ? '' : 's'} marcada{value.length === 1 ? '' : 's'}.</p>}
+      {zoomed && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(20,16,40,0.82)' }} onClick={() => setZoom(null)} role="dialog" aria-modal="true" aria-label={zoomed.caption}>
+          <div className="relative max-w-5xl w-full" onClick={e => e.stopPropagation()}>
+            <img src={zoomed.image.file} alt={zoomed.caption} className="w-full rounded-2xl" style={{ maxHeight: '78vh', objectFit: 'contain', background: '#000' }} />
+            <div className="flex flex-wrap items-center gap-2 mt-3">
+              <p className="flex-1 m-0 text-[14px]" style={{ color: '#fff', fontWeight: 600 }}>{zoomed.caption}</p>
+              <button type="button" onClick={() => toggle(zoomed.id)} className={`px-5 rounded-full text-[13px] flex items-center gap-2 ${value.includes(zoomed.id) ? 'v-grad' : 'bg-white'}`} style={{ minHeight: 44, fontWeight: 700 }}>
+                <Heart size={16} fill={value.includes(zoomed.id) ? 'currentColor' : 'none'} /> {value.includes(zoomed.id) ? 'Marcada' : 'Gostei'}
+              </button>
+              <button type="button" onClick={() => setZoom(null)} className="px-5 rounded-full text-[13px] bg-white" style={{ minHeight: 44, fontWeight: 600 }}>Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </Section>
   );
 }
 
@@ -444,6 +488,21 @@ function HeroIllustration() {
 function BlockBody({ block, draft, setA, onStyleDone }: {
   block: IBBlock; draft: InteriorBriefingData; setA: (p: Partial<IBAnswers>) => void; onStyleDone: () => void;
 }) {
+  const a = draft.answers;
+  const body = blockContent(block, draft, setA, onStyleDone);
+  const dorm = block.kind === 'dorm' ? draft.config.dorms.find(d => d.id === block.dormId) : undefined;
+  const room: RefRoom | null = block.kind === 'sala' ? 'sala' : block.kind === 'jantar' ? 'jantar' : block.kind === 'cozinha' ? 'cozinha'
+    : block.kind === 'escritorio' ? 'escritorio' : dorm ? dormRefRoom(dorm.type) : null;
+  if (!room) return body;
+  return (
+    <div className="flex flex-col gap-8">
+      <RefGallery room={room} value={a.refs[block.key] || []} onChange={v => setA({ refs: { ...a.refs, [block.key]: v } })} />
+      {body}
+    </div>
+  );
+}
+
+function blockContent(block: IBBlock, draft: InteriorBriefingData, setA: (p: Partial<IBAnswers>) => void, onStyleDone: () => void) {
   const a = draft.answers;
   switch (block.kind) {
     case 'moradores': return <BlockMoradores a={a} setA={setA} />;
@@ -800,6 +859,10 @@ function BlockAcabamentos({ a, setA, areas }: BlockProps & { areas: FinishArea[]
             );
           })}
         </div>
+      )}
+      {(area === 'banheiro' || area === 'gourmet' || area === 'cozinha') && (
+        <RefGallery room={area === 'cozinha' ? 'cozinha' : area} title="Que marcenaria e bancada chamam a atenção?"
+          value={a.refs[`acab-${area}`] || []} onChange={v => setA({ refs: { ...a.refs, [`acab-${area}`]: v } })} />
       )}
       <Section title="Armários: claros ou escuros?" hint="Pense na sensação que querem no ambiente, não no material exato.">
         <ToneCards options={CABINET_TONES} value={f.cabinet} onPick={id => setF({ cabinet: id })} label="Tom dos armários" />
@@ -1281,6 +1344,24 @@ function AdminReport({ briefing }: { briefing: InteriorBriefingData }) {
             <p className={`text-[14px] m-0 ${briefing.done[b.key] ? '' : 'ib-warn-text'}`} style={{ fontWeight: 600 }}>{briefing.done[b.key] ? blockSummary(briefing, b) : 'Pendente'}</p>
           </div>
         ))}
+        {blocks.some(b => chosenRefs(briefing, b).length) && (
+          <div className="pt-4 flex flex-col gap-4">
+            <p className="text-[15px] m-0" style={{ fontWeight: 800 }}>Referências marcadas</p>
+            {blocks.filter(b => chosenRefs(briefing, b).length).map(b => (
+              <div key={b.key} className="flex flex-col gap-2">
+                <p className="text-[12px] text-vmute m-0">{b.title}</p>
+                <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-6 gap-2">
+                  {chosenRefs(briefing, b).map(r => (
+                    <figure key={r.id} className="m-0">
+                      <img src={r.image.file} alt={r.caption} loading="lazy" className="w-full aspect-[4/3] object-cover rounded-xl" />
+                      <figcaption className="text-[10px] text-vmute mt-1 leading-tight">{r.caption}</figcaption>
+                    </figure>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         {a.keep.trim() && <div className="pt-3"><p className="text-[12px] text-vmute m-0">O que vai ficar</p><p className="text-[14px] m-0 whitespace-pre-line">{a.keep}</p></div>}
         {a.notes.trim() && <div className="pt-3"><p className="text-[12px] text-vmute m-0">Observações</p><p className="text-[14px] m-0 whitespace-pre-line">{a.notes}</p></div>}
       </div>
