@@ -21,3 +21,15 @@ Se um arquivo faltar, o app mostra uma ilustração na paleta do estilo, então 
 Ainda sem foto (aparece a ilustração): cama evolutiva e bicama. Para incluir, salve
 `cama-infantil-evolutiva.jpg` ou `cama-infantil-bicama.jpg` aqui e adicione `image: cbc('…')`
 ao item correspondente em `KID_BEDS` (src/lib/interiorBriefing.ts).
+
+## Capa e galerias de referência por ambiente
+
+- `capa.jpg`: imagem da tela de boas-vindas do briefing.
+- `ref/<ambiente>-<n>.jpg`: fotos das galerias "Quais destas referências agradam vocês?" em cada bloco
+  (sala, jantar, cozinha, banheiro, gourmet, casal, solteiro, infantil, escritório). A lista, com a
+  legenda de cada foto, fica em `ROOM_REFS` (src/lib/interiorBriefing.ts). Para incluir uma foto nova,
+  salve o arquivo em `ref/` e adicione uma linha em `ROOM_REFS`.
+
+Ao substituir um arquivo mantendo o mesmo nome, aumente `IMG_VERSION` em
+src/lib/interiorBriefing.ts: o servidor guarda imagens em cache por 1 ano, e a nova versão
+obriga o navegador a buscar a foto atualizada.

@@ -7,7 +7,7 @@
 
 import {
   ACCEPT_TEXT, BASES, BEDS, KID_BEDS, PRIORITY_OPTIONS, CABINET_TONES, STONE_TONES, FINISH_AREAS, FINISH_COMBOS,
-  finishAreasOf, kitchenLabel, voltageLabel, STYLES, bedTopCm, buildBlocks,
+  finishAreasOf, kitchenLabel, voltageLabel, chosenRefs, STYLES, bedTopCm, buildBlocks,
   computeAlerts, computePendencias, computeProfile, dinnerTable, dormAnswer, fmt1, officeDeskCm, tvRange,
   wardrobeEstimate, type IBBlock, type InteriorBriefingData,
 } from './interiorBriefing';
@@ -90,6 +90,14 @@ export function buildInteriorBriefingReportHtml(b: InteriorBriefingData, meta: I
       const sw = combo ? `<div class="combo"><span style="background:${esc(combo.stone)}"></span><span style="background:${esc(combo.cabinet)}"></span></div>` : '';
       return card(FINISH_AREAS.find(x => x.id === id)!.label, sw + dl(rows));
     }).join('')}</div>
+  </section>` : '';
+
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const refBlocks = blocks.filter(bl => chosenRefs(b, bl).length);
+  const refsHtml = refBlocks.length ? `
+  <section><h2><span>Referências marcadas</span></h2>
+    ${refBlocks.map(bl => `<div class="refgroup"><p class="eyebrow">${esc(bl.title)}</p><div class="refs">${chosenRefs(b, bl).map(r =>
+      `<figure><img src="${esc(origin + r.image.file)}" alt="${esc(r.caption)}"><figcaption>${esc(r.caption)}</figcaption></figure>`).join('')}</div></div>`).join('')}
   </section>` : '';
 
   const w = a.wardrobe;
@@ -195,6 +203,7 @@ dl{display:grid;grid-template-columns:34mm 1fr;gap:1.5mm 4mm}dt{color:#837f99}dd
 .swatches{display:grid;grid-template-columns:repeat(5,1fr);gap:2mm}.swatches span{height:14mm;border-radius:2.5mm;border:1px solid rgba(0,0,0,.06)}
 .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:3mm}.kpis div{background:#f7f5fe;border-radius:3mm;padding:3mm 4mm;display:flex;flex-direction:column}
 .kpis b{font-size:16pt;font-weight:700;line-height:1.1}.kpis span{font-size:8pt;color:#5a5570}
+.refgroup{margin-bottom:4mm;break-inside:avoid}.refs{display:grid;grid-template-columns:repeat(4,1fr);gap:3mm}.refs figure{margin:0}.refs img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:2.5mm;display:block}.refs figcaption{font-size:7.5pt;color:#837f99;margin-top:1mm;line-height:1.3}
 .combo{display:grid;grid-template-rows:5mm 12mm;border-radius:2.5mm;overflow:hidden;margin-bottom:3mm;border:1px solid rgba(0,0,0,.08)}.combo span{display:block}
 .tags{display:flex;flex-wrap:wrap;gap:2mm}.tags span{background:#f0edfd;border-radius:99px;padding:1mm 3.5mm;font-size:9pt}
 .alert{background:#fff2dc;color:#7a4300;border-radius:4mm;padding:5mm;break-inside:avoid}.alert .eyebrow{color:#7a4300}.alert-t{font-weight:700;font-size:10.5pt}
@@ -228,6 +237,7 @@ footer b{letter-spacing:.22em;color:#1b1830;font-size:8pt;white-space:nowrap}
   ${estilo}
   ${ambientes ? `<section><h2><span>Ambientes</span></h2><div class="grid3">${ambientes}</div></section>` : ''}
   ${finishes}
+  ${refsHtml}
   ${roupeiro}
   ${extras}
   ${pendHtml}

@@ -61,6 +61,7 @@ export interface IBAnswers {
   keep: string;          // o que vai ficar (móveis, objetos, obras)
   notes: string;         // observações livres
   priorities: string[];  // ordem das prioridades (ids de PRIORITY_OPTIONS)
+  refs: Record<string, string[]>; // referências marcadas por bloco/ambiente (ids de ROOM_REFS)
 }
 
 export interface InteriorBriefingData {
@@ -111,7 +112,11 @@ export const STYLE_PALETTES: Record<string, StylePalette> = {
  * na paleta do estilo.
  */
 export interface RefImage { file: string }
-const cbc = (file: string): RefImage => ({ file: `/briefing-interiores/${file}.jpg` });
+// IMG_VERSION força o navegador a buscar a foto nova quando um arquivo é substituído
+// (o nginx guarda imagens em cache por 1 ano). Aumente ao trocar fotos.
+export const IMG_VERSION = 3;
+const cbc = (file: string): RefImage => ({ file: `/briefing-interiores/${file}.jpg?v=${IMG_VERSION}` });
+export const COVER_IMAGE = cbc('capa');
 
 export interface StyleCard {
   id: string;
@@ -139,6 +144,67 @@ export const STYLE_CARDS: StyleCard[] = [
   { id: 'rustico-2', style: 'rustico', tags: { rustico: 1, modernobr: 0.3 }, caption: 'Forro de madeira, pedra e mesa comprida', image: cbc('estilo-rustico-2') },
   { id: 'minimal-2', style: 'minimal', tags: { minimal: 1 }, caption: 'Revestimento neutro e superfícies limpas', image: cbc('estilo-minimal-2') },
 ];
+
+// ---- Galeria de referências por ambiente (projetos da CBC) ----
+export type RefRoom = 'sala' | 'jantar' | 'cozinha' | 'banheiro' | 'gourmet' | 'casal' | 'solteiro' | 'infantil' | 'escritorio';
+export interface RoomRef { id: string; room: RefRoom; caption: string; image: RefImage }
+export const ROOM_REFS: RoomRef[] = [
+  { id: 'sala-1', room: 'sala', caption: "Pé-direito duplo, parede de pedra e sofá com chaise", image: cbc('ref/sala-1') },
+  { id: 'sala-2', room: 'sala', caption: "Painel de madeira com TV e pedra branca", image: cbc('ref/sala-2') },
+  { id: 'sala-3', room: 'sala', caption: "Estar integrado ao jantar, com rack em madeira", image: cbc('ref/sala-3') },
+  { id: 'sala-4', room: 'sala', caption: "Painel ripado, arte e iluminação de sanca", image: cbc('ref/sala-4') },
+  { id: 'sala-5', room: 'sala', caption: "Sofá de couro, escada escultural e estante", image: cbc('ref/sala-5') },
+  { id: 'sala-6', room: 'sala', caption: "Freijó, poltrona de madeira e tapete natural", image: cbc('ref/sala-6') },
+  { id: 'sala-7', room: 'sala', caption: "Sala de estar e jogos com poltronas orgânicas", image: cbc('ref/sala-7') },
+  { id: 'sala-8', room: 'sala', caption: "Home theater escuro com estante de coleção", image: cbc('ref/sala-8') },
+  { id: 'jantar-1', room: 'jantar', caption: "Mesa longa, cadeiras estofadas e boiserie", image: cbc('ref/jantar-1') },
+  { id: 'jantar-2', room: 'jantar', caption: "Mesa de madeira com cadeiras de couro", image: cbc('ref/jantar-2') },
+  { id: 'jantar-3', room: 'jantar', caption: "Jantar integrado ao estar, cadeiras claras", image: cbc('ref/jantar-3') },
+  { id: 'cozinha-1', room: 'cozinha', caption: "Ilha em travertino, pendentes e armários claros", image: cbc('ref/cozinha-1') },
+  { id: 'cozinha-2', room: 'cozinha', caption: "Ilha em madeira com forno embutido", image: cbc('ref/cozinha-2') },
+  { id: 'cozinha-3', room: 'cozinha', caption: "Bancada com banquetas e nichos iluminados", image: cbc('ref/cozinha-3') },
+  { id: 'cozinha-4', room: 'cozinha', caption: "Parede de pedra, ripado e ilha em travertino", image: cbc('ref/cozinha-4') },
+  { id: 'cozinha-5', room: 'cozinha', caption: "Cristaleiras iluminadas e ilha em pedra", image: cbc('ref/cozinha-5') },
+  { id: 'cozinha-6', room: 'cozinha', caption: "Portas de vidro, ripado e janela de jardim", image: cbc('ref/cozinha-6') },
+  { id: 'cozinha-7', room: 'cozinha', caption: "Portas com moldura e ilha em madeira", image: cbc('ref/cozinha-7') },
+  { id: 'cozinha-8', room: 'cozinha', caption: "Lavanderia compacta com armários claros", image: cbc('ref/cozinha-8') },
+  { id: 'banheiro-1', room: 'banheiro', caption: "Gabinete em madeira e bancada de mármore", image: cbc('ref/banheiro-1') },
+  { id: 'banheiro-2', room: 'banheiro', caption: "Banheira, box amplo e cubas de apoio", image: cbc('ref/banheiro-2') },
+  { id: 'banheiro-3', room: 'banheiro', caption: "Banheira revestida em mármore", image: cbc('ref/banheiro-3') },
+  { id: 'banheiro-4', room: 'banheiro', caption: "Banheira sob a janela e luz natural", image: cbc('ref/banheiro-4') },
+  { id: 'banheiro-5', room: 'banheiro', caption: "Bancada dupla, box em vidro e sanca", image: cbc('ref/banheiro-5') },
+  { id: 'banheiro-6', room: 'banheiro', caption: "Mesmo banheiro com iluminação noturna", image: cbc('ref/banheiro-6') },
+  { id: 'gourmet-1', room: 'gourmet', caption: "Forno a lenha, gabião e balcão em madeira", image: cbc('ref/gourmet-1') },
+  { id: 'gourmet-2', room: 'gourmet', caption: "Forro de madeira, churrasqueira e mesa longa", image: cbc('ref/gourmet-2') },
+  { id: 'gourmet-3', room: 'gourmet', caption: "Forno de pizza com bancada de apoio", image: cbc('ref/gourmet-3') },
+  { id: 'gourmet-4', room: 'gourmet', caption: "Pedra moledo, granito preto e ilha", image: cbc('ref/gourmet-4') },
+  { id: 'gourmet-5', room: 'gourmet', caption: "Área gourmet aberta para a piscina", image: cbc('ref/gourmet-5') },
+  { id: 'casal-1', room: 'casal', caption: "Madeira escura, cabeceira estofada e luz indireta", image: cbc('ref/casal-1') },
+  { id: 'casal-2', room: 'casal', caption: "Painel de madeira com cabeceira e plantas", image: cbc('ref/casal-2') },
+  { id: 'casal-3', room: 'casal', caption: "Parede revestida em madeira e luz zenital", image: cbc('ref/casal-3') },
+  { id: 'casal-4', room: 'casal', caption: "Cabeceira com fita de LED e cortinas leves", image: cbc('ref/casal-4') },
+  { id: 'casal-5', room: 'casal', caption: "Madeira clara, roupeiro integrado e arte azul", image: cbc('ref/casal-5') },
+  { id: 'casal-6', room: 'casal', caption: "Marcenaria clara em curva e iluminação suave", image: cbc('ref/casal-6') },
+  { id: 'solteiro-1', room: 'solteiro', caption: "Cabeceira ripada terracota e roupeiro branco", image: cbc('ref/solteiro-1') },
+  { id: 'solteiro-2', room: 'solteiro', caption: "Painel de TV em terracota e prateleiras", image: cbc('ref/solteiro-2') },
+  { id: 'infantil-1', room: 'infantil', caption: "Estudo para dois, estante e painel de TV", image: cbc('ref/infantil-1') },
+  { id: 'infantil-2', room: 'infantil', caption: "Duas camas de solteiro e revestimento claro", image: cbc('ref/infantil-2') },
+  { id: 'infantil-3', room: 'infantil', caption: "Cama com roupeiro grafite e tapete orgânico", image: cbc('ref/infantil-3') },
+  { id: 'infantil-4', room: 'infantil', caption: "Bancada de estudo e roupeiro fechado", image: cbc('ref/infantil-4') },
+  { id: 'infantil-5', room: 'infantil', caption: "Beliche em madeira e papel de parede listrado", image: cbc('ref/infantil-5') },
+  { id: 'infantil-6', room: 'infantil', caption: "Estudo com estante iluminada para brinquedos", image: cbc('ref/infantil-6') },
+  { id: 'infantil-7', room: 'infantil', caption: "Mesa para dois e estante colorida", image: cbc('ref/infantil-7') },
+  { id: 'infantil-8', room: 'infantil', caption: "Papel de parede de aviões e cabeceira azul", image: cbc('ref/infantil-8') },
+  { id: 'escritorio-1', room: 'escritorio', caption: "Estante em madeira escura e mesa em mármore", image: cbc('ref/escritorio-1') },
+  { id: 'escritorio-2', room: 'escritorio', caption: "Painel com arte e mesa em pedra", image: cbc('ref/escritorio-2') },
+  { id: 'escritorio-3', room: 'escritorio', caption: "Revestimento em madeira e luz embutida", image: cbc('ref/escritorio-3') },
+  { id: 'escritorio-4', room: 'escritorio', caption: "Ambiente escuro com iluminação de destaque", image: cbc('ref/escritorio-4') },
+  { id: 'escritorio-5', room: 'escritorio', caption: "Setup de trabalho e jogos com marcenaria preta", image: cbc('ref/escritorio-5') },
+];
+export const refsFor = (room: RefRoom) => ROOM_REFS.filter(r => r.room === room);
+export const refById = (id: string) => ROOM_REFS.find(r => r.id === id);
+/** Galeria usada por um dormitório, conforme o tipo. */
+export const dormRefRoom = (t: DormType): RefRoom => (t === 'casal' ? 'casal' : t === 'infantil' ? 'infantil' : 'solteiro');
 
 export const TVS: { inches: number; widthM: number }[] = [
   { inches: 50, widthM: 1.12 }, { inches: 55, widthM: 1.23 }, { inches: 65, widthM: 1.45 },
@@ -283,7 +349,7 @@ export function defaultAnswers(): IBAnswers {
     dorms: {},
     office: { people: 1, monitors: 1, use: [], items: [] },
     wardrobe: { p1: emptyWardrobe(), p2: emptyWardrobe(), p1Name: 'Pessoa 1', p2Name: 'Pessoa 2' },
-    keep: '', notes: '', priorities: PRIORITY_OPTIONS.map(p => p.id),
+    keep: '', notes: '', priorities: PRIORITY_OPTIONS.map(p => p.id), refs: {},
   };
 }
 
@@ -308,6 +374,7 @@ export function normalizeBriefing(raw?: Partial<InteriorBriefingData> | null): I
   a.priorities = prios;
   a.kitchen = (a.kitchen || []).map(k => ({ voltage: '' as Voltage, ...k }));
   a.finishes = a.finishes || {};
+  a.refs = a.refs || {};
   return {
     ...base, ...raw,
     config: { ...base.config, ...(raw.config || {}), dorms: raw.config?.dorms ?? base.config.dorms },
@@ -509,7 +576,22 @@ export function computePendencias(b: InteriorBriefingData): { title: string; tex
 
 const pl = (n: number, a: string, b: string) => `${n} ${n === 1 ? a : b}`;
 
+export function refKeysOf(b: InteriorBriefingData, block: IBBlock): string[] {
+  if (block.kind === 'acabamentos') return finishAreasOf(b.config).map(id => `acab-${id}`);
+  if (['sala', 'jantar', 'cozinha', 'dorm', 'escritorio'].includes(block.kind)) return [block.key];
+  return [];
+}
+export function chosenRefs(b: InteriorBriefingData, block: IBBlock): RoomRef[] {
+  return refKeysOf(b, block).flatMap(k => b.answers.refs[k] || []).map(refById).filter((r): r is RoomRef => !!r);
+}
+
 export function blockSummary(b: InteriorBriefingData, block: IBBlock): string {
+  const base = blockSummaryBase(b, block);
+  const n = chosenRefs(b, block).length;
+  return n ? `${base} · ${n} referência${n === 1 ? '' : 's'}` : base;
+}
+
+function blockSummaryBase(b: InteriorBriefingData, block: IBBlock): string {
   const a = b.answers;
   switch (block.kind) {
     case 'moradores': {
