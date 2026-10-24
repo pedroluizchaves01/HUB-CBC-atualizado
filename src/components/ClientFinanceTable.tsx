@@ -76,7 +76,7 @@ export default function ClientFinanceTable({ transactions, formatCurrency }: Pro
   };
   const temFiltro = busca || catFiltro !== 'todas' || fornecedorFiltro !== 'todos' || statusFiltro !== 'todos' || agrupar !== 'nenhum';
 
-  const selClass = "bg-white border border-stone-200 py-1.5 px-2 text-xs focus:outline-none focus:border-stone-400 rounded";
+  const selClass = "bg-white border border-stone-200 py-1.5 px-2.5 text-xs rounded-full cursor-pointer transition-colors hover:border-stone-300 focus:outline-none focus:border-[#18181b]";
 
   const linha = (t: Transaction) => (
     <tr key={t.id} className="border-b border-stone-100 hover:bg-stone-50">
@@ -96,15 +96,15 @@ export default function ClientFinanceTable({ transactions, formatCurrency }: Pro
 
   return (
     <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
-      <div className="px-5 py-4 border-b border-stone-150">
+      <div className="px-5 py-4 border-b border-stone-100">
         <h4 className="font-mono text-xs uppercase tracking-wider text-stone-900 font-bold">Gastos realizados na obra</h4>
         <p className="text-[11px] text-stone-500 mt-0.5">Filtre por fornecedor, tipo ou busque; agrupe para ver os totais.</p>
       </div>
 
-      {/* Filtros */}
-      <div className="px-5 py-3 bg-stone-50 border-b border-stone-150 flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-1.5 bg-white border border-stone-200 rounded px-2 py-1.5 flex-1 min-w-[180px]">
-          <Search size={13} className="text-stone-400" />
+      {/* Filtros — pílulas de vidro, no mesmo estilo dos botões do resto do app */}
+      <div className="px-5 py-3 border-b border-stone-100 flex flex-wrap items-center gap-2" style={{ background: 'rgba(0,0,0,0.015)' }}>
+        <div className="flex items-center gap-1.5 bg-white border border-stone-200 rounded-full px-3 py-1.5 flex-1 min-w-[180px] transition-colors focus-within:border-[#18181b]">
+          <Search size={13} className="text-stone-400 flex-shrink-0" />
           <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar descrição, fornecedor, NF…"
             className="text-xs outline-none flex-1 bg-transparent" />
         </div>
@@ -126,7 +126,7 @@ export default function ClientFinanceTable({ transactions, formatCurrency }: Pro
           <option value="categoria">Agrupar por tipo</option>
         </select>
         {temFiltro && (
-          <button onClick={limparFiltros} className="text-[11px] font-mono uppercase text-stone-500 hover:text-stone-800 px-2 py-1.5">Limpar</button>
+          <button onClick={limparFiltros} className="text-[11px] font-mono uppercase text-stone-500 hover:text-[#FF5A35] px-2.5 py-1.5 rounded-full transition-colors cursor-pointer">Limpar</button>
         )}
       </div>
 
@@ -136,13 +136,15 @@ export default function ClientFinanceTable({ transactions, formatCurrency }: Pro
         <span className="text-xs font-bold text-stone-900">Total: {fmt(totalFiltrado)}</span>
       </div>
 
-      {/* Tabela ou grupos */}
-      <div className="overflow-x-auto">
+      {/* Tabela ou grupos — rolagem própria (em vez de esticar a página inteira
+          quando há muitos lançamentos; o resto da tela não precisa ficar refém
+          do tamanho desta lista). */}
+      <div className="overflow-x-auto overflow-y-auto max-h-[380px]">
         {filtradas.length === 0 ? (
           <p className="text-xs text-stone-400 text-center py-8">Nenhum gasto encontrado com esses filtros.</p>
         ) : agrupar === 'nenhum' ? (
           <table className="w-full">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr className="border-b border-stone-200 bg-stone-50">
                 <th className="py-2 px-3 text-[10px] font-mono uppercase text-stone-400 text-left">Data</th>
                 <th className="py-2 px-3 text-[10px] font-mono uppercase text-stone-400 text-left">Descrição</th>

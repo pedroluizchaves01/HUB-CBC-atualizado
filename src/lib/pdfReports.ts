@@ -138,62 +138,6 @@ function sectionTitle(doc: jsPDF, text: string, y: number): number {
   return y + 6;
 }
 
-/** Desenha um anel de progresso (donut) com percentual no centro. Para o dashboard do boletim. */
-function drawProgressRing(
-  doc: jsPDF, cx: number, cy: number, radius: number,
-  percent: number, color: [number, number, number], label: string, centerText: string,
-): void {
-  const pct = Math.max(0, Math.min(100, percent));
-  const thickness = radius * 0.32;
-  // Trilha de fundo (círculo cinza claro).
-  doc.setDrawColor(232, 230, 228);
-  doc.setLineWidth(thickness);
-  doc.circle(cx, cy, radius, "S");
-  // Arco de progresso: aproximado por segmentos de linha (jsPDF não tem arco parcial nativo).
-  const steps = Math.max(1, Math.round((pct / 100) * 60));
-  doc.setDrawColor(...color);
-  doc.setLineWidth(thickness);
-  const startAngle = -Math.PI / 2; // começa no topo
-  let prevX = cx + radius * Math.cos(startAngle);
-  let prevY = cy + radius * Math.sin(startAngle);
-  for (let i = 1; i <= steps; i++) {
-    const a = startAngle + (i / 60) * 2 * Math.PI;
-    const x = cx + radius * Math.cos(a);
-    const y = cy + radius * Math.sin(a);
-    doc.line(prevX, prevY, x, y);
-    prevX = x; prevY = y;
-  }
-  // Texto central (o percentual).
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(radius * 0.62);
-  doc.setTextColor(...color);
-  doc.text(centerText, cx, cy + radius * 0.18, { align: "center" });
-  // Rótulo abaixo do anel.
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.5);
-  doc.setTextColor(...BRAND.soft);
-  doc.text(label.toUpperCase(), cx, cy + radius + 5, { align: "center" });
-}
-
-/** Título de seção mais leve (boletim): barra de acento terracota + texto, sem faixa cinza. */
-function bulletinSectionTitle(doc: jsPDF, text: string, y: number): number {
-  const w = doc.internal.pageSize.getWidth();
-  const m = 14;
-  // Barra de acento à esquerda.
-  doc.setFillColor(194, 112, 61);
-  doc.rect(m, y - 3, 2.5, 5, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9.5);
-  doc.setTextColor(...BRAND.ink);
-  doc.text(text, m + 4.5, y + 1);
-  // Linha fina até a margem direita.
-  doc.setDrawColor(...BRAND.line);
-  doc.setLineWidth(0.15);
-  const tw = doc.getTextWidth(text);
-  doc.line(m + 4.5 + tw + 3, y - 0.5, w - m, y - 0.5);
-  return y + 5;
-}
-
 /**
  * Desenha o gráfico de BARRAS do desembolso mensal (valor previsto em cada mês).
  * Complementa a curva S (que é o acumulado). Retorna o Y ao final.
@@ -1093,419 +1037,785 @@ export function validateMeasurementBulletinData(data: MeasurementBulletinData): 
   return { ok: errors.length === 0, errors, warnings };
 }
 
+type RGB = [number, number, number];
+type IconKind =
+  | "building" | "user" | "calendar" | "chart" | "wallet" | "check" | "camera"
+  | "pen" | "alert" | "list" | "helmet" | "trend" | "clock" | "quote";
+
+/**
+ * Boletim de Medição — layout próprio, na mesma identidade do app (preto, branco e
+ * laranja #FF5A35, cartões arredondados, cabeçalho escuro com grade técnica e brilho
+ * laranja, como o painel visual da tela de login). Ícones são vetoriais (desenhados
+ * com primitivas do jsPDF) para não depender de imagens.
+ */
 export async function generateMeasurementBulletinPdf(data: MeasurementBulletinData): Promise<void> {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const w = doc.internal.pageSize.getWidth();
-  const h = doc.internal.pageSize.getHeight();
-  const m = 14;
-  const hasPoppins = registerPoppins(doc);
-
-  const emission = data.emissionDate || new Date().toISOString().slice(0, 10);
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const M = 12;
+  const CW = W - 2 * M;
+  const HF = registerPoppins(doc) ? "Poppins" : "helvetica";
   const num = (data.measurementNumber || "01").trim();
+  const emission = data.emissionDate || new Date().toISOString().slice(0, 10);
+  const TOP = 26;          // início do conteúdo nas páginas de continuação (abaixo do cabeçalho compacto)
+  const BOTTOM = H - 18;   // limite inferior do conteúdo (acima do rodapé)
 
-  // Cabeçalho específico do boletim.
-  const drawBulletinHeader = () => {
-    doc.setFillColor(...BRAND.headBg);
-    doc.rect(0, 0, w, 30, "F");
-    // Nome da empresa em texto: "CHAVES / BRITES / CORREA" empilhado, Poppins bold,
-    // palavras alinhadas entre si pela DIREITA. (Substitui a logo em imagem.)
-    const words = ["CHAVES", "BRITES", "CORREA"];
-    const logoFont = hasPoppins ? "Poppins" : "helvetica";
-    doc.setFont(logoFont, "bold");
-    doc.setFontSize(11);
-    doc.setTextColor(255, 255, 255);
-    // Largura da palavra mais larga define a borda direita do bloco.
-    const widest = Math.max(...words.map((wd) => doc.getTextWidth(wd)));
-    const rightEdge = m + widest;
-    let ly = 9;
-    words.forEach((wd) => {
-      doc.text(wd, rightEdge, ly, { align: "right" });
-      ly += 5.2;
-    });
-    // Subtítulo abaixo.
-    doc.setFont(hasPoppins ? "Poppins" : "helvetica", hasPoppins ? "bold" : "normal");
-    doc.setFontSize(6);
-    doc.setTextColor(190, 185, 180);
-    doc.text(COMPANY_SUB.toUpperCase(), m, ly + 1.5);
-    // Bloco à direita — número, emissão, período.
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.setTextColor(255, 255, 255);
-    doc.text(`BOLETIM DE MEDIÇÃO Nº ${num}`, w - m, 12, { align: "right" });
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
-    doc.setTextColor(200, 195, 190);
-    doc.text(`Emissão: ${fmtDateBR(emission)}`, w - m, 18, { align: "right" });
-    doc.text(`Período: ${fmtDateBR(data.periodStart)} a ${fmtDateBR(data.periodEnd)}`, w - m, 23, { align: "right" });
+  const C = {
+    ink: [24, 24, 27] as RGB,
+    graphite: [63, 63, 70] as RGB,
+    muted: [113, 113, 122] as RGB,
+    faint: [161, 161, 170] as RGB,
+    line: [228, 228, 231] as RGB,
+    card: [250, 250, 250] as RGB,
+    soft: [244, 244, 245] as RGB,
+    softer: [228, 228, 231] as RGB,
+    orange: [255, 90, 53] as RGB,
+    orangeSoft: [255, 238, 232] as RGB,
+    green: [5, 150, 105] as RGB,
+    greenSoft: [220, 252, 231] as RGB,
+    red: [220, 38, 38] as RGB,
+    redSoft: [254, 226, 226] as RGB,
+    amber: [180, 83, 9] as RGB,
+    amberSoft: [254, 243, 199] as RGB,
+    white: [255, 255, 255] as RGB,
   };
 
-  let pageNum = 1;
-  const footer = () => {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7);
-    doc.setTextColor(...BRAND.soft);
-    doc.setDrawColor(...BRAND.line);
-    doc.setLineWidth(0.2);
-    doc.line(m, h - 12, w - m, h - 12);
-    doc.text(`${COMPANY} — Boletim de Medição Nº ${num}`, m, h - 8);
-    doc.text(`Página ${pageNum}`, w - m, h - 8, { align: "right" });
+  // ---------------------------------------------------------------- utilitários
+  const anyDoc = doc as any;
+  // "stroke-opacity" explícito: sem ele a transparência só vale para preenchimentos e
+  // as linhas da grade/contornos saem em opacidade total.
+  const opacity = (o: number) => {
+    if (anyDoc.setGState && anyDoc.GState) anyDoc.setGState(new anyDoc.GState({ opacity: o, "stroke-opacity": o }));
+  };
+  // A Poppins embutida é um subconjunto (maiúsculas, dígitos e alguns acentos — feito
+  // para o nome da empresa). Texto com caractere fora dele cai para Helvetica, senão
+  // o PDF corta a palavra no primeiro glifo ausente.
+  const POPPINS_SAFE = /^[ %(),\-./0-9:A-EG-JL-VxªºÀÁÂÃÇÉÊÍÓÔÕÚàáâãçéêíóôõú]*$/;
+  const hf = (text: string) => (HF === "Poppins" && POPPINS_SAFE.test(text) ? "Poppins" : "helvetica");
+  const withAlpha = (o: number, fn: () => void) => { opacity(o); fn(); opacity(1); };
+  const fill = (c: RGB) => doc.setFillColor(c[0], c[1], c[2]);
+  const stroke = (c: RGB) => doc.setDrawColor(c[0], c[1], c[2]);
+  const ink = (c: RGB) => doc.setTextColor(c[0], c[1], c[2]);
+  const font = (family: string, style: string, size: number, color: RGB) => {
+    doc.setFont(family, style); doc.setFontSize(size); ink(color);
+  };
+  const lineCap = (cap: "butt" | "round") => { anyDoc.setLineCap?.(cap); anyDoc.setLineJoin?.(cap === "round" ? "round" : "miter"); };
+  const pctBR = (v: number, digits = 1) => `${(Number(v) || 0).toFixed(digits).replace(".", ",")}%`;
+  const fit = (text: string, maxW: number): string => {
+    if (doc.getTextWidth(text) <= maxW) return text;
+    let t = text;
+    while (t.length > 1 && doc.getTextWidth(t + "…") > maxW) t = t.slice(0, -1);
+    return t + "…";
   };
 
-  const newPage = () => { footer(); doc.addPage(); pageNum++; drawBulletinHeader(); };
+  const card = (x: number, y: number, w: number, h: number, bg: RGB = C.white, border: RGB | null = C.line, r = 2.6) => {
+    fill(bg);
+    if (border) { stroke(border); doc.setLineWidth(0.2); doc.roundedRect(x, y, w, h, r, r, "FD"); }
+    else doc.roundedRect(x, y, w, h, r, r, "F");
+  };
+
+  /** Pílula com texto (chip). Retorna a largura. */
+  const pill = (
+    text: string, x: number, y: number, bg: RGB, fg: RGB,
+    opts: { align?: "left" | "right"; size?: number; bold?: boolean; family?: string } = {},
+  ): number => {
+    const size = opts.size ?? 6;
+    doc.setFont(opts.family ?? "helvetica", opts.bold === false ? "normal" : "bold");
+    doc.setFontSize(size);
+    const tw = doc.getTextWidth(text);
+    const ph = size * 0.55 + 2.2;
+    const pw = tw + 4.4;
+    const px = opts.align === "right" ? x - pw : x;
+    fill(bg); doc.roundedRect(px, y, pw, ph, ph / 2, ph / 2, "F");
+    ink(fg); doc.text(text, px + 2.2, y + ph / 2 + size * 0.13);
+    return pw;
+  };
+
+  /** Arco/elipse aproximado por segmentos (jsPDF não tem arco parcial nativo). */
+  const arc = (cx: number, cy: number, rx: number, ry: number, a0: number, a1: number, steps = 24) => {
+    let px = cx + rx * Math.cos(a0), py = cy + ry * Math.sin(a0);
+    for (let i = 1; i <= steps; i++) {
+      const a = a0 + ((a1 - a0) * i) / steps;
+      const x = cx + rx * Math.cos(a), y = cy + ry * Math.sin(a);
+      doc.line(px, py, x, y);
+      px = x; py = y;
+    }
+  };
+
+  /** Ícones vetoriais simples, traço arredondado — linguagem dos ícones do app. */
+  const icon = (kind: IconKind, cx: number, cy: number, s: number, color: RGB) => {
+    stroke(color); fill(color);
+    doc.setLineWidth(Math.max(0.25, s * 0.09));
+    lineCap("round");
+    const h = s / 2;
+    switch (kind) {
+      case "building":
+        doc.line(cx - h * 0.9, cy - h * 0.15, cx, cy - h * 0.85);
+        doc.line(cx, cy - h * 0.85, cx + h * 0.9, cy - h * 0.15);
+        doc.roundedRect(cx - h * 0.65, cy - h * 0.2, h * 1.3, h * 1.0, 0.3, 0.3, "S");
+        doc.line(cx, cy + h * 0.8, cx, cy + h * 0.35);
+        break;
+      case "user":
+        doc.circle(cx, cy - h * 0.35, h * 0.35, "S");
+        arc(cx, cy + h * 0.85, h * 0.7, h * 0.65, Math.PI, 2 * Math.PI, 16);
+        break;
+      case "calendar":
+        doc.roundedRect(cx - h * 0.8, cy - h * 0.6, h * 1.6, h * 1.45, 0.5, 0.5, "S");
+        doc.line(cx - h * 0.8, cy - h * 0.15, cx + h * 0.8, cy - h * 0.15);
+        doc.line(cx - h * 0.4, cy - h * 0.85, cx - h * 0.4, cy - h * 0.45);
+        doc.line(cx + h * 0.4, cy - h * 0.85, cx + h * 0.4, cy - h * 0.45);
+        break;
+      case "chart": {
+        const bw = h * 0.38;
+        doc.roundedRect(cx - h * 0.8, cy + h * 0.1, bw, h * 0.7, 0.2, 0.2, "F");
+        doc.roundedRect(cx - bw / 2, cy - h * 0.35, bw, h * 1.15, 0.2, 0.2, "F");
+        doc.roundedRect(cx + h * 0.8 - bw, cy - h * 0.8, bw, h * 1.6, 0.2, 0.2, "F");
+        break;
+      }
+      case "wallet":
+        doc.roundedRect(cx - h * 0.85, cy - h * 0.6, h * 1.7, h * 1.3, 0.5, 0.5, "S");
+        doc.roundedRect(cx + h * 0.2, cy - h * 0.2, h * 0.65, h * 0.5, 0.3, 0.3, "S");
+        doc.circle(cx + h * 0.45, cy + h * 0.05, h * 0.08, "F");
+        break;
+      case "check":
+        doc.circle(cx, cy, h * 0.85, "S");
+        doc.line(cx - h * 0.4, cy, cx - h * 0.1, cy + h * 0.32);
+        doc.line(cx - h * 0.1, cy + h * 0.32, cx + h * 0.42, cy - h * 0.3);
+        break;
+      case "camera":
+        doc.roundedRect(cx - h * 0.85, cy - h * 0.45, h * 1.7, h * 1.2, 0.5, 0.5, "S");
+        doc.circle(cx, cy + h * 0.15, h * 0.35, "S");
+        doc.line(cx - h * 0.35, cy - h * 0.45, cx - h * 0.2, cy - h * 0.72);
+        doc.line(cx - h * 0.2, cy - h * 0.72, cx + h * 0.2, cy - h * 0.72);
+        doc.line(cx + h * 0.2, cy - h * 0.72, cx + h * 0.35, cy - h * 0.45);
+        break;
+      case "pen":
+        doc.line(cx - h * 0.55, cy + h * 0.55, cx + h * 0.6, cy - h * 0.6);
+        doc.line(cx - h * 0.55, cy + h * 0.55, cx - h * 0.75, cy + h * 0.78);
+        doc.line(cx - h * 0.9, cy + h * 0.9, cx + h * 0.9, cy + h * 0.9);
+        break;
+      case "alert":
+        doc.line(cx, cy - h * 0.85, cx + h * 0.9, cy + h * 0.7);
+        doc.line(cx + h * 0.9, cy + h * 0.7, cx - h * 0.9, cy + h * 0.7);
+        doc.line(cx - h * 0.9, cy + h * 0.7, cx, cy - h * 0.85);
+        doc.line(cx, cy - h * 0.25, cx, cy + h * 0.15);
+        doc.circle(cx, cy + h * 0.42, h * 0.06, "F");
+        break;
+      case "list":
+        [-0.5, 0, 0.5].forEach((o) => {
+          doc.circle(cx - h * 0.65, cy + h * o, h * 0.09, "F");
+          doc.line(cx - h * 0.3, cy + h * o, cx + h * 0.8, cy + h * o);
+        });
+        break;
+      case "helmet":
+        arc(cx, cy + h * 0.3, h * 0.7, h * 0.85, Math.PI, 2 * Math.PI, 16);
+        doc.line(cx - h * 0.95, cy + h * 0.3, cx + h * 0.95, cy + h * 0.3);
+        doc.line(cx, cy - h * 0.55, cx, cy - h * 0.1);
+        break;
+      case "trend":
+        doc.line(cx - h * 0.85, cy + h * 0.55, cx - h * 0.25, cy - h * 0.05);
+        doc.line(cx - h * 0.25, cy - h * 0.05, cx + h * 0.1, cy + h * 0.25);
+        doc.line(cx + h * 0.1, cy + h * 0.25, cx + h * 0.85, cy - h * 0.55);
+        doc.line(cx + h * 0.85, cy - h * 0.55, cx + h * 0.4, cy - h * 0.55);
+        doc.line(cx + h * 0.85, cy - h * 0.55, cx + h * 0.85, cy - h * 0.1);
+        break;
+      case "clock":
+        doc.circle(cx, cy, h * 0.85, "S");
+        doc.line(cx, cy, cx, cy - h * 0.5);
+        doc.line(cx, cy, cx + h * 0.35, cy + h * 0.2);
+        break;
+      case "quote":
+        doc.circle(cx - h * 0.4, cy - h * 0.1, h * 0.28, "F");
+        doc.circle(cx + h * 0.35, cy - h * 0.1, h * 0.28, "F");
+        doc.line(cx - h * 0.62, cy - h * 0.05, cx - h * 0.75, cy + h * 0.55);
+        doc.line(cx + h * 0.13, cy - h * 0.05, cx, cy + h * 0.55);
+        break;
+    }
+    lineCap("butt");
+  };
+
+  const iconTile = (kind: IconKind, x: number, y: number, size: number, color: RGB, bg: RGB) => {
+    fill(bg); doc.roundedRect(x, y, size, size, size * 0.3, size * 0.3, "F");
+    icon(kind, x + size / 2, y + size / 2, size * 0.52, color);
+  };
+
+  /** Barra de progresso com cantos arredondados. */
+  const bar = (x: number, y: number, w: number, h: number, pct: number, color: RGB, track: RGB = C.soft) => {
+    fill(track); doc.roundedRect(x, y, w, h, h / 2, h / 2, "F");
+    const fw = (w * Math.max(0, Math.min(100, pct))) / 100;
+    if (fw > 0.3) { fill(color); doc.roundedRect(x, y, Math.max(fw, h), h, h / 2, h / 2, "F"); }
+  };
+
+  /** Anel de progresso suave com pontas arredondadas. */
+  const ring = (cx: number, cy: number, r: number, pct: number, color: RGB, track: RGB, thick: number) => {
+    const p = Math.max(0, Math.min(100, pct));
+    stroke(track); doc.setLineWidth(thick); doc.circle(cx, cy, r, "S");
+    if (p <= 0) return;
+    stroke(color); doc.setLineWidth(thick);
+    lineCap("round");
+    const a0 = -Math.PI / 2;
+    arc(cx, cy, r, r, a0, a0 + (p / 100) * 2 * Math.PI, Math.max(2, Math.round(p * 1.4)));
+    lineCap("butt");
+  };
+
+  /** Título de seção: ícone em bloco laranja suave + título Poppins + subtítulo + chip opcional à direita. */
+  const section = (title: string, subtitle: string | null, kind: IconKind, y: number, right?: string): number => {
+    iconTile(kind, M, y, 7, C.orange, C.orangeSoft);
+    const t = title.toUpperCase();
+    font(hf(t), "bold", 9.5, C.ink);
+    doc.text(t, M + 9.5, y + (subtitle ? 3.4 : 4.9), { charSpace: 0.15 });
+    if (subtitle) { font("helvetica", "normal", 6.6, C.muted); doc.text(subtitle, M + 9.5, y + 6.6); }
+    if (right) pill(right, W - M, y + 0.8, C.ink, C.white, { align: "right", size: 6.5 });
+    return y + 10.5;
+  };
+
   const ensure = (needed: number, y: number): number => {
-    if (y + needed > h - 16) { newPage(); return 36; }
+    if (y + needed > BOTTOM) { doc.addPage(); return TOP; }
     return y;
   };
 
-  drawBulletinHeader();
-  let y = 36;
-
-  // Identificação da obra/cliente.
-  doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(...BRAND.ink);
-  doc.text("Obra / Projeto:", m, y);
-  doc.setFont("helvetica", "normal");
-  doc.text(data.projectName || "—", m + 26, y);
-  if (data.clientName) {
-    doc.setFont("helvetica", "bold"); doc.text("Cliente:", m, y + 5);
-    doc.setFont("helvetica", "normal"); doc.text(data.clientName, m + 26, y + 5);
-    y += 5;
-  }
-  y += 8;
-
-  // -------- RESUMO EXECUTIVO (cards de %) --------
-  y = bulletinSectionTitle(doc, "Resumo do Período", y) + 4;
-  const cardW = (w - 2 * m - 3 * 3) / 4;
-  const cardH = 18;
-  // [label, valor, cor do texto, cor do acento/fundo suave]
-  const terra: [number, number, number] = [194, 112, 61];
-  const azul: [number, number, number] = [62, 124, 139];
-  const cards: [string, string, [number, number, number], [number, number, number]][] = [
-    ["Físico no Período", `${data.physicalProgressPeriod.toFixed(1)}%`, terra, terra],
-    ["Físico Acumulado", `${data.physicalProgressTotal.toFixed(1)}%`, terra, terra],
-    ["Financeiro no Período", `${data.financialProgressPeriod.toFixed(1)}%`, azul, azul],
-    ["Financeiro Acumulado", `${data.financialProgressTotal.toFixed(1)}%`, azul, azul],
-  ];
-  cards.forEach(([label, value, color, accent], i) => {
-    const x = m + i * (cardW + 3);
-    // Fundo suave da cor do acento.
-    doc.setFillColor(accent[0], accent[1], accent[2]);
-    (doc as any).setGState && (doc as any).setGState(new (doc as any).GState({ opacity: 0.07 }));
-    doc.rect(x, y, cardW, cardH, "F");
-    (doc as any).setGState && (doc as any).setGState(new (doc as any).GState({ opacity: 1 }));
-    // Barra de acento no topo.
-    doc.setFillColor(accent[0], accent[1], accent[2]);
-    doc.rect(x, y, cardW, 1.4, "F");
-    // Rótulo e valor.
-    doc.setFont("helvetica", "bold"); doc.setFontSize(5.8); doc.setTextColor(...BRAND.soft);
-    doc.text(label.toUpperCase(), x + 2.5, y + 6);
-    doc.setFontSize(15); doc.setTextColor(...color);
-    doc.text(value, x + 2.5, y + 14);
-  });
-  y += cardH + 5;
-
-  // Linha de valores (orçamento / gasto período / gasto acumulado).
-  doc.setFillColor(...BRAND.zebra); doc.setDrawColor(...BRAND.line); doc.setLineWidth(0.2);
-  doc.rect(m, y, w - 2 * m, 11, "FD");
-  const vCol = (w - 2 * m) / 3;
-  const vals: [string, string][] = [
-    ["ORÇAMENTO TOTAL DA OBRA", fmtMoney(data.budgetTotal)],
-    ["INVESTIDO NO PERÍODO", fmtMoney(data.spentPeriod)],
-    ["INVESTIDO ACUMULADO", fmtMoney(data.spentTotal)],
-  ];
-  vals.forEach(([l, v], i) => {
-    // Divisória vertical entre colunas.
-    if (i > 0) { doc.setDrawColor(...BRAND.line); doc.setLineWidth(0.15); doc.line(m + i * vCol, y + 2, m + i * vCol, y + 9); }
-    doc.setFont("helvetica", "bold"); doc.setFontSize(5.6); doc.setTextColor(...BRAND.soft);
-    doc.text(l, m + i * vCol + 3, y + 4);
-    doc.setFontSize(9.5); doc.setTextColor(...BRAND.ink);
-    doc.text(v, m + i * vCol + 3, y + 8.5);
-  });
-  y += 11 + 7;
-
-  // -------- DIAS IMPRODUTIVOS NO PERÍODO (chuva, feriado, etc.) --------
-  if (data.unproductiveDays && data.unproductiveDays.length > 0) {
-    const boxH = 9;
-    doc.setFillColor(255, 247, 230); doc.setDrawColor(...BRAND.line); doc.setLineWidth(0.2);
-    doc.rect(m, y, w - 2 * m, boxH, "FD");
-    doc.setFont("helvetica", "bold"); doc.setFontSize(6.2); doc.setTextColor(150, 100, 20);
-    doc.text(`DIAS IMPRODUTIVOS NO PERÍODO: ${data.unproductiveDays.length}`, m + 3, y + 4);
-    doc.setFont("helvetica", "normal"); doc.setFontSize(6);
-    const datasTxt = data.unproductiveDays
-      .map(d => `${new Date(d.date + 'T00:00:00').toLocaleDateString('pt-BR')}${d.reason ? ` (${d.reason})` : ''}`)
-      .join('  ·  ');
-    doc.text(datasTxt, m + 3, y + 7.5, { maxWidth: w - 2 * m - 6 });
-    y += boxH + 5;
-  }
-
-  // -------- DASHBOARD VISUAL (anéis de progresso do período) --------
+  // ------------------------------------------------- 1. CABEÇALHO (cartão escuro)
+  const heroH = 48;
   {
-    y = ensure(52, y);
-    y = bulletinSectionTitle(doc, "Panorama da Medição", y) + 6;
-    const terra: [number, number, number] = [194, 112, 61];
-    const azul: [number, number, number] = [62, 124, 139];
+    const x = M, y = M, w = CW, h = heroH;
+    fill(C.ink); doc.roundedRect(x, y, w, h, 4, 4, "F");
 
-    // Dois anéis lado a lado: avanço físico e financeiro do período.
-    const ringR = 15;
-    const ring1X = m + 22;
-    const ring2X = w / 2 - 6;
-    const ringY = y + ringR + 2;
-    drawProgressRing(doc, ring1X, ringY, ringR, data.physicalProgressPeriod,
-      terra, "Avanço Físico", `${data.physicalProgressPeriod.toFixed(0)}%`);
-    drawProgressRing(doc, ring2X, ringY, ringR, data.financialProgressPeriod,
-      azul, "Avanço Financeiro", `${data.financialProgressPeriod.toFixed(0)}%`);
-
-    // Painel de leitura rápida à direita.
-    const panelX = w / 2 + 24;
-    const panelW = w - m - panelX;
-    let py = y + 2;
-    // Status geral: compara físico realizado vs previsto (se houver previsto).
-    const hasPlanned = data.physicalPlannedPeriod !== undefined;
-    const physDev = hasPlanned ? data.physicalProgressPeriod - (data.physicalPlannedPeriod || 0) : 0;
-    const statusText = !hasPlanned ? "Medição registrada"
-      : physDev >= 2 ? "Obra adiantada"
-      : physDev <= -2 ? "Obra atrasada"
-      : "Dentro do previsto";
-    const statusColor: [number, number, number] = !hasPlanned ? BRAND.soft
-      : physDev >= 2 ? [4, 120, 87]
-      : physDev <= -2 ? [180, 70, 47]
-      : [62, 124, 139];
-
-    // Caixa de status.
-    doc.setFillColor(statusColor[0], statusColor[1], statusColor[2]);
-    (doc as any).setGState && (doc as any).setGState(new (doc as any).GState({ opacity: 0.10 }));
-    doc.rect(panelX, py, panelW, 13, "F");
-    (doc as any).setGState && (doc as any).setGState(new (doc as any).GState({ opacity: 1 }));
-    doc.setFillColor(statusColor[0], statusColor[1], statusColor[2]);
-    doc.rect(panelX, py, 1.6, 13, "F");
-    doc.setFont("helvetica", "bold"); doc.setFontSize(9.5); doc.setTextColor(...statusColor);
-    doc.text(statusText, panelX + 4, py + 6);
-    doc.setFont("helvetica", "normal"); doc.setFontSize(6.5); doc.setTextColor(...BRAND.soft);
-    doc.text(`Período de ${fmtDateBR(data.periodStart)} a ${fmtDateBR(data.periodEnd)}`, panelX + 4, py + 10.5);
-    py += 16;
-
-    // Mini-indicadores: acumulado físico e financeiro.
-    const miniW = (panelW - 3) / 2;
-    const minis: [string, string, [number, number, number]][] = [
-      ["FÍSICO ACUMULADO", `${data.physicalProgressTotal.toFixed(0)}%`, terra],
-      ["FINANC. ACUMULADO", `${data.financialProgressTotal.toFixed(0)}%`, azul],
-    ];
-    minis.forEach(([l, v, c], i) => {
-      const mx = panelX + i * (miniW + 3);
-      doc.setFillColor(...BRAND.zebra); doc.setDrawColor(...BRAND.line); doc.setLineWidth(0.15);
-      doc.rect(mx, py, miniW, 12, "FD");
-      doc.setFont("helvetica", "bold"); doc.setFontSize(5.4); doc.setTextColor(...BRAND.soft);
-      doc.text(l, mx + 2, py + 4);
-      doc.setFontSize(11); doc.setTextColor(...c);
-      doc.text(v, mx + 2, py + 10);
+    // Grade técnica (blueprint), bem sutil — mesma do painel visual do login.
+    stroke(C.white); doc.setLineWidth(0.1);
+    withAlpha(0.06, () => {
+      for (let gx = x + 6; gx < x + w - 2; gx += 6) doc.line(gx, y + 1.5, gx, y + h - 1.5);
+      for (let gy = y + 6; gy < y + h - 2; gy += 6) doc.line(x + 1.5, gy, x + w - 1.5, gy);
     });
 
-    y = ringY + ringR + 9;
-  }
+    // Brilho laranja atrás do anel.
+    const rcx = x + w - 22, rcy = y + h / 2;
+    fill(C.orange);
+    ([[22, 0.05], [15, 0.07], [9, 0.1]] as [number, number][]).forEach(([r, o]) =>
+      withAlpha(o, () => doc.circle(rcx, rcy, r, "F")));
 
-  // -------- COMPARATIVO PREVISTO (cronograma) x REALIZADO (acompanhamento) --------
-  if (data.physicalPlannedPeriod !== undefined || data.financialPlannedPeriod !== undefined) {
-    y = ensure(42, y);
-    y = bulletinSectionTitle(doc, "Comparativo do Período: Previsto x Realizado", y) + 4;
+    // Esquerda: selo + marca, título, obra/cliente.
+    const lx = x + 8;
+    const pw = pill("BOLETIM DE MEDIÇÃO", lx, y + 6, C.orange, C.white, { size: 5.6 });
+    font(HF, "bold", 6.8, [200, 200, 205]);
+    doc.text("CHAVES BRITES CORREA", lx + pw + 3, y + 10.2);
 
-    // Desenha uma linha comparativa (previsto vs realizado) com duas barras.
-    const drawCompare = (
-      label: string, plannedPct: number, realizedPct: number,
-      plannedLabel: string, realizedLabel: string, yPos: number,
-    ): number => {
-      const barW = w - 2 * m;
-      const barH = 4;
-      const clamp = (v: number) => Math.max(0, Math.min(100, v));
+    font(hf("MEDIÇÃO"), "bold", 24, C.white);
+    doc.text("MEDIÇÃO", lx, y + 22);
+    const tw = doc.getTextWidth("MEDIÇÃO ");
+    ink(C.orange);
+    doc.text(`Nº ${num}`, lx + tw, y + 22);
 
-      doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(...BRAND.ink);
-      doc.text(label, m, yPos);
+    font("helvetica", "bold", 8.5, [228, 228, 231]);
+    doc.text(fit(data.projectName || "—", 98), lx, y + 28.5);
+    if (data.clientName) {
+      font("helvetica", "normal", 7, C.faint);
+      doc.text(fit(`Cliente: ${data.clientName}`, 98), lx, y + 33);
+    }
 
-      // Desvio (realizado - previsto), com cor conforme adianta/atrasa.
-      const dev = realizedPct - plannedPct;
-      const devColor: [number, number, number] = dev >= 0 ? [4, 120, 87] : [180, 70, 47];
-      doc.setFont("helvetica", "bold"); doc.setFontSize(7.5); doc.setTextColor(...devColor);
-      doc.text(`${dev >= 0 ? "+" : ""}${dev.toFixed(1)}%`, w - m, yPos, { align: "right" });
-
-      // Barra PREVISTO (cinza)
-      let by = yPos + 2;
-      doc.setFont("helvetica", "normal"); doc.setFontSize(6); doc.setTextColor(...BRAND.soft);
-      doc.text("Previsto", m, by + 3);
-      doc.setFillColor(...BRAND.zebra); doc.rect(m + 18, by, barW - 18, barH, "F");
-      doc.setFillColor(150, 145, 140); doc.rect(m + 18, by, (barW - 18) * (clamp(plannedPct) / 100), barH, "F");
-      doc.setTextColor(...BRAND.ink); doc.setFontSize(6);
-      doc.text(plannedLabel, w - m, by + 3, { align: "right" });
-
-      // Barra REALIZADO (terracota)
-      by += barH + 2;
-      doc.setTextColor(...BRAND.soft); doc.setFontSize(6);
-      doc.text("Realizado", m, by + 3);
-      doc.setFillColor(...BRAND.zebra); doc.rect(m + 18, by, barW - 18, barH, "F");
-      doc.setFillColor(194, 112, 61); doc.rect(m + 18, by, (barW - 18) * (clamp(realizedPct) / 100), barH, "F");
-      doc.setTextColor(...BRAND.ink); doc.setFontSize(6);
-      doc.text(realizedLabel, w - m, by + 3, { align: "right" });
-
-      return by + barH + 6;
+    // Chips de vidro: emissão e período.
+    const glass = (label: string, value: string, gx: number, gy: number): number => {
+      doc.setFont("helvetica", "bold"); doc.setFontSize(5.4);
+      const lw = doc.getTextWidth(label);
+      doc.setFontSize(6.6);
+      const vw = doc.getTextWidth(value);
+      const gw = lw + vw + 7.2, gh = 6.4;
+      withAlpha(0.09, () => { fill(C.white); doc.roundedRect(gx, gy, gw, gh, gh / 2, gh / 2, "F"); });
+      withAlpha(0.22, () => { stroke(C.white); doc.setLineWidth(0.15); doc.roundedRect(gx, gy, gw, gh, gh / 2, gh / 2, "S"); });
+      doc.setFontSize(5.4); ink(C.faint); doc.text(label, gx + 2.8, gy + 4.15);
+      doc.setFontSize(6.6); ink(C.white); doc.text(value, gx + 2.8 + lw + 1.6, gy + 4.25);
+      return gw;
     };
+    let gx = lx;
+    gx += glass("EMISSÃO", fmtDateBR(emission), gx, y + 37) + 2.5;
+    glass("PERÍODO", `${fmtDateBR(data.periodStart)} a ${fmtDateBR(data.periodEnd)}`, gx, y + 37);
 
-    if (data.physicalPlannedPeriod !== undefined) {
-      y = drawCompare(
-        "Avanço Físico",
-        data.physicalPlannedPeriod, data.physicalProgressPeriod,
-        `${data.physicalPlannedPeriod.toFixed(1)}%`, `${data.physicalProgressPeriod.toFixed(1)}%`,
-        y,
-      );
-    }
-    if (data.financialPlannedPeriod !== undefined) {
-      const plannedMoney = data.costPlannedPeriod !== undefined ? `  (${fmtMoney(data.costPlannedPeriod)})` : "";
-      y = drawCompare(
-        "Avanço Financeiro",
-        data.financialPlannedPeriod, data.financialProgressPeriod,
-        `${data.financialPlannedPeriod.toFixed(1)}%${plannedMoney}`,
-        `${data.financialProgressPeriod.toFixed(1)}%  (${fmtMoney(data.spentPeriod)})`,
-        y,
-      );
-    }
+    // Direita: indicadores acumulados + anel do avanço físico acumulado.
+    const rx = x + w - 40;
+    font("helvetica", "bold", 5.2, C.faint);
+    doc.text("FINANCEIRO ACUMULADO", rx, y + 15, { align: "right" });
+    font(HF, "bold", 11, C.white);
+    doc.text(pctBR(data.financialProgressTotal), rx, y + 20.5, { align: "right" });
+    font("helvetica", "bold", 5.2, C.faint);
+    doc.text("INVESTIDO ACUMULADO", rx, y + 28, { align: "right" });
+    font(hf(fmtMoney(data.spentTotal)), "bold", 9.5, C.white);
+    doc.text(fmtMoney(data.spentTotal), rx, y + 33.2, { align: "right" });
 
-    // Legenda interpretativa.
-    doc.setFont("helvetica", "italic"); doc.setFontSize(6.5); doc.setTextColor(...BRAND.soft);
-    doc.text("Valores positivos indicam adiantamento em relação ao planejado; negativos, atraso.", m, y);
-    y += 6;
+    ring(rcx, rcy, 12, data.physicalProgressTotal, C.orange, [63, 63, 70], 3.2);
+    font(HF, "bold", 11, C.white);
+    doc.text(`${Math.round(data.physicalProgressTotal)}%`, rcx, rcy + 1.2, { align: "center" });
+    font("helvetica", "bold", 4.6, C.faint);
+    doc.text("FÍSICO", rcx, rcy + 4.6, { align: "center" });
+    font("helvetica", "bold", 5, C.faint);
+    doc.text("AVANÇO ACUMULADO", rcx, rcy + 18, { align: "center" });
+  }
+  let y = M + heroH + 5;
+
+  // ------------------------------------------------- 2. IDENTIFICAÇÃO (3 cartões)
+  {
+    const gap = 4;
+    const cw3 = (CW - 2 * gap) / 3;
+    const items: [IconKind, string, string][] = [
+      ["building", "OBRA / PROJETO", data.projectName || "—"],
+      ["user", "CLIENTE", data.clientName || "—"],
+      ["helmet", "RESPONSÁVEL TÉCNICO", data.responsibleTechnical || "Equipe técnica CBC"],
+    ];
+    items.forEach(([kind, label, value], i) => {
+      const x = M + i * (cw3 + gap);
+      card(x, y, cw3, 15, C.card, C.line);
+      iconTile(kind, x + 3.5, y + 4, 7, C.ink, C.white);
+      font("helvetica", "bold", 5.3, C.muted);
+      doc.text(label, x + 13, y + 6.4);
+      font("helvetica", "bold", 7.8, C.ink);
+      doc.text(fit(value, cw3 - 16), x + 13, y + 11);
+    });
+    y += 15 + 7;
   }
 
-  // -------- RESUMO TEXTUAL (acumulado) --------
+  // ------------------------------------------------- 3. RESUMO DO PERÍODO (KPIs)
+  y = section("Resumo do período", "Avanço físico e financeiro registrado nesta medição", "chart", y);
+  {
+    const gap = 3;
+    const kw = (CW - 3 * gap) / 4;
+    const kh = 27;
+    const kpis: [IconKind, string, number, RGB, RGB, string][] = [
+      ["trend", "FÍSICO NO PERÍODO", data.physicalProgressPeriod, C.orange, C.orangeSoft, "avanço desta medição"],
+      ["building", "FÍSICO ACUMULADO", data.physicalProgressTotal, C.orange, C.orangeSoft, "da obra executada"],
+      ["wallet", "FINANCEIRO NO PERÍODO", data.financialProgressPeriod, C.graphite, C.softer, "do orçamento no período"],
+      ["chart", "FINANCEIRO ACUMULADO", data.financialProgressTotal, C.graphite, C.softer, "do orçamento total"],
+    ];
+    kpis.forEach(([kind, label, value, color, soft, caption], i) => {
+      const x = M + i * (kw + gap);
+      card(x, y, kw, kh, C.card, C.line);
+      iconTile(kind, x + 3, y + 3, 6.4, color, soft);
+      font("helvetica", "bold", 5.2, C.muted);
+      doc.text(fit(label, kw - 13), x + 11.2, y + 7.2);
+      font(HF, "bold", 16, color);
+      doc.text(pctBR(value), x + 3, y + 18.3);
+      bar(x + 3, y + 20.8, kw - 6, 2.2, value, color);
+      font("helvetica", "normal", 5, C.faint);
+      doc.text(caption, x + 3, y + 25.4);
+    });
+    y += kh + 4;
+  }
+
+  // Valores: orçamento, investido no período, acumulado + consumo do orçamento.
+  {
+    const h = 25;
+    card(M, y, CW, h, C.white, C.line);
+    const col = CW / 3;
+    const vals: [IconKind, string, string, RGB, RGB][] = [
+      ["wallet", "ORÇAMENTO TOTAL DA OBRA", fmtMoney(data.budgetTotal), C.ink, C.soft],
+      ["trend", "INVESTIDO NO PERÍODO", fmtMoney(data.spentPeriod), C.orange, C.orangeSoft],
+      ["list", "INVESTIDO ACUMULADO", fmtMoney(data.spentTotal), C.graphite, C.soft],
+    ];
+    vals.forEach(([kind, label, value, color, soft], i) => {
+      const x = M + i * col;
+      if (i > 0) { stroke(C.line); doc.setLineWidth(0.2); doc.line(x, y + 3.5, x, y + 12.5); }
+      iconTile(kind, x + 4, y + 4, 7, color, soft);
+      font("helvetica", "bold", 5.2, C.muted);
+      doc.text(label, x + 13.5, y + 6.8);
+      font(hf(value), "bold", 9.5, i === 1 ? C.orange : C.ink);
+      doc.text(value, x + 13.5, y + 11.8);
+    });
+    const consumo = data.budgetTotal > 0 ? (data.spentTotal / data.budgetTotal) * 100 : 0;
+    stroke(C.line); doc.setLineWidth(0.15); doc.line(M + 4, y + 15.5, M + CW - 4, y + 15.5);
+    font("helvetica", "bold", 5.4, C.muted);
+    const lbl = "CONSUMO DO ORÇAMENTO";
+    doc.text(lbl, M + 4, y + 20.6);
+    const bx = M + 4 + doc.getTextWidth(lbl) + 4;
+    font(HF, "bold", 7.5, C.ink);
+    const pctTxt = pctBR(consumo);
+    doc.text(pctTxt, M + CW - 4, y + 20.9, { align: "right" });
+    bar(bx, y + 18.8, M + CW - 4 - doc.getTextWidth(pctTxt) - 4 - bx, 2.4, consumo, consumo > 100 ? C.red : C.orange);
+    y += h + 7;
+  }
+
+  // ------------------------------------------------- 4. DIAS IMPRODUTIVOS
+  if (data.unproductiveDays && data.unproductiveDays.length > 0) {
+    font("helvetica", "normal", 6.3, C.graphite);
+    const txt = data.unproductiveDays
+      .map((d) => `${fmtDateBR(d.date)}${d.reason ? ` (${d.reason})` : ""}`)
+      .join("   ·   ");
+    const lines = doc.splitTextToSize(txt, CW - 20) as string[];
+    const h = 10 + lines.length * 3;
+    y = ensure(h + 4, y);
+    card(M, y, CW, h, C.amberSoft, null);
+    iconTile("alert", M + 3.5, y + 3, 7, C.amber, C.white);
+    font("helvetica", "bold", 7.2, C.amber);
+    doc.text(`${data.unproductiveDays.length} dia(s) improdutivo(s) no período`, M + 13.5, y + 6.2);
+    font("helvetica", "normal", 6.3, C.graphite);
+    doc.text(lines, M + 13.5, y + 9.6);
+    y += h + 7;
+  }
+
+  // ------------------------------------------------- 5. PANORAMA + PREVISTO x REALIZADO
+  y = ensure(64, y);
+  y = section("Panorama da medição", "Leitura rápida do período e comparação com o cronograma", "clock", y);
+  {
+    const ch = 50;
+    const lw = CW * 0.4;
+    const rw = CW - lw - 4;
+    const lx = M, rx = M + lw + 4;
+
+    // Esquerda: dois anéis + status.
+    card(lx, y, lw, ch, C.card, C.line);
+    const rings: [number, number, RGB, string][] = [
+      [lx + lw * 0.27, data.physicalProgressPeriod, C.orange, "FÍSICO"],
+      [lx + lw * 0.73, data.financialProgressPeriod, C.graphite, "FINANCEIRO"],
+    ];
+    rings.forEach(([cx, v, color, label]) => {
+      const cy = y + 17;
+      ring(cx, cy, 9.5, v, color, C.softer, 2.6);
+      font(HF, "bold", 9.5, color);
+      doc.text(`${Math.round(v)}%`, cx, cy + 1.3, { align: "center" });
+      font("helvetica", "bold", 5.4, C.ink);
+      doc.text(label, cx, cy + 14, { align: "center" });
+      font("helvetica", "normal", 5, C.faint);
+      doc.text("no período", cx, cy + 16.8, { align: "center" });
+    });
+
+    const hasPlanned = data.physicalPlannedPeriod !== undefined;
+    const dev = hasPlanned ? data.physicalProgressPeriod - (data.physicalPlannedPeriod || 0) : 0;
+    const [stText, stFg, stBg]: [string, RGB, RGB] = !hasPlanned
+      ? ["Medição registrada", C.graphite, C.soft]
+      : dev >= 2 ? ["Obra adiantada", C.green, C.greenSoft]
+      : dev <= -2 ? ["Obra atrasada", C.red, C.redSoft]
+      : ["Dentro do previsto", C.graphite, C.soft];
+    doc.setFont("helvetica", "bold"); doc.setFontSize(6.6);
+    const sw = doc.getTextWidth(stText) + 9;
+    const sx = lx + (lw - sw) / 2, sy = y + ch - 9.5;
+    fill(stBg); doc.roundedRect(sx, sy, sw, 6, 3, 3, "F");
+    fill(stFg); doc.circle(sx + 3.2, sy + 3, 0.9, "F");
+    ink(stFg); doc.text(stText, sx + 5.3, sy + 4.1);
+
+    // Direita: previsto x realizado.
+    card(rx, y, rw, ch, C.white, C.line);
+    font("helvetica", "bold", 7.6, C.ink);
+    doc.text("Previsto x Realizado", rx + 5, y + 7.2);
+    const legend: [string, RGB][] = [["Realizado", C.orange], ["Previsto", [190, 190, 196]]];
+    let lgx = rx + rw - 5;
+    legend.forEach(([t, c]) => {
+      font("helvetica", "normal", 5.6, C.muted);
+      const tw = doc.getTextWidth(t);
+      doc.text(t, lgx, y + 7, { align: "right" });
+      fill(c); doc.roundedRect(lgx - tw - 4, y + 4.9, 2.6, 2.6, 0.6, 0.6, "F");
+      lgx -= tw + 8;
+    });
+
+    const blocks: [string, number | undefined, number, string, RGB][] = [
+      ["Avanço físico", data.physicalPlannedPeriod, data.physicalProgressPeriod, "", C.orange],
+      ["Avanço financeiro", data.financialPlannedPeriod, data.financialProgressPeriod,
+        `  (${fmtMoney(data.spentPeriod)})`, C.graphite],
+    ];
+    const anyPlanned = blocks.some(([, p]) => p !== undefined);
+    if (!anyPlanned) {
+      icon("clock", rx + rw / 2, y + 23, 7, C.faint);
+      font("helvetica", "bold", 7, C.graphite);
+      doc.text("Sem cronograma previsto vinculado", rx + rw / 2, y + 32, { align: "center" });
+      font("helvetica", "normal", 5.8, C.faint);
+      doc.text("O comparativo aparece quando a medição tem metas do cronograma.", rx + rw / 2, y + 35.8, { align: "center" });
+    } else {
+      let by = y + 14.5;
+      blocks.forEach(([label, planned, realized, extra, color]) => {
+        if (planned === undefined) return;
+        font("helvetica", "bold", 6.8, C.ink);
+        doc.text(label, rx + 5, by);
+        const d = realized - planned;
+        pill(`${d >= 0 ? "+" : ""}${d.toFixed(1).replace(".", ",")}%`, rx + rw - 5, by - 3.6,
+          d >= 0 ? C.greenSoft : C.redSoft, d >= 0 ? C.green : C.red, { align: "right", size: 5.6 });
+        const bx = rx + 19, bw = rw - 19 - 27;
+        const rows: [string, number, RGB, string][] = [
+          ["Previsto", planned, [190, 190, 196], pctBR(planned)],
+          ["Realizado", realized, color, pctBR(realized) + extra],
+        ];
+        rows.forEach(([t, v, c, txt], k) => {
+          const ry = by + 2.6 + k * 4.6;
+          font("helvetica", "normal", 5.4, C.muted);
+          doc.text(t, rx + 5, ry + 2);
+          bar(bx, ry, bw, 2.6, v, c);
+          font("helvetica", "bold", 5.4, C.ink);
+          doc.text(fit(txt, 25), rx + rw - 5, ry + 2.1, { align: "right" });
+        });
+        by += 16.5;
+      });
+      font("helvetica", "italic", 5.2, C.faint);
+      doc.text("Positivo = adiantado em relação ao planejado · Negativo = atrasado", rx + 5, y + ch - 3.5);
+    }
+    y += ch + 7;
+  }
+
+  // ------------------------------------------------- 6. SITUAÇÃO GERAL (texto)
   if (data.summaryText && data.summaryText.trim()) {
-    y = ensure(30, y);
-    y = bulletinSectionTitle(doc, "Situação Geral da Obra", y) + 3;
-    doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor(...BRAND.ink);
-    const lines = doc.splitTextToSize(data.summaryText.trim(), w - 2 * m);
-    doc.text(lines, m, y);
-    y += lines.length * 4.4 + 6;
+    font("helvetica", "normal", 7.6, C.graphite);
+    const lines = doc.splitTextToSize(data.summaryText.trim(), CW - 14) as string[];
+    const h = lines.length * 3.7 + 8;
+    y = ensure(h + 14, y);
+    y = section("Situação geral da obra", null, "quote", y);
+    card(M, y, CW, h, C.card, C.line);
+    fill(C.orange); doc.roundedRect(M + 3.5, y + 3, 1.2, h - 6, 0.6, 0.6, "F");
+    font("helvetica", "normal", 7.6, C.graphite);
+    doc.text(lines, M + 8, y + 6.2);
+    y += h + 7;
   }
 
-  // -------- AVANÇO FÍSICO DAS ETAPAS (com barras) --------
+  // ------------------------------------------------- 7. AVANÇO DAS ETAPAS
   if (data.phaseProgress.length > 0) {
-    y = ensure(20, y);
-    y = bulletinSectionTitle(doc, "Avanço Físico das Etapas no Período", y) + 4;
-
-    // Mostra só as etapas que tiveram avanço no período (evita poluir com 0%),
-    // mas se nenhuma teve avanço, mostra todas para não ficar vazio.
-    const withProgress = data.phaseProgress.filter(ph => (ph.progressEnd - ph.progressStart) > 0.5);
+    const withProgress = data.phaseProgress.filter((ph) => ph.progressEnd - ph.progressStart > 0.5);
     const toShow = withProgress.length > 0 ? withProgress : data.phaseProgress;
+    y = ensure(26, y);
+    y = section("Avanço das etapas", "Execução física de cada etapa neste período", "building", y,
+      `${toShow.length} etapa(s)`);
+    toShow.forEach((ph, i) => {
+      y = ensure(11.5, y);
+      const rh = 10;
+      card(M, y, CW, rh, C.card, null, 2);
+      const done = ph.progressEnd >= 99.5;
+      const bcx = M + 5.5, bcy = y + rh / 2;
+      if (done) {
+        fill(C.green); doc.circle(bcx, bcy, 2.6, "F");
+        stroke(C.white); doc.setLineWidth(0.45); lineCap("round");
+        doc.line(bcx - 1.1, bcy, bcx - 0.3, bcy + 0.85);
+        doc.line(bcx - 0.3, bcy + 0.85, bcx + 1.2, bcy - 0.8);
+        lineCap("butt");
+      } else {
+        fill(C.white); stroke(C.line); doc.setLineWidth(0.2); doc.circle(bcx, bcy, 2.6, "FD");
+        font("helvetica", "bold", 5.6, C.graphite);
+        doc.text(String(i + 1), bcx, bcy + 0.75, { align: "center" });
+      }
 
-    doc.setFontSize(7.5);
-    toShow.forEach((ph) => {
-      y = ensure(9, y);
       const delta = ph.progressEnd - ph.progressStart;
-      // Nome da etapa à esquerda.
-      doc.setFont("helvetica", "bold"); doc.setTextColor(...BRAND.ink); doc.setFontSize(7.5);
-      doc.text(ph.name, m, y);
-      // Progresso à direita. Se a etapa começou o período em 0% (nova no período),
-      // mostra apenas o valor executado. Se já tinha avanço anterior, mostra "de Y% para X%".
-      doc.setFont("helvetica", "normal"); doc.setTextColor(...BRAND.soft); doc.setFontSize(7);
-      const hadPrevious = ph.progressStart > 0.5;
-      const rangeText = hadPrevious
+      const deltaTxt = delta > 0.5 ? `+${delta.toFixed(0)}%` : "sem avanço";
+      const pw = pill(deltaTxt, W - M - 3, y + 1.3, delta > 0.5 ? C.orangeSoft : C.soft,
+        delta > 0.5 ? C.orange : C.muted, { align: "right", size: 5.4 });
+      font("helvetica", "normal", 5.6, C.muted);
+      const range = ph.progressStart > 0.5
         ? `de ${ph.progressStart.toFixed(0)}% para ${ph.progressEnd.toFixed(0)}%`
         : `executado: ${ph.progressEnd.toFixed(0)}%`;
-      const deltaText = delta > 0.5 ? `+${delta.toFixed(0)}%` : "sem avanço";
-      // Desenha a variação em terracota, e o texto de contexto em cinza à esquerda dela.
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(delta > 0.5 ? 194 : 168, delta > 0.5 ? 112 : 162, delta > 0.5 ? 61 : 158);
-      doc.text(deltaText, w - m, y, { align: "right" });
-      const deltaW = doc.getTextWidth(deltaText);
-      doc.setFont("helvetica", "normal"); doc.setTextColor(...BRAND.soft);
-      doc.text(rangeText, w - m - deltaW - 3, y, { align: "right" });
+      doc.text(range, W - M - 3 - pw - 2.5, y + 4.6, { align: "right" });
+      const rangeW = doc.getTextWidth(range);
 
-      // Barra: fundo + parte já feita antes do período (cinza) + avanço do período (terracota).
-      const barY = y + 1.8, barW = w - 2 * m, barH = 2.6;
-      doc.setFillColor(...BRAND.zebra); doc.rect(m, barY, barW, barH, "F");
-      doc.setFillColor(214, 211, 209); doc.rect(m, barY, barW * (ph.progressStart / 100), barH, "F");
-      doc.setFillColor(194, 112, 61); // terracota: avanço do período
-      const startX = m + barW * (ph.progressStart / 100);
-      doc.rect(startX, barY, barW * (Math.max(0, delta) / 100), barH, "F");
-      y += 7;
+      font("helvetica", "bold", 6.8, C.ink);
+      doc.text(fit(ph.name, CW - 10 - pw - rangeW - 10), M + 10, y + 4.5);
+
+      // Barra: avanço até o fim do período (laranja) com a parte anterior por cima (cinza).
+      const bx = M + 10, bw = CW - 13, bh = 1.8, by = y + 6.5;
+      fill(C.white); doc.roundedRect(bx, by, bw, bh, bh / 2, bh / 2, "F");
+      const endW = (bw * Math.max(0, Math.min(100, ph.progressEnd))) / 100;
+      if (endW > 0.3) { fill(C.orange); doc.roundedRect(bx, by, Math.max(endW, bh), bh, bh / 2, bh / 2, "F"); }
+      const startW = (bw * Math.max(0, Math.min(100, ph.progressStart))) / 100;
+      if (startW > 0.3) { fill([190, 190, 196]); doc.roundedRect(bx, by, Math.max(startW, bh), bh, bh / 2, bh / 2, "F"); }
+      y += rh + 1.5;
     });
-    y += 3;
+    font("helvetica", "normal", 5.4, C.faint);
+    fill([190, 190, 196]); doc.roundedRect(M + 1, y + 0.8, 2.4, 2.4, 0.6, 0.6, "F");
+    doc.text("já executado antes", M + 4.6, y + 2.8);
+    fill(C.orange); doc.roundedRect(M + 26, y + 0.8, 2.4, 2.4, 0.6, 0.6, "F");
+    doc.text("avanço neste período", M + 29.6, y + 2.8);
+    y += 9;
   }
 
-  // -------- PLANILHA DE GASTOS DO PERÍODO --------
-  y = ensure(24, y);
-  y = bulletinSectionTitle(doc, "Gastos do Período", y) + 2;
-  const expBody = data.expenses.map((e) => [
-    fmtDateBR(e.date), e.description || "—", e.category || "—", e.supplier || "—", fmtMoney(e.value),
-  ]);
-  const expTotal = data.expenses.reduce((s, e) => s + (e.value || 0), 0);
-  expBody.push([
-    { content: "TOTAL DO PERÍODO", colSpan: 4, styles: { halign: "right", fontStyle: "bold", fillColor: BRAND.headBg, textColor: BRAND.headText } } as any,
-    { content: fmtMoney(expTotal), styles: { halign: "right", fontStyle: "bold", fillColor: BRAND.headBg, textColor: BRAND.headText } } as any,
-  ]);
-  autoTable(doc, {
-    head: [["Data", "Descrição", "Categoria", "Fornecedor", "Valor"]],
-    body: expBody,
-    startY: y,
-    margin: { left: m, right: m },
-    styles: { fontSize: 7, cellPadding: 1.4, overflow: "linebreak", lineColor: BRAND.line, lineWidth: 0.1, textColor: BRAND.ink },
-    headStyles: { fillColor: BRAND.headBg, textColor: BRAND.headText, fontStyle: "bold", fontSize: 7, halign: "center" },
-    alternateRowStyles: { fillColor: BRAND.zebra },
-    columnStyles: { 0: { cellWidth: 20, halign: "center" }, 2: { cellWidth: 30 }, 3: { cellWidth: 34 }, 4: { cellWidth: 26, halign: "right" } },
-    didDrawPage: () => { /* autoTable gerencia páginas próprias */ },
-  });
-  y = ((doc as any).lastAutoTable?.finalY || y) + 6;
+  // ------------------------------------------------- 8. GASTOS DO PERÍODO
+  const tableBase = {
+    margin: { left: M, right: M, top: TOP, bottom: H - BOTTOM },
+    theme: "plain" as const,
+    styles: {
+      font: "helvetica", fontSize: 6.8, textColor: C.ink, overflow: "linebreak" as const, valign: "middle" as const,
+      cellPadding: { top: 2.1, bottom: 2.1, left: 2.6, right: 2.6 },
+    },
+    headStyles: { fillColor: C.soft, textColor: C.graphite, fontStyle: "bold" as const, fontSize: 5.8 },
+    footStyles: { fillColor: C.orangeSoft, textColor: C.orange, fontStyle: "bold" as const, fontSize: 7.2 },
+    alternateRowStyles: { fillColor: [250, 250, 250] as RGB },
+  };
+  const headUpper = (d: any) => {
+    if (d.section === "head") d.cell.text = (d.cell.text as string[]).map((t) => t.toUpperCase());
+  };
+  const drawRules = (d: any) => {
+    const yb = d.cell.y + d.cell.height;
+    if (d.section === "head") { stroke(C.orange); doc.setLineWidth(0.5); doc.line(d.cell.x, yb, d.cell.x + d.cell.width, yb); }
+    if (d.section === "body") { stroke(C.line); doc.setLineWidth(0.1); doc.line(d.cell.x, yb, d.cell.x + d.cell.width, yb); }
+  };
+  const catColor = (cat: string): RGB => {
+    const c = (cat || "").toLowerCase();
+    if (c.includes("mater")) return C.orange;
+    if (c.includes("obra")) return C.graphite;
+    if (c.includes("proj")) return [161, 98, 7];
+    if (c.includes("tax")) return C.muted;
+    if (c.includes("decor") || c.includes("acab")) return [217, 119, 87];
+    return C.faint;
+  };
 
-  // -------- RELATÓRIO FOTOGRÁFICO --------
+  const expTotal = data.expenses.reduce((s, e) => s + (e.value || 0), 0);
+  y = ensure(34, y);
+  y = section("Gastos do período", `${data.expenses.length} lançamento(s) entre ${fmtDateBR(data.periodStart)} e ${fmtDateBR(data.periodEnd)}`,
+    "list", y, `Total ${fmtMoney(expTotal)}`);
+  if (data.expenses.length === 0) {
+    card(M, y, CW, 12, C.card, C.line);
+    font("helvetica", "normal", 6.8, C.muted);
+    doc.text("Nenhum gasto registrado neste período.", M + CW / 2, y + 7.2, { align: "center" });
+    y += 12 + 7;
+  } else {
+    autoTable(doc, {
+      ...tableBase,
+      startY: y,
+      head: [["Data", "Descrição", "Categoria", "Fornecedor", "Valor"]],
+      body: data.expenses.map((e) => [fmtDateBR(e.date), e.description || "—", e.category || "—", e.supplier || "—", fmtMoney(e.value)]),
+      foot: [[{ content: "Total do período", colSpan: 4, styles: { halign: "right" } }, { content: fmtMoney(expTotal), styles: { halign: "right" } }]],
+      showFoot: "lastPage",
+      columnStyles: {
+        0: { cellWidth: 19, textColor: C.muted },
+        2: { cellWidth: 32, cellPadding: { top: 2.1, bottom: 2.1, left: 6, right: 2.6 } },
+        3: { cellWidth: 38, textColor: C.graphite },
+        4: { cellWidth: 26, halign: "right", fontStyle: "bold" },
+      },
+      didParseCell: (d: any) => {
+        headUpper(d);
+        if (d.section === "head" && d.column.index === 4) d.cell.styles.halign = "right";
+      },
+      didDrawCell: (d: any) => {
+        drawRules(d);
+        if (d.section === "body" && d.column.index === 2) {
+          fill(catColor(String(d.cell.raw)));
+          doc.circle(d.cell.x + 3.3, d.cell.y + d.cell.height / 2, 0.9, "F");
+        }
+      },
+    } as any);
+    y = ((doc as any).lastAutoTable?.finalY || y) + 8;
+  }
+
+  // ------------------------------------------------- 9. MÃO DE OBRA PAGA
+  if (data.laborPayments && data.laborPayments.length > 0) {
+    const laborTotal = data.laborPayments.reduce((s, p) => s + (p.value || 0), 0);
+    y = ensure(34, y);
+    y = section("Mão de obra paga no período", "Pagamentos a empreiteiros e prestadores, com o andamento de cada contrato",
+      "helmet", y, `Total ${fmtMoney(laborTotal)}`);
+    const pctPaid = (p: BulletinLaborPayment) => (p.contractValue > 0 ? (p.contractPaidTotal / p.contractValue) * 100 : 0);
+    autoTable(doc, {
+      ...tableBase,
+      startY: y,
+      head: [["Data", "Prestador", "Serviço", "Valor pago", "Contrato"]],
+      body: data.laborPayments.map((p) => [
+        fmtDateBR(p.paymentDate), p.supplier || "—", p.description || "—", fmtMoney(p.value),
+        p.contractValue > 0 ? `${Math.round(pctPaid(p))}% pago` : "—",
+      ]),
+      foot: [[{ content: "Total pago no período", colSpan: 3, styles: { halign: "right" } }, { content: fmtMoney(laborTotal), styles: { halign: "right" } }, ""]],
+      showFoot: "lastPage",
+      columnStyles: {
+        0: { cellWidth: 19, textColor: C.muted },
+        1: { cellWidth: 42, fontStyle: "bold" },
+        3: { cellWidth: 26, halign: "right", fontStyle: "bold" },
+        4: { cellWidth: 30, cellPadding: { top: 2.1, bottom: 2.1, left: 15.5, right: 2.6 }, textColor: C.graphite },
+      },
+      didParseCell: (d: any) => {
+        headUpper(d);
+        if (d.section === "head" && d.column.index === 3) d.cell.styles.halign = "right";
+        if (d.section === "head" && d.column.index === 4) d.cell.styles.cellPadding = { top: 2.1, bottom: 2.1, left: 2.6, right: 2.6 };
+      },
+      didDrawCell: (d: any) => {
+        drawRules(d);
+        if (d.section === "body" && d.column.index === 4) {
+          const p = data.laborPayments[d.row.index];
+          if (p && p.contractValue > 0) bar(d.cell.x + 2.6, d.cell.y + d.cell.height / 2 - 0.9, 11, 1.8, pctPaid(p), C.graphite, C.softer);
+        }
+      },
+    } as any);
+    y = ((doc as any).lastAutoTable?.finalY || y) + 8;
+  }
+
+  // ------------------------------------------------- 10. RELATÓRIO FOTOGRÁFICO
   if (data.photos.length > 0) {
-    newPage(); y = 36;
-    y = bulletinSectionTitle(doc, "Relatório Fotográfico", y) + 4;
-    const gap = 4;
-    const cols = 2;
-    const cellW = (w - 2 * m - (cols - 1) * gap) / cols;
-    const imgH = 52;
+    const gap = 5;
+    const cellW = (CW - gap) / 2;
+    const imgH = 58;
+    const boxH = imgH + 11;
+    y = ensure(boxH + 16, y);
+    y = section("Relatório fotográfico", `${data.photos.length} registro(s) do período`, "camera", y);
     let col = 0;
     let rowY = y;
-    for (let i = 0; i < data.photos.length; i++) {
-      const photo = data.photos[i];
-      if (col === 0) { rowY = ensure(imgH + 12, rowY); }
-      const x = m + col * (cellW + gap);
-      // Moldura
-      doc.setDrawColor(...BRAND.line); doc.setLineWidth(0.2);
-      doc.setFillColor(248, 248, 247);
-      doc.rect(x, rowY, cellW, imgH, "FD");
+    data.photos.forEach((photo, i) => {
+      if (col === 0) rowY = ensure(boxH + 4, rowY);
+      const x = M + col * (cellW + gap);
+      card(x, rowY, cellW, boxH, C.white, C.line, 3);
+      fill(C.soft); doc.roundedRect(x + 2, rowY + 2, cellW - 4, imgH - 1, 2, 2, "F");
       try {
-        // Detecta formato pela assinatura do data URL.
         const fmt = /png/i.test(photo.url) ? "PNG" : "JPEG";
-        doc.addImage(photo.url, fmt, x + 1, rowY + 1, cellW - 2, imgH - 2, undefined, "FAST");
+        doc.addImage(photo.url, fmt, x + 2, rowY + 2, cellW - 4, imgH - 1, undefined, "FAST");
       } catch {
-        doc.setFont("helvetica", "italic"); doc.setFontSize(7); doc.setTextColor(...BRAND.soft);
-        doc.text("(imagem indisponível)", x + cellW / 2, rowY + imgH / 2, { align: "center" });
+        icon("camera", x + cellW / 2, rowY + imgH / 2 - 2, 8, C.faint);
+        font("helvetica", "italic", 6.2, C.faint);
+        doc.text("imagem indisponível", x + cellW / 2, rowY + imgH / 2 + 6, { align: "center" });
       }
-      // Legenda
-      const cap = photo.caption?.trim() || `Foto ${i + 1}`;
-      doc.setFont("helvetica", "normal"); doc.setFontSize(6.5); doc.setTextColor(...BRAND.ink);
-      const capLines = doc.splitTextToSize(cap, cellW);
-      doc.text(capLines.slice(0, 2), x, rowY + imgH + 3.5);
-
+      const nw = pill(String(i + 1).padStart(2, "0"), x + 2.5, rowY + imgH + 2.6, C.orange, C.white, { size: 5.6 });
+      font("helvetica", "normal", 6.4, C.graphite);
+      doc.text(fit(photo.caption?.trim() || `Foto ${i + 1}`, cellW - nw - 8), x + 2.5 + nw + 2.5, rowY + imgH + 6.6);
       col++;
-      if (col >= cols) { col = 0; rowY += imgH + 12; }
-    }
-    if (col !== 0) rowY += imgH + 12;
-    y = rowY + 2;
+      if (col >= 2) { col = 0; rowY += boxH + 4; }
+    });
+    y = (col !== 0 ? rowY + boxH + 4 : rowY) + 3;
   }
 
-  // -------- ASSINATURAS --------
-  y = ensure(40, y);
-  y = bulletinSectionTitle(doc, "Aprovação da Medição", y) + 12;
-  const sigW = (w - 2 * m - 20) / 2;
-  const drawSig = (x: number, label: string, sub: string) => {
-    doc.setDrawColor(...BRAND.ink); doc.setLineWidth(0.3);
-    doc.line(x, y, x + sigW, y);
-    doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(...BRAND.ink);
-    doc.text(label, x + sigW / 2, y + 4.5, { align: "center" });
-    doc.setFont("helvetica", "normal"); doc.setFontSize(6.5); doc.setTextColor(...BRAND.soft);
-    doc.text(sub, x + sigW / 2, y + 8.5, { align: "center" });
-  };
-  drawSig(m, data.clientName || "Cliente", "Contratante");
-  drawSig(m + sigW + 20, data.responsibleTechnical || COMPANY, "Responsável Técnico");
-  y += 16;
+  // ------------------------------------------------- 11. APROVAÇÃO
+  y = ensure(56, y);
+  y = section("Aprovação da medição", "Conferência e aceite do boletim pelas partes", "pen", y);
+  {
+    const gap = 5;
+    const sw = (CW - gap) / 2;
+    const sh = 32;
+    const sigs: [string, string][] = [
+      ["CONTRATANTE", data.clientName || "Cliente"],
+      ["RESPONSÁVEL TÉCNICO", data.responsibleTechnical || COMPANY],
+    ];
+    sigs.forEach(([role, name], i) => {
+      const x = M + i * (sw + gap);
+      card(x, y, sw, sh, C.card, C.line, 3);
+      pill(role, x + 4, y + 4, C.white, C.graphite, { size: 5.4 });
+      stroke(C.faint); doc.setLineWidth(0.25);
+      anyDoc.setLineDashPattern?.([1, 1], 0);
+      doc.line(x + 8, y + 21, x + sw - 8, y + 21);
+      anyDoc.setLineDashPattern?.([], 0);
+      font("helvetica", "bold", 7.6, C.ink);
+      doc.text(fit(name, sw - 12), x + sw / 2, y + 25.2, { align: "center" });
+      font("helvetica", "normal", 5.6, C.faint);
+      doc.text("Assinatura e data", x + sw / 2, y + 28.6, { align: "center" });
+    });
+    y += sh + 6;
 
-  footer();
+    // Selo de emissão.
+    const seal = `Documento gerado pelo HUB CBC em ${today()} · Boletim de Medição Nº ${num}`;
+    font("helvetica", "bold", 6, C.graphite);
+    const stw = doc.getTextWidth(seal) + 12;
+    const sx = M + (CW - stw) / 2;
+    fill(C.soft); doc.roundedRect(sx, y, stw, 7, 3.5, 3.5, "F");
+    icon("check", sx + 4, y + 3.5, 3.4, C.green);
+    font("helvetica", "bold", 6, C.graphite);
+    doc.text(seal, sx + 7.5, y + 4.6);
+  }
+
+  // ------------------------------------------------- CABEÇALHO COMPACTO + RODAPÉ (todas as páginas)
+  const total = doc.getNumberOfPages();
+  for (let i = 1; i <= total; i++) {
+    doc.setPage(i);
+    if (i > 1) {
+      fill(C.ink); doc.roundedRect(M, 8, CW, 11, 2.8, 2.8, "F");
+      fill(C.orange); doc.circle(M + 5, 13.5, 1.1, "F");
+      font(HF, "bold", 6.6, C.white);
+      doc.text("CHAVES BRITES CORREA", M + 8, 14.6);
+      font("helvetica", "normal", 6.4, [212, 212, 216]);
+      doc.text(fit(`Boletim de Medição Nº ${num} · ${data.projectName || ""}`, CW - 70), W - M - 5, 14.6, { align: "right" });
+    }
+    fill(C.soft); doc.roundedRect(M, H - 13, CW, 7.5, 3.75, 3.75, "F");
+    font(HF, "bold", 6.2, C.ink);
+    doc.text("HUB CBC", M + 4, H - 8.3);
+    const hw = doc.getTextWidth("HUB CBC");
+    font("helvetica", "normal", 6, C.muted);
+    doc.text(`  ·  ${COMPANY}  ·  Boletim de Medição Nº ${num}`, M + 4 + hw, H - 8.3);
+    const pageOf = `de ${total}`;
+    doc.text(pageOf, W - M - 4, H - 8.3, { align: "right" });
+    const pw = doc.getTextWidth(pageOf);
+    font("helvetica", "bold", 6.4, C.orange);
+    doc.text(`Página ${i}`, W - M - 4 - pw - 1.2, H - 8.3, { align: "right" });
+  }
+
   const safeName = (data.projectName || "obra").replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-").toLowerCase();
   doc.save(`medicao-${num}-${safeName}.pdf`);
 }
+

@@ -18,7 +18,8 @@ import {
   Camera,
   ExternalLink,
   Download,
-  Eye
+  Eye,
+  X
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import AcompanhamentoFisico from './AcompanhamentoFisico';
@@ -54,8 +55,10 @@ export default function ClientDashboard({ client, projects, transactions, docume
     return clientProjects.length > 0 ? clientProjects[0].id : '';
   });
 
-  // Active Document class tab (Administrativo, Planejamento, Acompanhamento)
-  const [activeDocClassTab, setActiveDocClassTab] = useState<DocumentClass>('administrativo');
+  // Active Document class tab (Administrativo, Planejamento, Acompanhamento) —
+  // começa em "acompanhamento": é onde ficam as primeiras informações que o
+  // cliente quer ver (progresso da obra e investimento), não a parte documental.
+  const [activeDocClassTab, setActiveDocClassTab] = useState<DocumentClass>('acompanhamento');
 
   // Synchronize selectedProjectId when clientProjects load or update from Firestore
   useEffect(() => {
@@ -262,21 +265,21 @@ export default function ClientDashboard({ client, projects, transactions, docume
     switch (status) {
       case 'pago':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[length:var(--ui-text-xs)] font-mono uppercase bg-emerald-50 text-emerald-800 border border-emerald-200">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[length:var(--ui-text-xs)] font-mono uppercase bg-emerald-50 text-emerald-800 border border-emerald-200">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
             Quitado
           </span>
         );
       case 'pendente':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[length:var(--ui-text-xs)] font-mono uppercase bg-amber-50 text-amber-800 border border-amber-200">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[length:var(--ui-text-xs)] font-mono uppercase bg-amber-50 text-amber-800 border border-amber-200">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
             A pagar
           </span>
         );
       case 'reembolsado':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[length:var(--ui-text-xs)] font-mono uppercase bg-blue-50 text-blue-800 border border-blue-200">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[length:var(--ui-text-xs)] font-mono uppercase bg-blue-50 text-blue-800 border border-blue-200">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
             Reembolsado
           </span>
@@ -322,43 +325,68 @@ export default function ClientDashboard({ client, projects, transactions, docume
   };
 
   return (
-    <div className="min-h-screen bg-[#F4F6FA] text-[#0F172A] font-sans selection:bg-[#FF5A35]/15 relative overflow-hidden theme-light">
-      <div className="grid-bg"></div>
-      
-      {/* Ambient backgrounds */}
-      <div className="bg-glow-orange top-[-100px] left-[-50px] opacity-20"></div>
-      <div className="bg-glow-purple bottom-[150px] right-[50px] opacity-15"></div>
+    <div
+      className="client-portal min-h-screen text-[#18181b] font-sans selection:bg-[#FF5A35]/15 relative overflow-hidden theme-light"
+      style={{ background: 'linear-gradient(160deg, #d6d9de 0%, #eef0f3 45%, #d1d4da 100%)' }}
+    >
+      {/* Grade decorativa sutil — igual à tela de seleção de ambiente */}
+      <div className="absolute inset-0 pointer-events-none" style={{
+        backgroundImage:
+          'linear-gradient(to right, rgba(0,0,0,0.025) 1px, transparent 1px),' +
+          'linear-gradient(to bottom, rgba(0,0,0,0.025) 1px, transparent 1px)',
+        backgroundSize: '48px 48px',
+      }} />
+      {/* Brilhos ambiente — mesma dupla grafite + laranja da seleção de ambiente */}
+      <div className="absolute pointer-events-none" style={{
+        width: 600, height: 600, top: -180, left: -140,
+        background: 'radial-gradient(circle, rgba(24,24,27,0.08) 0%, transparent 70%)',
+      }} />
+      <div className="absolute pointer-events-none" style={{
+        width: 650, height: 650, bottom: -200, right: -160,
+        background: 'radial-gradient(circle, #FF5A3520 0%, transparent 70%)',
+      }} />
 
-      {/* Header Branding */}
-      <header className="sticky top-0 z-40 bg-[#090D16]/90 border-b border-white/5 backdrop-blur-md px-6 py-4 relative z-10">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#18181b] to-[#1E1E1E] flex items-center justify-center font-bold text-xs shadow-lg shadow-[#18181b]/20" style={{ color: '#fff' }}>
-                CBC
-              </div>
-              <div>
-                <h1 className="font-sans font-bold text-sm tracking-[0.12em] uppercase text-white leading-tight">
-                  CHAVES BRITES CORREA
-                </h1>
-                <p className="font-sans text-[length:var(--ui-text-xs)] tracking-[0.2em] uppercase text-slate-400 mt-0.5">
-                  ARQUITETURA &amp; ENGENHARIA
-                </p>
-              </div>
+      {/* Header Branding — cartão de vidro claro, mesma linguagem visual do resto do app */}
+      <header className="client-header sticky top-3 z-40 mx-3 px-5 py-3.5 relative rounded-[20px]" style={{
+        background: 'rgba(255,255,255,0.7)',
+        backdropFilter: 'blur(20px) saturate(160%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(160%)',
+        border: '1px solid rgba(255,255,255,0.7)',
+        boxShadow: '0 10px 28px -14px rgba(15,23,42,0.18)',
+      }}>
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs flex-shrink-0" style={{
+              background: 'linear-gradient(135deg, #3f3f46, #000000)',
+              border: '1px solid rgba(255,255,255,0.14)',
+              boxShadow: '0 6px 16px rgba(0,0,0,0.25)',
+              color: '#fff',
+            }}>
+              CBC
+            </div>
+            <div>
+              {/* .theme-light já força h1/h2 para #0F172A (escuro) — não precisa de cor própria aqui. */}
+              <h1 className="font-sans font-bold text-sm tracking-[0.1em] uppercase leading-tight">
+                Chaves Brites Correa
+              </h1>
+              <p className="font-mono text-[10px] tracking-[0.18em] uppercase mt-0.5">
+                Arquitetura &amp; Engenharia
+              </p>
             </div>
           </div>
 
-          <div className="flex items-center justify-between md:justify-end gap-6 border-t md:border-t-0 pt-3 md:pt-0 border-white/5">
+          <div className="flex items-center justify-between md:justify-end gap-4">
             <div className="text-left md:text-right">
-              <p className="text-[length:var(--ui-text-xs)] font-mono text-slate-500 uppercase tracking-widest">Acesso do Cliente</p>
-              <p className="text-xs font-bold text-white">{client.name}</p>
+              <p className="text-[10px] font-mono uppercase tracking-widest">Acesso do Cliente</p>
+              <p className="text-xs"><b>{client.name}</b></p>
             </div>
-            <button 
+            <button
               id="logout_btn"
               onClick={onLogout}
-              className="flex items-center gap-2 border border-white/10 px-3.5 py-1.5 rounded-xl text-xs font-mono uppercase tracking-wider text-slate-300 hover:text-white hover:border-white/30 hover:bg-white/5 transition-all cursor-pointer"
+              className="flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-mono uppercase tracking-wider transition-colors hover:bg-white cursor-pointer"
+              style={{ color: '#52525b', background: 'rgba(255,255,255,0.5)', border: '1px solid rgba(0,0,0,0.08)' }}
             >
-              <LogOut size={13} className="text-[#FF5A35]" />
+              <LogOut size={13} style={{ color: '#FF5A35' }} />
               Sair
             </button>
           </div>
@@ -366,12 +394,12 @@ export default function ClientDashboard({ client, projects, transactions, docume
       </header>
 
       {/* Main Content Area */}
-      <main className="max-w-7xl mx-auto px-6 py-8 relative z-10">
+      <main className="max-w-7xl mx-auto px-3 md:px-6 py-6 relative z-10">
         
         {/* Project Selection Tabs */}
         {clientProjects.length > 1 && (
-          <div className="mb-8 border-b border-white/5 pb-4">
-            <span className="text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest text-slate-500 block mb-3 px-1">Selecione o Centro de Custo / Obra</span>
+          <div className="mb-6 pb-4 border-b border-stone-200/70">
+            <span className="text-[10px] font-mono uppercase tracking-widest text-stone-400 block mb-3 px-1">Selecione o Centro de Custo / Obra</span>
             <div className="flex flex-wrap gap-2">
               {clientProjects.map(p => (
                 <button
@@ -383,10 +411,10 @@ export default function ClientDashboard({ client, projects, transactions, docume
                     setCategoryFilter('all');
                     setStatusFilter('all');
                   }}
-                  className={`px-4 py-2.5 text-xs font-mono uppercase tracking-wider transition-all rounded-xl border ${
-                    selectedProjectId === p.id 
-                      ? 'bg-gradient-to-r from-[#FF5A35] to-[#E04824] text-white border-none shadow-lg shadow-[#FF5A35]/15 font-semibold' 
-                      : 'bg-white/5 text-slate-400 border-white/5 hover:border-white/20 hover:text-white'
+                  className={`px-4 py-2.5 text-xs font-mono uppercase tracking-wider transition-all rounded-xl border cursor-pointer ${
+                    selectedProjectId === p.id
+                      ? 'bg-gradient-to-r from-[#FF5A35] to-[#E04824] text-white border-transparent shadow-lg shadow-[#FF5A35]/20 font-semibold'
+                      : 'bg-white/70 text-stone-500 border-stone-200 hover:border-stone-300 hover:text-stone-800'
                   }`}
                 >
                   {p.name}
@@ -398,176 +426,141 @@ export default function ClientDashboard({ client, projects, transactions, docume
 
         {/* If no projects exist */}
         {clientProjects.length === 0 ? (
-          <div className="bg-white/5 border border-white/10 p-12 text-center my-12 rounded-2xl">
-            <h3 className="text-lg font-bold text-white">Nenhum Centro de Custo Disponível</h3>
-            <p className="text-xs text-slate-400 mt-2">Seu cadastro está ativo, porém o time técnico ainda não liberou obras ou projetos vinculados.</p>
+          <div className="bg-white/70 border border-stone-200 p-12 text-center my-12 rounded-2xl">
+            <h3 className="text-lg font-bold text-stone-900">Nenhum Centro de Custo Disponível</h3>
+            <p className="text-xs text-stone-500 mt-2">Seu cadastro está ativo, porém o time técnico ainda não liberou obras ou projetos vinculados.</p>
             <p className="text-xs text-[#FF5A35] mt-1 font-mono uppercase text-[length:var(--ui-text-xs)] tracking-wider">Entre em contato com o escritório para vincular seus custos.</p>
           </div>
         ) : !selectedProject ? (
-          <div className="text-center p-12 text-slate-400 font-mono text-xs">Carregando dados...</div>
+          <div className="text-center p-12 text-stone-400 font-mono text-xs">Carregando dados...</div>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-4">
             
-            {/* Project Overview Card */}
-            <div className="bg-white border border-stone-200 p-6 md:p-8 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-24 h-24 pointer-events-none opacity-[0.03] bg-[radial-gradient(#000_1px,transparent_1px)] bg-[size:10px_10px]"></div>
-              
-              <div className="flex flex-col lg:flex-row justify-between items-start gap-6">
-                <div className="space-y-4 max-w-2xl">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span className="inline-flex px-2 py-0.5 text-[length:var(--ui-text-xs)] font-mono uppercase bg-stone-100 text-stone-700 border border-stone-300">
+            {/* Resumo compacto do centro de custo — nome, status, local, área, início,
+                consumo financeiro e avisos, tudo numa única faixa para reduzir o scroll
+                que antes era necessário para ver essas informações separadas. */}
+            <div className="bg-white/85 backdrop-blur-sm border border-stone-200/70 rounded-2xl p-4 relative overflow-hidden" style={{ boxShadow: '0 10px 28px -18px rgba(15,23,42,0.18)' }}>
+              <div className="flex flex-col lg:flex-row justify-between items-start gap-5">
+                <div className="space-y-2.5 flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex px-2 py-0.5 text-[10px] font-mono uppercase rounded-md bg-stone-100 text-stone-600 border border-stone-200">
                       {selectedProject.type === 'obra' ? 'Execução de Obra' : 'Desenvolvimento de Projeto'}
                     </span>
-                    <span className={`inline-flex px-2 py-0.5 text-[length:var(--ui-text-xs)] font-mono uppercase ${
-                      selectedProject.status === 'execucao' ? 'bg-[#EBF7EE] text-[#245D3B]' :
-                      selectedProject.status === 'concluido' ? 'bg-[#EEF2F6] text-[#204060]' :
-                      'bg-stone-100 text-stone-600'
-                    } border border-current/25`}>
+                    <span className={`inline-flex px-2 py-0.5 text-[10px] font-mono uppercase rounded-md border ${
+                      selectedProject.status === 'execucao' ? 'bg-[#EBF7EE] text-[#245D3B] border-[#245D3B]/20' :
+                      selectedProject.status === 'concluido' ? 'bg-[#EEF2F6] text-[#204060] border-[#204060]/20' :
+                      'bg-stone-100 text-stone-600 border-stone-200'
+                    }`}>
                       {selectedProject.status === 'planejamento' ? 'Planejamento' :
                        selectedProject.status === 'execucao' ? 'Em Andamento' :
                        selectedProject.status === 'concluido' ? 'Concluído' : 'Suspenso'}
                     </span>
+                    {!hasContract && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono uppercase rounded-md bg-amber-50 text-amber-800 border border-amber-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" /> Pendência
+                      </span>
+                    )}
                   </div>
 
-                  <h2 className="font-serif text-xl md:text-2xl text-stone-900 leading-tight">{selectedProject.name}</h2>
-                  <p className="text-xs text-stone-600 leading-relaxed font-sans">{selectedProject.description}</p>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-4 border-t border-stone-100">
-                    <div className="flex items-center gap-2.5 text-stone-600">
-                      <MapPin size={14} className="text-stone-400 flex-shrink-0" />
-                      <div className="text-xs">
-                        <p className="text-[length:var(--ui-text-xs)] font-mono text-stone-400 uppercase tracking-wider">Localização</p>
-                        <p className="truncate max-w-[200px]" title={selectedProject.location}>{selectedProject.location}</p>
-                      </div>
-                    </div>
+                  <h2 className="text-xl md:text-2xl font-bold text-stone-900 leading-tight">{selectedProject.name}</h2>
+
+                  <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-stone-500 pt-1">
+                    <span className="flex items-center gap-1.5"><MapPin size={13} className="text-stone-400 flex-shrink-0" /> <span className="truncate max-w-[220px]" title={selectedProject.location}>{selectedProject.location}</span></span>
                     {selectedProject.area && (
-                      <div className="flex items-center gap-2.5 text-stone-600">
-                        <Layers size={14} className="text-stone-400 flex-shrink-0" />
-                        <div className="text-xs">
-                          <p className="text-[length:var(--ui-text-xs)] font-mono text-stone-400 uppercase tracking-wider">Área Construída</p>
-                          <p>{selectedProject.area} m²</p>
-                        </div>
-                      </div>
+                      <span className="flex items-center gap-1.5"><Layers size={13} className="text-stone-400 flex-shrink-0" /> {selectedProject.area} m²</span>
                     )}
-                    <div className="flex items-center gap-2.5 text-stone-600">
-                      <Calendar size={14} className="text-stone-400 flex-shrink-0" />
-                      <div className="text-xs">
-                        <p className="text-[length:var(--ui-text-xs)] font-mono text-stone-400 uppercase tracking-wider">Iniciada em</p>
-                        <p>{formatDateBR(selectedProject.startDate)}</p>
-                      </div>
-                    </div>
+                    <span className="flex items-center gap-1.5"><Calendar size={13} className="text-stone-400 flex-shrink-0" /> Iniciada em {formatDateBR(selectedProject.startDate)}</span>
                   </div>
                 </div>
 
-                {/* Circular ring percent for execution */}
-                <div className="flex items-center gap-4 bg-[#FBFBFA] border border-stone-100 p-4 w-full lg:w-auto">
-                  <div className="relative w-20 h-20 flex-shrink-0">
+                {/* Anel de progresso + consumo financeiro */}
+                <div className="flex items-center gap-3 rounded-xl p-3.5 w-full lg:w-auto flex-shrink-0" style={{ background: '#FF5A350d', border: '1px solid #FF5A3520' }}>
+                  <div className="relative w-16 h-16 flex-shrink-0">
                     <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                      <path
-                        className="text-stone-200"
-                        strokeWidth="2.5"
-                        stroke="currentColor"
-                        fill="none"
-                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                      />
-                      <path
-                        className="text-stone-700 transition-all duration-1000"
-                        strokeWidth="2.5"
-                        strokeDasharray={`${Math.min(100, summary.percentSpent)}, 100`}
-                        strokeLinecap="round"
-                        stroke="currentColor"
-                        fill="none"
-                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                      />
+                      <path className="text-stone-200" strokeWidth="3" stroke="currentColor" fill="none"
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                      <path strokeWidth="3" strokeDasharray={`${Math.min(100, summary.percentSpent)}, 100`} strokeLinecap="round"
+                        stroke="#FF5A35" fill="none"
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-sm font-semibold text-stone-800">{summary.percentSpent.toFixed(1)}%</span>
-                      <span className="text-[length:var(--ui-text-xs)] font-mono text-stone-400 uppercase">utilizado</span>
+                      <span className="text-xs font-bold text-stone-800">{summary.percentSpent.toFixed(0)}%</span>
                     </div>
                   </div>
-                  <div>
-                    <span className="text-[length:var(--ui-text-xs)] font-mono text-stone-400 uppercase tracking-widest block">Consumo Financeiro</span>
-                    <h4 className="text-sm font-semibold text-stone-800 mt-1">Investido vs. Previsto</h4>
-                    <p className="text-xs text-stone-500 mt-0.5">Sua obra gastou {summary.percentSpent.toFixed(1)}% do orçamento total aprovado de {formatCurrency(selectedProject.budget)}.</p>
+                  <div className="min-w-0">
+                    <span className="text-[10px] font-mono text-stone-400 uppercase tracking-widest block">Consumo Financeiro</span>
+                    <p className="text-xs text-stone-600 mt-0.5 max-w-[180px]">{summary.percentSpent.toFixed(1)}% de {formatCurrency(selectedProject.budget)}</p>
                   </div>
                 </div>
               </div>
+
+              {/* Linha de aviso — compacta, dentro do mesmo cartão */}
+              <div className={`mt-4 pt-4 border-t border-stone-100 flex items-start gap-2 text-xs ${!hasContract ? 'text-amber-800' : 'text-[#245D3B]'}`}>
+                {!hasContract ? (
+                  <>
+                    <span className="mt-0.5">⚠️</span>
+                    <span><strong>Contrato técnico pendente de anexo.</strong> Entre em contato com a equipe da Chaves Brites Correa para regularização.</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 size={14} style={{ color: '#059669' }} className="flex-shrink-0 mt-0.5" />
+                    <span><strong>Tudo em dia!</strong> O contrato técnico foi anexado e está homologado.</span>
+                  </>
+                )}
+              </div>
             </div>
 
-            {/* Avisos e Notificações do Centro de Custo */}
-            <div className="bg-white border border-stone-200 p-5 space-y-3">
-              <h3 className="font-serif text-sm font-bold text-stone-900 flex items-center gap-1.5">
-                <span className={`inline-block w-2 h-2 rounded-full ${!hasContract ? 'bg-red-500 animate-pulse' : 'bg-emerald-500'}`}></span>
-                Avisos e Notificações do Canteiro
-              </h3>
-              {!hasContract ? (
-                <div className="bg-amber-50/50 border border-amber-200 p-4 flex items-start gap-3">
-                  <span className="inline-flex items-center justify-center p-1.5 bg-amber-100 text-amber-800 rounded-none flex-shrink-0 mt-0.5 text-xs font-bold">
-                    ⚠️
-                  </span>
-                  <div>
-                    <p className="text-xs font-bold text-amber-950">Documento Mínimo Obrigatório Pendente: Contrato Técnico de Prestação de Serviços</p>
-                    <p className="text-[length:var(--ui-text-xs)] text-stone-600 mt-0.5 leading-relaxed">
-                      Identificamos que o contrato assinado ou a minuta regulamentar desta obra/projeto ainda não foi vinculada ao sistema. 
-                      Enquanto essa pendência persistir, seu centro de custo exibirá status de pendência documental. Entre em contato com a equipe de arquitetura ou aguarde o anexo pelo time administrativo da Chaves Brites Correa para regularização.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-[length:var(--ui-text-xs)] text-[#245D3B] bg-emerald-50/50 border border-emerald-200 p-3 flex items-center gap-2">
-                  <span className="inline-flex items-center justify-center p-1 bg-emerald-100 text-emerald-800 rounded-none text-xs">
-                    ✓
-                  </span>
-                  <span><strong>Todas as obrigações administrativas estão em dia!</strong> O contrato técnico obrigatório foi anexado e está homologado na pasta administrativa.</span>
-                </div>
-              )}
-            </div>
-
-            {/* Top-level Navigation: Administrativo / Planejamento / Acompanhamento */}
-            <div className="flex border-b border-stone-200 gap-1 pb-px overflow-x-auto">
-              {(['administrativo', 'planejamento', 'acompanhamento'] as DocumentClass[]).map(dcClass => {
-                const count = documents.filter(d => d.projectId === selectedProjectId && d.class === dcClass).length;
+            {/* Seleção de categoria — cards coloridos, no mesmo estilo da tela de
+                seleção de ambiente, em vez de abas de texto simples. */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {([
+                { key: 'acompanhamento' as DocumentClass, label: 'Acompanhamento', desc: 'Progresso da obra e investimentos', Icon: Activity, color: '#FF5A35' },
+                { key: 'planejamento' as DocumentClass, label: 'Planejamento', desc: 'Cronograma, orçamento e arquivos técnicos', Icon: Clock, color: '#B08A3E' },
+                { key: 'administrativo' as DocumentClass, label: 'Administrativo', desc: 'Contrato, licenças e documentos', Icon: FileText, color: '#4D5E6F' },
+              ]).map(cat => {
+                const count = documents.filter(d => d.projectId === selectedProjectId && d.class === cat.key).length;
+                const active = activeDocClassTab === cat.key;
+                const Icon = cat.Icon;
                 return (
                   <button
-                    key={dcClass}
+                    key={cat.key}
                     type="button"
-                    onClick={() => setActiveDocClassTab(dcClass)}
-                    className={`px-6 py-3 text-xs font-mono uppercase tracking-wider transition-all border-b-2 -mb-px cursor-pointer flex items-center gap-2 ${
-                      activeDocClassTab === dcClass
-                        ? 'border-[#1E1E1E] text-[#1E1E1E] font-bold'
-                        : 'border-transparent text-stone-400 hover:text-stone-700'
-                    }`}
+                    onClick={() => setActiveDocClassTab(cat.key)}
+                    className="group relative text-left rounded-2xl p-4 cursor-pointer transition-all duration-300"
+                    style={{
+                      background: active ? '#fff' : 'rgba(255,255,255,0.6)',
+                      border: `1px solid ${active ? cat.color + '55' : 'rgba(0,0,0,0.08)'}`,
+                      boxShadow: active
+                        ? `0 14px 30px -12px ${cat.color}40, inset 0 1px 0 rgba(255,255,255,0.7)`
+                        : '0 4px 14px -8px rgba(15,23,42,0.1)',
+                      transform: active ? 'translateY(-2px)' : 'none',
+                    }}
                   >
-                    {dcClass === 'administrativo' ? (
-                      <>
-                        <FileText size={13} />
-                        <span>📄 Administrativo</span>
-                      </>
-                    ) : dcClass === 'planejamento' ? (
-                      <>
-                        <Clock size={13} />
-                        <span>📋 Planejamento</span>
-                      </>
-                    ) : (
-                      <>
-                        <Activity size={13} />
-                        <span>📈 Acompanhamento</span>
-                      </>
-                    )}
-                    <span className="text-[length:var(--ui-text-xs)] opacity-60 font-mono">({count})</span>
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex items-center justify-center w-10 h-10 rounded-xl flex-shrink-0 transition-transform duration-300 group-hover:scale-105" style={{ background: cat.color + '1f' }}>
+                        <Icon size={18} style={{ color: cat.color }} />
+                      </span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm font-bold text-stone-900">{cat.label}</span>
+                          <span className="text-[10px] font-mono text-stone-400">({count})</span>
+                        </div>
+                        <p className="text-[11px] text-stone-500 truncate">{cat.desc}</p>
+                      </div>
+                    </div>
                   </button>
                 );
               })}
             </div>
 
-            <div className="space-y-6 pt-4">
+            <div className="space-y-4 pt-1">
 
                 {/* Sub Tab: ADMINISTRATIVO */}
                 {activeDocClassTab === 'administrativo' && (
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                     
                     {/* Tool 1: Contract View */}
-                    <div className="bg-white border border-stone-200 p-6 space-y-4">
+                    <div className="bg-white border border-stone-200 rounded-2xl p-5 space-y-3">
                       <div className="border-b border-stone-100 pb-2.5">
                         <h3 className="font-serif text-sm text-stone-950 font-bold flex items-center gap-1.5">
                           <FileText size={15} className="text-stone-600" />
@@ -620,7 +613,7 @@ export default function ClientDashboard({ client, projects, transactions, docume
                               penalties: contractForm.penalties,
                               signed: contractForm.isSigned,
                             })}
-                            className="bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-700 px-2 py-1 text-[length:var(--ui-text-xs)] font-mono uppercase flex items-center gap-1 cursor-pointer"
+                            className="bg-[#18181b] hover:bg-black text-white px-3 py-1.5 rounded-full text-[length:var(--ui-text-xs)] font-mono uppercase flex items-center gap-1 cursor-pointer transition-colors"
                           >
                             Download
                           </button>
@@ -629,7 +622,7 @@ export default function ClientDashboard({ client, projects, transactions, docume
                     </div>
 
                     {/* Tool 2: Licenses */}
-                    <div className="bg-white border border-stone-200 p-6 space-y-4">
+                    <div className="bg-white border border-stone-200 rounded-2xl p-5 space-y-3">
                       <div className="border-b border-stone-100 pb-2.5">
                         <h3 className="font-serif text-sm text-stone-950 font-bold flex items-center gap-1.5">
                           <CheckCircle2 size={15} className="text-stone-600" />
@@ -645,10 +638,10 @@ export default function ClientDashboard({ client, projects, transactions, docume
                           </div>
                         ) : (
                           regulatorySteps.filter(s => s.projectId === selectedProjectId).map(step => (
-                            <div key={step.id} className="bg-stone-50 border border-stone-150 p-3 space-y-1.5">
+                            <div key={step.id} className="bg-stone-50 border border-stone-150 rounded-xl p-3 space-y-1.5">
                               <div className="flex justify-between items-center">
                                 <h4 className="font-sans font-bold text-xs text-stone-900">{step.name}</h4>
-                                <span className={`text-[length:var(--ui-text-xs)] font-mono uppercase tracking-wider py-0.5 px-1.5 border ${
+                                <span className={`text-[length:var(--ui-text-xs)] font-mono uppercase tracking-wider py-0.5 px-2 rounded-full border ${
                                   step.status === 'Emitido'
                                     ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-bold'
                                     : step.status === 'Sob Análise'
@@ -666,7 +659,7 @@ export default function ClientDashboard({ client, projects, transactions, docume
                     </div>
 
                     {/* Tool 3: Admin Files */}
-                    <div className="bg-white border border-stone-200 p-6 space-y-4">
+                    <div className="bg-white border border-stone-200 rounded-2xl p-5 space-y-3">
                       <div className="border-b border-stone-100 pb-2.5">
                         <h3 className="font-serif text-sm text-stone-950 font-bold flex items-center gap-1.5">
                           <Layers size={15} className="text-stone-600" />
@@ -682,7 +675,7 @@ export default function ClientDashboard({ client, projects, transactions, docume
                           </div>
                         ) : (
                           documents.filter(d => d.projectId === selectedProjectId && d.class === 'administrativo').map(doc => (
-                            <div key={doc.id} className="bg-stone-50 border border-stone-200 p-3 space-y-2">
+                            <div key={doc.id} className="bg-stone-50 border border-stone-200 rounded-xl p-3 space-y-2">
                               <div className="flex items-center justify-between gap-1">
                                 <h4 className="font-sans font-bold text-xs text-stone-900">{doc.name}</h4>
                                 <span className="text-[8.5px] font-mono text-stone-400">{doc.uploadedAt}</span>
@@ -711,10 +704,10 @@ export default function ClientDashboard({ client, projects, transactions, docume
 
                 {/* Sub Tab: PLANEJAMENTO */}
                 {activeDocClassTab === 'planejamento' && (
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                     
                     {/* Tool 1: Gantt Schedule view */}
-                    <div className="bg-white border border-stone-200 p-6 lg:col-span-2 space-y-5">
+                    <div className="bg-white border border-stone-200 rounded-2xl p-5 lg:col-span-2 space-y-4">
                       <div className="border-b border-stone-100 pb-2.5">
                         <h3 className="font-serif text-sm text-stone-950 font-bold flex items-center gap-1.5">
                           <Clock size={15} className="text-stone-600" />
@@ -732,13 +725,13 @@ export default function ClientDashboard({ client, projects, transactions, docume
                           timelinePhases.filter(ph => ph.projectId === selectedProjectId).map(phase => {
                             const isOver = phase.costReal > phase.costPrev;
                             return (
-                              <div key={phase.id} className="bg-stone-50 border border-stone-200 p-4 space-y-2.5">
+                              <div key={phase.id} className="bg-stone-50 border border-stone-200 rounded-xl p-4 space-y-2.5">
                                 <div className="flex justify-between items-center text-xs">
                                   <div>
                                     <h4 className="font-sans font-bold text-stone-900">{phase.name}</h4>
                                     <span className="text-[length:var(--ui-text-xs)] font-mono text-stone-400">Duração planejada: {phase.startDate} a {phase.endDate}</span>
                                   </div>
-                                  <span className="bg-stone-200 text-stone-800 font-mono text-[length:var(--ui-text-xs)] font-bold px-1.5 py-0.5">{phase.progress}% Concluído</span>
+                                  <span className="bg-stone-200 text-stone-800 font-mono text-[length:var(--ui-text-xs)] font-bold px-2 py-0.5 rounded-full">{phase.progress}% Concluído</span>
                                 </div>
 
                                 <div className="w-full bg-stone-200 h-1.5 rounded-full overflow-hidden">
@@ -772,7 +765,7 @@ export default function ClientDashboard({ client, projects, transactions, docume
                     <div className="space-y-6">
                       
                       {/* Budget Health */}
-                      <div className="bg-white border border-stone-200 p-6 space-y-4">
+                      <div className="bg-white border border-stone-200 rounded-2xl p-5 space-y-3">
                         <div className="border-b border-stone-100 pb-2.5">
                           <h3 className="font-serif text-sm text-stone-950 font-bold flex items-center gap-1.5">
                             <TrendingUp size={15} className="text-stone-600" />
@@ -791,7 +784,7 @@ export default function ClientDashboard({ client, projects, transactions, docume
 
                           return (
                             <div className="space-y-4">
-                              <div className="bg-stone-50 border border-stone-150 p-3.5 space-y-2 font-mono text-[10.5px]">
+                              <div className="bg-stone-50 border border-stone-150 rounded-xl p-3.5 space-y-2 font-mono text-[10.5px]">
                                 <div className="flex justify-between border-b border-stone-100 pb-1 text-stone-500">
                                   <span>VALOR CONTRATADO</span>
                                   <span className="text-stone-900 font-bold">{formatCurrency(budget)}</span>
@@ -808,21 +801,21 @@ export default function ClientDashboard({ client, projects, transactions, docume
 
                               {isClosed && currentBalance >= 0 ? (
                                 <div className="border border-emerald-200 bg-emerald-50 p-3 text-emerald-900 text-[length:var(--ui-text-xs)] leading-relaxed flex gap-1.5">
-                                  <CheckCircle2 size={14} className="text-emerald-600 flex-shrink-0 mt-0.5" />
+                                  <CheckCircle2 size={14} style={{ color: '#059669' }} className="flex-shrink-0 mt-0.5" />
                                   <p>
                                     <strong>Obra encerrada dentro do orçamento:</strong> custo final {budget > 0 ? ((currentBalance / budget) * 100).toFixed(1).replace('.', ',') : '0'}% abaixo do valor contratado (economia de {formatCurrency(currentBalance)}).
                                   </p>
                                 </div>
                               ) : isWarning ? (
                                 <div className="border border-red-200 bg-red-50 p-3 text-red-900 text-[length:var(--ui-text-xs)] leading-relaxed flex gap-1.5">
-                                  <Info size={14} className="text-red-600 flex-shrink-0 mt-0.5" />
+                                  <Info size={14} style={{ color: '#dc2626' }} className="flex-shrink-0 mt-0.5" />
                                   <p>
                                     <strong>Alerta do Escritório:</strong> O saldo da obra está abaixo da margem de contingência estipulada de {bufferSlider}%. Nossos engenheiros estão otimizando recursos.
                                   </p>
                                 </div>
                               ) : (
                                 <div className="border border-emerald-200 bg-emerald-50 p-3 text-emerald-900 text-[length:var(--ui-text-xs)] leading-relaxed flex gap-1.5">
-                                  <CheckCircle2 size={14} className="text-emerald-600 flex-shrink-0 mt-0.5" />
+                                  <CheckCircle2 size={14} style={{ color: '#059669' }} className="flex-shrink-0 mt-0.5" />
                                   <p>
                                     <strong>Conformidade Orçamentária:</strong> Margem de segurança de arquitetura e contingência civil operando em níveis ideais de segurança física.
                                   </p>
@@ -834,7 +827,7 @@ export default function ClientDashboard({ client, projects, transactions, docume
                       </div>
 
                       {/* Planning files repository */}
-                      <div className="bg-white border border-stone-200 p-6 space-y-4">
+                      <div className="bg-white border border-stone-200 rounded-2xl p-5 space-y-3">
                         <div className="border-b border-stone-100 pb-2.5">
                           <h3 className="font-serif text-sm text-stone-950 font-bold flex items-center gap-1.5">
                             <Layers size={15} className="text-stone-600" />
@@ -850,7 +843,7 @@ export default function ClientDashboard({ client, projects, transactions, docume
                             </div>
                           ) : (
                             documents.filter(d => d.projectId === selectedProjectId && d.class === 'planejamento').map(doc => (
-                              <div key={doc.id} className="bg-stone-50 border border-stone-200 p-2.5 space-y-1">
+                              <div key={doc.id} className="bg-stone-50 border border-stone-200 rounded-xl p-2.5 space-y-1">
                                 <h4 className="font-sans font-bold text-xs text-stone-900">{doc.name}</h4>
                                 <p className="text-[length:var(--ui-text-xs)] text-stone-500">{doc.description}</p>
                                 {doc.fileName && (
@@ -882,7 +875,7 @@ export default function ClientDashboard({ client, projects, transactions, docume
 
                 {/* Sub Tab: ACOMPANHAMENTO */}
                 {activeDocClassTab === 'acompanhamento' && (
-                  <div className="space-y-6">
+                  <div className="space-y-4">
                     {/* Painel visual e didático — a visão principal do cliente. */}
                     {selectedProjectId && selectedProject && (
                       <ClientAcompanhamentoDashboard
@@ -947,19 +940,19 @@ export default function ClientDashboard({ client, projects, transactions, docume
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-md bg-white border border-stone-200 p-6 md:p-8 shadow-2xl relative"
+            className="w-full max-w-md bg-white border border-stone-200 rounded-2xl p-6 md:p-8 shadow-2xl relative"
           >
             <div className="flex justify-between items-start mb-6">
               <div>
                 <span className="text-[length:var(--ui-text-xs)] font-mono text-stone-400 uppercase tracking-widest block">Detalhes do Custo</span>
                 <h4 className="font-serif text-lg text-stone-900 mt-1">Lançamento Consolidado</h4>
               </div>
-              <button 
+              <button
                 id="close_modal_btn"
                 onClick={() => setSelectedTx(null)}
-                className="text-stone-400 hover:text-stone-800 text-xs font-mono uppercase tracking-widest cursor-pointer"
+                className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-stone-400 hover:text-stone-800 hover:bg-stone-100 transition-colors cursor-pointer"
               >
-                [ Fechar ]
+                <X size={16} />
               </button>
             </div>
 
@@ -1012,7 +1005,7 @@ export default function ClientDashboard({ client, projects, transactions, docume
               <div>
                 <p className="text-[length:var(--ui-text-xs)] font-mono text-stone-400 uppercase tracking-wider">Comprovante / Nota Fiscal</p>
                 {selectedTx.receiptName ? (
-                  <div className="mt-2 bg-stone-50 border border-stone-200 p-2.5 flex items-center justify-between">
+                  <div className="mt-2 bg-stone-50 border border-stone-200 rounded-lg p-2.5 flex items-center justify-between">
                     <div className="flex items-center gap-2 max-w-[70%]">
                       <FileText size={14} className="text-stone-400 flex-shrink-0" />
                       <span className="font-mono text-[length:var(--ui-text-xs)] text-stone-600 truncate" title={selectedTx.receiptName}>{selectedTx.receiptName}</span>
@@ -1022,12 +1015,12 @@ export default function ClientDashboard({ client, projects, transactions, docume
                         href={selectedTx.receiptUrl || selectedTx.receiptBase64}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[length:var(--ui-text-xs)] font-mono uppercase bg-stone-900 text-white px-2 py-1 font-bold hover:bg-stone-800 transition-all cursor-pointer"
+                        className="text-[length:var(--ui-text-xs)] font-mono uppercase bg-[#18181b] text-white px-2.5 py-1 rounded-full font-bold hover:bg-black transition-colors cursor-pointer"
                       >
                         Abrir Nota ↗
                       </a>
                     ) : (
-                      <span className="text-[length:var(--ui-text-xs)] font-mono uppercase text-emerald-700 bg-emerald-50 px-1.5 border border-emerald-100">Auditado</span>
+                      <span className="text-[length:var(--ui-text-xs)] font-mono uppercase text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">Auditado</span>
                     )}
                   </div>
                 ) : (
@@ -1045,7 +1038,7 @@ export default function ClientDashboard({ client, projects, transactions, docume
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-4xl bg-stone-100 border border-stone-200 shadow-2xl relative flex flex-col md:flex-row max-h-[90vh]"
+            className="w-full max-w-4xl bg-stone-100 border border-stone-200 rounded-2xl overflow-hidden shadow-2xl relative flex flex-col md:flex-row max-h-[90vh]"
           >
             {/* Left Column: Metadata & Technical Information */}
             <div className="w-full md:w-80 bg-[#1E1E1E] text-stone-300 p-6 flex flex-col justify-between font-mono text-[length:var(--ui-text-xs)] flex-shrink-0">
@@ -1081,7 +1074,7 @@ export default function ClientDashboard({ client, projects, transactions, docume
                 <button
                   type="button"
                   onClick={() => setPreviewDoc(null)}
-                  className="w-full bg-stone-800 hover:bg-stone-700 text-stone-200 hover:text-white py-2 px-4 uppercase tracking-wider font-bold transition-all text-[length:var(--ui-text-xs)] cursor-pointer border-0"
+                  className="w-full bg-stone-800 hover:bg-stone-700 text-stone-200 hover:text-white py-2 px-4 rounded-full uppercase tracking-wider font-bold transition-colors text-[length:var(--ui-text-xs)] cursor-pointer border-0"
                 >
                   Fechar Visualização
                 </button>
@@ -1136,7 +1129,7 @@ export default function ClientDashboard({ client, projects, transactions, docume
                           href={previewDoc.fileUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="bg-red-700 hover:bg-red-800 text-white font-mono text-[length:var(--ui-text-xs)] font-bold py-2.5 px-4 uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer text-center"
+                          className="bg-red-700 hover:bg-red-800 text-white font-mono text-[length:var(--ui-text-xs)] font-bold py-2.5 px-4 rounded-full uppercase tracking-wider transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer text-center"
                         >
                           <ExternalLink size={12} />
                           Visualizar em Nova Aba
@@ -1144,7 +1137,7 @@ export default function ClientDashboard({ client, projects, transactions, docume
                         <button
                           type="button"
                           onClick={() => handleDownloadDoc(previewDoc)}
-                          className="bg-stone-900 hover:bg-stone-800 text-white font-mono text-[length:var(--ui-text-xs)] font-bold py-2.5 px-4 uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer text-center"
+                          className="bg-[#18181b] hover:bg-black text-white font-mono text-[length:var(--ui-text-xs)] font-bold py-2.5 px-4 rounded-full uppercase tracking-wider transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer text-center"
                         >
                           <Download size={12} />
                           Baixar Arquivo PDF
@@ -1199,7 +1192,7 @@ export default function ClientDashboard({ client, projects, transactions, docume
             © {new Date().getFullYear()} CHAVES BRITES CORREA. TODOS OS DIREITOS RESERVADOS.
           </p>
           <div className="flex items-center gap-2 text-[length:var(--ui-text-xs)] font-mono text-stone-400">
-            <CheckCircle2 size={12} className="text-emerald-500" />
+            <CheckCircle2 size={12} style={{ color: '#10b981' }} />
             Vias auditadas e integradas com o centro de custo
           </div>
         </div>
