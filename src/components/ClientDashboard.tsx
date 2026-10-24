@@ -334,7 +334,7 @@ export default function ClientDashboard({ client, projects, transactions, docume
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#FF5A35] to-[#7C3AED] text-white flex items-center justify-center font-bold text-xs shadow-lg shadow-[#FF5A35]/20">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#18181b] to-[#1E1E1E] flex items-center justify-center font-bold text-xs shadow-lg shadow-[#18181b]/20" style={{ color: '#fff' }}>
                 CBC
               </div>
               <div>

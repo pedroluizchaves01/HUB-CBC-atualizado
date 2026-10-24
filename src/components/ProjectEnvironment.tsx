@@ -21,7 +21,7 @@ import {
   Sun, Wind, Thermometer, Droplets, Compass as CompassIcon, ClipboardList,
   Home, Menu, BookOpen, Leaf, Building2,
   MapPin, Palette, Users, Wallet, Sparkles,
-  Search, Bell, MessageSquare, SlidersHorizontal, Calendar, Check, XCircle, RotateCcw, Zap, Pen, FolderLock, Sofa,
+  Search, Bell, SlidersHorizontal, Calendar, Check, XCircle, RotateCcw, Zap, Pen, FolderLock, Sofa,
 } from 'lucide-react';
 import { subscribeCollection, saveDoc, removeDoc } from '../lib/firebaseDb';
 import { PROJECT_BG } from '../lib/projectBackground';
@@ -440,6 +440,69 @@ export default function ProjectEnvironment({
     };
   };
 
+  // DEV ONLY — monta um projeto fictício com TODAS as etapas já aprovadas, para
+  // revisar o visual de cada etapa sem precisar avançar o fluxo real (aprovação
+  // de cliente, upload de arquivos etc.) nem de um banco de dados conectado.
+  // Não persiste no backend: só injeta no estado local da tela.
+  const demoProject = (): ArchProject => {
+    const servicos: ServicoId[] = ['arquitetonico', 'interiores'];
+    const opcionaisAtivas = ['aprovacao_prefeitura', 'aprovacao_condominio', 'caderno_interiores'];
+    const dataBaseInicio = new Date(Date.now() - 1000 * 60 * 60 * 24 * 150).toISOString();
+    let fases = gerarFases({ servicos, opcionaisAtivas });
+    fases = recalcularCronograma(fases, dataBaseInicio);
+    fases = fases.map((ph, i) => {
+      const aprovadoEm = addSemanas(dataBaseInicio, (i + 1) * (ph.semanas || 1));
+      const enviadoEm = addDias(aprovadoEm, -2);
+      return {
+        ...ph,
+        state: 'aprovada' as PhaseState,
+        approvedBy: 'Cliente Exemplo',
+        approvedAt: aprovadoEm,
+        enviadoEm,
+        rodadasUsadas: i % 3 === 0 ? 1 : 0,
+        events: [
+          { id: uid('ev'), kind: 'envio' as const, author: 'Equipe CBC', role: 'admin', at: enviadoEm, text: `Entrega de "${ph.name}" enviada para aprovação.` },
+          ...(i % 3 === 0 ? [{ id: uid('ev'), kind: 'ajuste' as const, author: 'Cliente Exemplo', role: 'client', at: addDias(enviadoEm, 1), text: 'Pequeno ajuste solicitado no posicionamento dos ambientes.' }] : []),
+          { id: uid('ev'), kind: 'aprovacao' as const, author: 'Cliente Exemplo', role: 'client', at: aprovadoEm, text: 'Entrega aprovada.' },
+        ],
+      };
+    });
+
+    return {
+      id: uid('demo'),
+      name: 'Residência Alto da Serra (Demo)',
+      clientName: 'Cliente Exemplo',
+      clientId: clients[0]?.id || '',
+      type: 'Residencial',
+      area: '320',
+      responsible: 'Pedro Chaves',
+      status: 'concluido',
+      servicos, opcionaisAtivas, escopoConfigurado: true,
+      dataBaseInicio,
+      prazoRespostaDias: PRAZO_RESPOSTA_PADRAO,
+      phases: fases,
+      createdAt: dataBaseInicio,
+      notes: 'Projeto de demonstração — todas as etapas aprovadas, só para revisão de layout.',
+      localizacao: 'Campo Grande, MS',
+      orientacao: 'N',
+      briefingQuestions: DEFAULT_BRIEFING.map(q => ({ ...q })),
+      briefingAnswers: DEFAULT_BRIEFING.map(q => ({ questionId: q.id, answer: 'Resposta de exemplo preenchida pelo cliente para fins de demonstração.' })),
+      briefingDone: true,
+      briefingDoneAt: dataBaseInicio,
+      mural: [
+        { id: uid('mural'), author: 'Equipe CBC', role: 'admin', fromAdmin: true, at: addDias(dataBaseInicio, 2), text: 'Bem-vindo ao seu Estúdio de Projetos! Qualquer dúvida, fale com a gente por aqui.' },
+        { id: uid('mural'), author: 'Cliente Exemplo', role: 'client', fromAdmin: false, at: addDias(dataBaseInicio, 3), text: 'Obrigado! Ficamos muito animados com o projeto.' },
+        { id: uid('mural'), author: 'Equipe CBC', role: 'admin', fromAdmin: true, at: addDias(dataBaseInicio, 20), text: 'Projeto concluído — todas as etapas aprovadas. 🎉' },
+      ],
+    };
+  };
+
+  const seedDemoProject = () => {
+    const demo = demoProject();
+    setAllProjects(prev => [...prev, demo]);
+    setSelected(demo.id);
+  };
+
   const persist = (p: ArchProject) => {
     const LIMITE = 60 * 1024 * 1024; // 60MB (margem sob os 70MB do servidor)
     const tamanho = (obj: any) => { try { return new Blob([JSON.stringify(obj)]).size; } catch { return 0; } };
@@ -583,9 +646,16 @@ export default function ProjectEnvironment({
             <h2 className="text-2xl sm:text-3xl m-0" style={{ fontWeight: 800, letterSpacing: '-0.02em' }}>Projetos de Arquitetura</h2>
             <p className="text-[13px] mt-1.5" style={{ color: 'var(--v-text-soft)' }}>Selecione um projeto para entrar, ou cadastre um novo.</p>
           </div>
-          <button onClick={() => setEditing(newProject())} className="v-btn flex items-center gap-2 px-5 py-3 text-[13px]">
-            <Plus size={16} /> Novo projeto
-          </button>
+          <div className="flex items-center gap-2">
+            {import.meta.env.DEV && (
+              <button onClick={seedDemoProject} className="v-btn-ghost px-4 py-3 text-[13px]" title="Cria um projeto fictício com todas as etapas aprovadas, só nesta tela (dev, não salva no banco)">
+                Simular projeto avançado (dev)
+              </button>
+            )}
+            <button onClick={() => setEditing(newProject())} className="v-btn flex items-center gap-2 px-5 py-3 text-[13px]">
+              <Plus size={16} /> Novo projeto
+            </button>
+          </div>
         </div>
 
         {projects.length === 0 ? (
@@ -683,7 +753,11 @@ function ProjectShell({
   // Papel efetivo: admin que ativou "ver como cliente" age como cliente.
   const isAdmin = isAdminReal && !previewClient;
   const [page, setPage] = useState<PageId>('inicio');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Começa aberto em telas grandes (desktop) e fechado em telas pequenas (mobile),
+  // igual ao comportamento de antes — mas agora dá pra alternar nos dois tamanhos.
+  const [sidebarOpen, setSidebarOpen] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(min-width: 1024px)').matches : true
+  );
   const [search, setSearch] = useState('');
   const [searchFocus, setSearchFocus] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
@@ -784,7 +858,7 @@ function ProjectShell({
     <div className="relative z-10 flex min-h-screen p-3 lg:p-5 gap-4">
       {/* Sidebar */}
       <aside className={`v-sidebar fixed lg:sticky top-3 left-3 lg:left-0 h-[calc(100vh-24px)] lg:h-[calc(100vh-40px)] w-64 flex-shrink-0 z-30 transition-transform rounded-[22px] ${
-        sidebarOpen ? 'translate-x-0' : '-translate-x-[110%] lg:translate-x-0'
+        sidebarOpen ? 'translate-x-0' : '-translate-x-[110%] lg:hidden'
       } flex flex-col p-3.5`}>
         {/* logo */}
         <div className="flex items-center gap-2.5 p-2.5 bg-white rounded-2xl" style={{ boxShadow: '0 3px 12px rgba(70,50,150,0.08)' }}>
@@ -833,8 +907,8 @@ function ProjectShell({
           </div>
         )}
         <div className="flex items-center gap-1 pt-2">
-          <button onClick={onSwitchEnvironment} className="flex-1 text-[10px] uppercase px-2 py-1.5 rounded-lg hover:bg-black/5" style={{ color: 'var(--v-text-mute)', fontWeight: 700 }}>Obra</button>
-          <button onClick={onLogout} className="flex-1 text-[10px] uppercase px-2 py-1.5 rounded-lg hover:bg-black/5" style={{ color: 'var(--v-text-mute)', fontWeight: 700 }}>Sair</button>
+          <button onClick={onSwitchEnvironment} className="flex-1 text-[10px] uppercase px-2 py-1.5 rounded-lg hover:bg-neutral-900/5" style={{ color: 'var(--v-text-mute)', fontWeight: 700 }}>Obra</button>
+          <button onClick={onLogout} className="flex-1 text-[10px] uppercase px-2 py-1.5 rounded-lg hover:bg-neutral-900/5" style={{ color: 'var(--v-text-mute)', fontWeight: 700 }}>Sair</button>
         </div>
       </aside>
 
@@ -845,7 +919,10 @@ function ProjectShell({
       <div className="flex-1 min-w-0 flex flex-col gap-4">
         {/* topbar */}
         <div className="flex items-center gap-2.5">
-          <button onClick={() => setSidebarOpen(true)} className="lg:hidden w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0" style={{ boxShadow: 'var(--v-shadow-sm)' }}><Menu size={18} /></button>
+          <button onClick={() => setSidebarOpen(v => !v)} title={sidebarOpen ? 'Esconder menu' : 'Mostrar menu'}
+            className="w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0" style={{ boxShadow: 'var(--v-shadow-sm)' }}>
+            <Menu size={18} style={{ color: 'var(--v-text-soft)' }} />
+          </button>
 
           {/* Busca funcional */}
           <div className="flex-1 relative">
@@ -868,7 +945,7 @@ function ProjectShell({
                 {searchResults.length === 0 ? (
                   <p className="text-[12px] px-3 py-2" style={{ color: 'var(--v-text-mute)' }}>Nada encontrado para "{search}".</p>
                 ) : searchResults.map((it, i) => (
-                  <button key={i} onMouseDown={() => go(it.page)} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-black/5 text-left">
+                  <button key={i} onMouseDown={() => go(it.page)} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-neutral-900/5 text-left">
                     {it.kind === 'arquivo' ? <FileText size={14} style={{ color: 'var(--v-accent-2)' }} /> : <ChevronRight size={14} style={{ color: 'var(--v-accent-2)' }} />}
                     <span className="flex-1 min-w-0">
                       <span className="block text-[13px] truncate" style={{ fontWeight: 600 }}>{it.label}</span>
@@ -897,8 +974,8 @@ function ProjectShell({
                   {notifications.length === 0 ? (
                     <p className="text-[12px] px-3 py-3" style={{ color: 'var(--v-text-mute)' }}>Tudo em dia. Nenhuma pendência.</p>
                   ) : notifications.map((n, i) => (
-                    <button key={i} onClick={() => go(n.page)} className="w-full flex items-start gap-2.5 px-3 py-2.5 rounded-xl hover:bg-black/5 text-left">
-                      <span className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style={{ background: n.kind === 'warn' ? '#f0a83c' : n.kind === 'ok' ? '#3fbf82' : '#7d5bf8' }} />
+                    <button key={i} onClick={() => go(n.page)} className="w-full flex items-start gap-2.5 px-3 py-2.5 rounded-xl hover:bg-neutral-900/5 text-left">
+                      <span className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style={{ background: n.kind === 'warn' ? '#f0a83c' : n.kind === 'ok' ? '#3fbf82' : '#000' }} />
                       <span className="text-[13px] leading-snug">{n.text}</span>
                     </button>
                   ))}
@@ -2049,13 +2126,13 @@ function PageMural({ project, isAdmin, userName, role, onPersist }: {
                   <div className="flex items-center gap-2" style={{ flexDirection: mine ? 'row-reverse' : 'row' }}>
                     <span className="text-[11px]" style={{ fontWeight: 700 }}>{m.author}</span>
                     <span className="text-[10px]" style={{ color: 'var(--v-text-mute)' }}>{fmtQuando(m.at)}</span>
-                    <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ background: m.fromAdmin ? '#ece7fd' : '#e8f7ee', color: m.fromAdmin ? 'var(--v-accent-2)' : '#12805a', fontWeight: 700 }}>
+                    <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ background: m.fromAdmin ? '#ececee' : '#e8f7ee', color: m.fromAdmin ? 'var(--v-accent-2)' : '#12805a', fontWeight: 700 }}>
                       {m.fromAdmin ? 'Arquiteto' : 'Cliente'}
                     </span>
                   </div>
-                  <div className="px-4 py-2.5 text-[13px] leading-relaxed whitespace-pre-wrap"
+                  <div className={`px-4 py-2.5 text-[13px] leading-relaxed whitespace-pre-wrap ${mine ? 'v-bubble-mine' : ''}`}
                     style={{
-                      background: mine ? 'var(--v-accent-grad)' : '#f4f1fe',
+                      background: mine ? 'var(--v-accent-grad)' : '#f1f1f2',
                       color: mine ? '#fff' : 'var(--v-text)',
                       borderRadius: mine ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
                     }}>
@@ -2146,7 +2223,7 @@ function PageTermico({ project }: { project: ArchProject }) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         {metrics.map(m => (
           <div key={m.label} className="p-4 text-white flex items-center gap-3 v-metric" style={{ background: m.grad }}>
-            <div className="w-11 h-11 flex-shrink-0 bg-white/25 flex items-center justify-center" style={{ borderRadius: 14 }}><m.Icon size={22} /></div>
+            <div className="w-11 h-11 flex-shrink-0 flex items-center justify-center" style={{ borderRadius: 14, background: 'rgba(255,255,255,0.25)', color: '#fff' }}><m.Icon size={22} /></div>
             <div>
               <p className="text-[9px] uppercase tracking-[0.1em] opacity-90" style={{ fontWeight: 500 }}>{m.label}</p>
               <p className="text-xl leading-none" style={{ fontWeight: 800 }}>{m.value}</p>
@@ -2522,12 +2599,17 @@ function PhaseCard({
       }`}>
         <button onClick={onToggle} disabled={locked}
           className={`w-full flex items-center gap-3 p-4 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black ${locked ? 'cursor-default' : 'cursor-pointer hover:bg-white'}`}>
-          {/* Marcador: aprovada = preto sólido; ativa = contorno preto grosso; bloqueada = cinza fino */}
-          <span className="relative w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 z-10 text-xs bg-white"
+          {/* Marcador: aprovada = gradiente preto + vidro desfocado (mesmo design do v-btn);
+              ativa = contorno preto grosso; bloqueada = cinza fino.
+              Sem a classe bg-white: ela tem !important no tema e apagava o fundo preto inline. */}
+          <span className="relative w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 z-10 text-xs"
             style={{
-              background: meta.filled ? '#000' : '#fff',
+              background: meta.filled ? 'linear-gradient(135deg, rgba(63,63,70,0.95), rgba(0,0,0,0.98))' : '#fff',
+              backdropFilter: meta.filled ? 'blur(6px) saturate(140%)' : undefined,
+              WebkitBackdropFilter: meta.filled ? 'blur(6px) saturate(140%)' : undefined,
+              boxShadow: meta.filled ? '0 4px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.12)' : undefined,
               color: meta.filled ? '#fff' : (meta.muted ? '#a8a29e' : '#000'),
-              border: meta.muted ? '1px solid #d6d3d1' : (meta.filled ? '2px solid #000' : '2px solid #000'),
+              border: meta.muted ? '1px solid #d6d3d1' : (meta.filled ? '2px solid rgba(255,255,255,0.1)' : '2px solid #000'),
               fontWeight: 700,
             }}>
             {meta.filled
@@ -2877,7 +2959,7 @@ function FileViewer({ file, onClose }: { file: ArchFile; onClose: () => void }) 
             className="flex items-center gap-1.5 text-xs font-semibold text-stone-300 hover:text-white border border-stone-600 hover:border-stone-400 px-3 py-1.5 rounded-lg transition-colors">
             <Download size={13} /> Baixar
           </button>
-          <button onClick={onClose} className="text-stone-300 hover:text-white p-1.5 rounded-lg hover:bg-black/5" title="Fechar (ESC)">
+          <button onClick={onClose} className="text-stone-300 hover:text-white p-1.5 rounded-lg hover:bg-neutral-50/10" title="Fechar (ESC)">
             <X size={20} />
           </button>
         </div>
@@ -2929,7 +3011,7 @@ function BriefingEditor({ questions, onChange }: {
             <div key={grupo}>
               <div className="flex items-center justify-between mb-2">
                 <p className="text-[10px] uppercase tracking-[0.12em] text-vsoft font-bold">{grupo}</p>
-                <button type="button" onClick={() => addTo(grupo)} className="text-[10px] flex items-center gap-1 border  px-2 py-0.5 hover:bg-black hover:text-white transition-colors" style={{ fontWeight: 600 }}>
+                <button type="button" onClick={() => addTo(grupo)} className="text-[10px] flex items-center gap-1 border  px-2 py-0.5 hover:bg-neutral-900 hover:text-white transition-colors" style={{ fontWeight: 600 }}>
                   <Plus size={10} /> Pergunta
                 </button>
               </div>
@@ -3094,7 +3176,7 @@ function ProjectEditor({
             {onAddObra && p.clientId && (
               !criandoObra ? (
                 <button type="button" onClick={() => setCriandoObra(true)}
-                  className="mt-2 flex items-center gap-1.5 text-xs px-3 py-1.5 v-card-border hover:bg-black hover:text-white transition-colors" style={{ fontWeight: 600 }}>
+                  className="mt-2 flex items-center gap-1.5 text-xs px-3 py-1.5 v-card-border hover:bg-neutral-900 hover:text-white transition-colors" style={{ fontWeight: 600 }}>
                   <Plus size={12} /> Criar nova obra para este cliente
                 </button>
               ) : (
@@ -3199,7 +3281,7 @@ function ProjectEditor({
         <div className="flex items-center gap-2 mt-5 pt-4 border-t">
           <button onClick={onSave} disabled={!p.name.trim()}
             className="flex-1 v-btn-solid px-4 py-2.5 text-sm disabled:opacity-30  v-card-border transition-colors" style={{ fontWeight: 700 }}>Salvar projeto</button>
-          {onDelete && <button onClick={onDelete} className="text-black hover:bg-black hover:text-white p-2.5 v-card-border transition-colors" title="Excluir projeto"><Trash2 size={16} /></button>}
+          {onDelete && <button onClick={onDelete} className="text-black hover:bg-neutral-900 hover:text-white p-2.5 v-card-border transition-colors" title="Excluir projeto"><Trash2 size={16} /></button>}
         </div>
       </div>
     </div>
