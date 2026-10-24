@@ -504,6 +504,13 @@ body {
 .theme-light header h2, .theme-light header h1 {
   color: #0F172A !important;
 }
+/* Cabeçalho do portal do cliente: cartão de vidro flutuante com borda e
+   sombra inteiras — sem isso a regra genérica acima força um border-bottom
+   reto que destoa do resto do visual arredondado. */
+.theme-light .client-header {
+  border: 1px solid rgba(255, 255, 255, 0.7) !important;
+  box-shadow: 0 10px 28px -14px rgba(15, 23, 42, 0.18);
+}
 
 .theme-light header span[class*="bg-white"] {
   background-color: rgba(15, 23, 42, 0.03) !important;

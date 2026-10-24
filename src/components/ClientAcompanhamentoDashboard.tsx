@@ -45,7 +45,7 @@ interface Props {
 }
 
 const CATEGORY_META: Record<TransactionCategory, { label: string; short: string; color: string; Icon: React.ComponentType<any> }> = {
-  materiais:               { label: 'Materiais de Construção', short: 'Materiais',   color: '#C2703D', Icon: Package },
+  materiais:               { label: 'Materiais de Construção', short: 'Materiais',   color: '#FF5A35', Icon: Package },
   mao_de_obra:             { label: 'Mão de Obra e Serviços',   short: 'Mão de Obra', color: '#3E7C8B', Icon: HardHat },
   projetos_complementares: { label: 'Projetos Complementares', short: 'Projetos',    color: '#5B6BA8', Icon: Ruler },
   taxas:                   { label: 'Taxas e Licenças',        short: 'Taxas',       color: '#B08A3E', Icon: FileCheck },
@@ -62,7 +62,7 @@ const fmtMoneyFull = (v: number) =>
 // Anel de progresso físico da obra
 // ---------------------------------------------------------------------------
 function ProgressRing({ percent }: { percent: number }) {
-  const size = 200, stroke = 18, r = (size - stroke) / 2, c = 2 * Math.PI * r;
+  const size = 136, stroke = 13, r = (size - stroke) / 2, c = 2 * Math.PI * r;
   const clamped = Math.max(0, Math.min(100, percent));
   const offset = c - (clamped / 100) * c;
 
@@ -78,7 +78,7 @@ function ProgressRing({ percent }: { percent: number }) {
       <svg width={size} height={size} className="-rotate-90">
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#EDE8E1" strokeWidth={stroke} />
         <motion.circle
-          cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#C2703D" strokeWidth={stroke}
+          cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#FF5A35" strokeWidth={stroke}
           strokeLinecap="round" strokeDasharray={c}
           initial={{ strokeDashoffset: c }}
           animate={{ strokeDashoffset: offset }}
@@ -87,13 +87,13 @@ function ProgressRing({ percent }: { percent: number }) {
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <motion.span
-          className="text-5xl font-bold text-stone-900"
+          className="text-3xl font-bold text-stone-900"
           style={{ fontFamily: 'var(--font-serif)' }}
           initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
         >
           {Math.round(clamped)}%
         </motion.span>
-        <span className="text-[11px] font-mono uppercase tracking-widest text-[#C2703D] mt-1">{stage}</span>
+        <span className="text-[11px] font-mono uppercase tracking-widest text-[#FF5A35] mt-1">{stage}</span>
       </div>
     </div>
   );
@@ -137,24 +137,26 @@ export default function ClientAcompanhamentoDashboard({ project, transactions, p
   const budgetTone = budgetPercent > 100 ? '#B4462F' : budgetPercent > 85 ? '#B08A3E' : '#3E7C8B';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Boletins de medição liberados — a informação principal para o cliente. */}
       {measurements.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
-          className="bg-gradient-to-br from-[#C2703D]/8 to-transparent border border-[#C2703D]/20 rounded-2xl p-6"
+          className="bg-gradient-to-br from-[#FF5A35]/8 to-transparent border border-[#FF5A35]/20 rounded-2xl p-4"
         >
           <div className="flex items-center gap-2 mb-1">
-            <FileCheck size={18} className="text-[#C2703D]" />
-            <h3 className="text-lg font-bold text-stone-900" style={{ fontFamily: 'var(--font-serif)' }}>Boletins de Medição</h3>
+            <FileCheck size={16} className="text-[#FF5A35]" />
+            <h3 className="text-sm font-bold text-stone-900" style={{ fontFamily: 'var(--font-serif)' }}>Boletins de Medição</h3>
           </div>
-          <p className="text-xs text-stone-500 mb-4">Relatórios oficiais de avanço da sua obra, período a período.</p>
-          <div className="space-y-2">
+          <p className="text-[11px] text-stone-500 mb-3">Relatórios oficiais de avanço da sua obra, período a período.</p>
+          {/* Rolagem própria — com muitas medições liberadas, a lista não deve
+              esticar a página inteira. */}
+          <div className="space-y-1.5 max-h-[280px] overflow-y-auto pr-1">
             {[...measurements].sort((a, b) => (b.number || '').localeCompare(a.number || '', undefined, { numeric: true })).map((mm) => (
-              <div key={mm.id} className="flex items-center justify-between bg-white border border-stone-200 rounded-xl p-3">
+              <div key={mm.id} className="flex items-center justify-between bg-white border border-stone-200 rounded-xl p-2.5">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-[#C2703D]/10 flex items-center justify-center flex-shrink-0">
-                    <span className="text-sm font-bold text-[#C2703D]">{mm.number}</span>
+                  <div className="w-10 h-10 rounded-lg bg-[#FF5A35]/10 flex items-center justify-center flex-shrink-0">
+                    <span className="text-sm font-bold text-[#FF5A35]">{mm.number}</span>
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-stone-800">
@@ -191,9 +193,9 @@ export default function ClientAcompanhamentoDashboard({ project, transactions, p
                     photos: mm.photos.map(p => ({ url: p.url, caption: p.caption })),
                     responsibleTechnical: mm.responsibleTechnical,
                   })}
-                  className="flex items-center gap-1.5 bg-[#C2703D] hover:bg-[#a85f32] text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                  className="flex items-center gap-1.5 bg-[#FF5A35] hover:bg-[#E04824] text-white px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors flex-shrink-0"
                 >
-                  <TrendingUp size={13} /> Baixar PDF
+                  <TrendingUp size={12} /> Baixar PDF
                 </button>
               </div>
             ))}
@@ -201,35 +203,31 @@ export default function ClientAcompanhamentoDashboard({ project, transactions, p
         </motion.div>
       )}
 
-      {/* Saudação */}
-      <div>
-        <h2 className="text-2xl md:text-3xl font-bold text-stone-900" style={{ fontFamily: 'var(--font-serif)' }}>
-          Como está a sua obra
-        </h2>
-        <p className="text-sm text-stone-500 mt-1">
-          Um panorama simples do andamento e dos investimentos de <span className="font-semibold text-stone-700">{project?.name}</span>.
-        </p>
-      </div>
+      {/* Saudação — bem reduzida: o nome/status da obra já aparece no cartão
+          de resumo logo acima, no shell do portal. */}
+      <h2 className="text-base font-bold text-stone-900" style={{ fontFamily: 'var(--font-serif)' }}>
+        Como está a sua obra
+      </h2>
 
       {/* Faixa principal: progresso físico + resumo financeiro */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* Progresso físico */}
         <motion.div
           initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
-          className="bg-white border border-stone-200 rounded-2xl p-6 flex flex-col items-center justify-center"
+          className="bg-white border border-stone-200 rounded-2xl p-4 flex flex-col items-center justify-center"
         >
-          <span className="text-[10px] font-mono uppercase tracking-widest text-stone-400 mb-3 self-start flex items-center gap-1.5">
+          <span className="text-[10px] font-mono uppercase tracking-widest text-stone-400 mb-2 self-start flex items-center gap-1.5">
             <TrendingUp size={12} /> Andamento da obra
           </span>
           <ProgressRing percent={physicalProgress} />
-          <div className="flex gap-4 mt-4 text-center">
+          <div className="flex gap-4 mt-3 text-center">
             <div className="flex items-center gap-1.5">
-              <CheckCircle2 size={14} className="text-emerald-600" />
-              <span className="text-xs text-stone-600"><b className="text-stone-900">{completedPhases}</b> concluídas</span>
+              <CheckCircle2 size={13} style={{ color: '#059669' }} />
+              <span className="text-[11px] text-stone-600"><b className="text-stone-900">{completedPhases}</b> concluídas</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <Clock size={14} className="text-[#C2703D]" />
-              <span className="text-xs text-stone-600"><b className="text-stone-900">{activePhases}</b> em andamento</span>
+              <Clock size={13} className="text-[#FF5A35]" />
+              <span className="text-[11px] text-stone-600"><b className="text-stone-900">{activePhases}</b> em andamento</span>
             </div>
           </div>
         </motion.div>
@@ -237,19 +235,19 @@ export default function ClientAcompanhamentoDashboard({ project, transactions, p
         {/* Resumo financeiro: 2 colunas de cartões */}
         <motion.div
           initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}
-          className="lg:col-span-2 bg-white border border-stone-200 rounded-2xl p-6"
+          className="lg:col-span-2 bg-white border border-stone-200 rounded-2xl p-4"
         >
-          <span className="text-[10px] font-mono uppercase tracking-widest text-stone-400 mb-4 flex items-center gap-1.5">
+          <span className="text-[10px] font-mono uppercase tracking-widest text-stone-400 mb-3 flex items-center gap-1.5">
             <Wallet size={12} /> Investimento da obra
           </span>
 
           {/* Termômetro de orçamento */}
-          <div className="mb-5">
+          <div className="mb-3">
             <div className="flex justify-between items-end mb-1.5">
               <span className="text-xs text-stone-500">Do orçamento previsto de <b className="text-stone-700">{fmtMoney(budget)}</b></span>
               <span className="text-sm font-bold" style={{ color: budgetTone }}>{Math.round(budgetPercent)}% utilizado</span>
             </div>
-            <div className="h-4 bg-stone-100 rounded-full overflow-hidden relative">
+            <div className="h-3 bg-stone-100 rounded-full overflow-hidden relative">
               <motion.div
                 className="h-full rounded-full"
                 style={{ background: budgetTone }}
@@ -263,16 +261,16 @@ export default function ClientAcompanhamentoDashboard({ project, transactions, p
             )}
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             {[
               { label: 'Já investido', value: fmtMoney(totalSpent), tone: 'text-stone-900' },
               { label: 'Pago', value: fmtMoney(paid), tone: 'text-emerald-700' },
               { label: 'A pagar', value: fmtMoney(pending), tone: 'text-[#B08A3E]' },
               { label: remaining >= 0 ? 'Saldo previsto' : 'Acima do previsto', value: fmtMoney(Math.abs(remaining)), tone: remaining >= 0 ? 'text-[#3E7C8B]' : 'text-[#B4462F]' },
             ].map((c, i) => (
-              <div key={i} className="bg-stone-50 rounded-xl p-3">
+              <div key={i} className="bg-stone-50 rounded-xl p-2.5">
                 <p className="text-[9px] font-mono uppercase tracking-wider text-stone-400">{c.label}</p>
-                <p className={`text-base font-bold mt-1 ${c.tone}`} style={{ fontFamily: 'var(--font-serif)' }}>{c.value}</p>
+                <p className={`text-sm font-bold mt-0.5 ${c.tone}`} style={{ fontFamily: 'var(--font-serif)' }}>{c.value}</p>
               </div>
             ))}
           </div>
@@ -282,20 +280,18 @@ export default function ClientAcompanhamentoDashboard({ project, transactions, p
       {/* Centros de custo */}
       <motion.div
         initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }}
-        className="bg-white border border-stone-200 rounded-2xl p-6"
+        className="bg-white border border-stone-200 rounded-2xl p-4"
       >
-        <div className="flex items-center justify-between mb-1">
-          <h3 className="text-lg font-bold text-stone-900" style={{ fontFamily: 'var(--font-serif)' }}>Para onde vai o investimento</h3>
-        </div>
-        <p className="text-xs text-stone-500 mb-5">Cada tipo de gasto da sua obra, do maior para o menor.</p>
+        <h3 className="text-sm font-bold text-stone-900" style={{ fontFamily: 'var(--font-serif)' }}>Para onde vai o investimento</h3>
+        <p className="text-[11px] text-stone-500 mb-3">Cada tipo de gasto da sua obra, do maior para o menor.</p>
 
         {byCategory.length === 0 ? (
-          <div className="text-center py-10">
-            <Package size={28} className="text-stone-300 mx-auto mb-2" />
+          <div className="text-center py-8">
+            <Package size={24} className="text-stone-300 mx-auto mb-2" />
             <p className="text-sm text-stone-400">Ainda não há investimentos lançados nesta obra.</p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-2.5">
             {byCategory.map((cat, i) => {
               const meta = CATEGORY_META[cat.key];
               const Icon = meta.Icon;
@@ -304,19 +300,19 @@ export default function ClientAcompanhamentoDashboard({ project, transactions, p
                   key={cat.key}
                   initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 + i * 0.08 }}
                 >
-                  <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
-                      <span className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: meta.color + '22' }}>
-                        <Icon size={15} style={{ color: meta.color }} />
+                      <span className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: meta.color + '22' }}>
+                        <Icon size={13} style={{ color: meta.color }} />
                       </span>
-                      <span className="text-sm font-medium text-stone-700">{meta.label}</span>
+                      <span className="text-xs font-medium text-stone-700">{meta.label}</span>
                     </div>
                     <div className="text-right">
-                      <span className="text-sm font-bold text-stone-900">{fmtMoneyFull(cat.value)}</span>
+                      <span className="text-xs font-bold text-stone-900">{fmtMoneyFull(cat.value)}</span>
                       <span className="text-[10px] text-stone-400 ml-1.5">{Math.round(cat.pctOfTotal)}%</span>
                     </div>
                   </div>
-                  <div className="h-2.5 bg-stone-100 rounded-full overflow-hidden ml-9">
+                  <div className="h-2 bg-stone-100 rounded-full overflow-hidden ml-8">
                     <motion.div
                       className="h-full rounded-full"
                       style={{ background: meta.color }}
@@ -332,15 +328,16 @@ export default function ClientAcompanhamentoDashboard({ project, transactions, p
         )}
       </motion.div>
 
-      {/* Etapas da obra */}
+      {/* Etapas da obra — rolagem própria quando há muitas fases, pra não
+          esticar a página inteira (algumas obras têm 15-20 etapas). */}
       {phases.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}
-          className="bg-white border border-stone-200 rounded-2xl p-6"
+          className="bg-white border border-stone-200 rounded-2xl p-4"
         >
-          <h3 className="text-lg font-bold text-stone-900 mb-1" style={{ fontFamily: 'var(--font-serif)' }}>Etapas da obra</h3>
-          <p className="text-xs text-stone-500 mb-5">O progresso de cada fase, passo a passo.</p>
-          <div className="space-y-3">
+          <h3 className="text-sm font-bold text-stone-900" style={{ fontFamily: 'var(--font-serif)' }}>Etapas da obra</h3>
+          <p className="text-[11px] text-stone-500 mb-3">O progresso de cada fase, passo a passo.</p>
+          <div className="space-y-2.5 max-h-[320px] overflow-y-auto pr-1">
             {phases.map((phase, i) => {
               const pct = Math.max(0, Math.min(100, phase.progress || 0));
               const done = pct >= 100;
@@ -350,20 +347,24 @@ export default function ClientAcompanhamentoDashboard({ project, transactions, p
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 + i * 0.06 }}
                   className="flex items-center gap-3"
                 >
-                  <span className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${done ? 'bg-emerald-100' : 'bg-stone-100'}`}>
+                  {/* Cor em style inline (não via classe text-emerald-600): a variável
+                      CSS que a utilidade do Tailwind usa pode não estar pronta ainda
+                      no primeiro carregamento, deixando o ícone branco-sobre-branco
+                      por um instante — inline sempre resolve de primeira. */}
+                  <span className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: done ? '#D1FAE5' : '#F5F5F4' }}>
                     {done
-                      ? <CheckCircle2 size={14} className="text-emerald-600" />
-                      : <span className="text-[10px] font-bold text-stone-500">{i + 1}</span>}
+                      ? <CheckCircle2 size={14} style={{ color: '#059669' }} />
+                      : <span className="text-[10px] font-bold" style={{ color: '#78716C' }}>{i + 1}</span>}
                   </span>
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-center mb-1">
                       <span className="text-sm text-stone-700 truncate">{phase.name}</span>
-                      <span className={`text-xs font-bold ml-2 ${done ? 'text-emerald-600' : 'text-stone-500'}`}>{Math.round(pct)}%</span>
+                      <span className="text-xs font-bold ml-2" style={{ color: done ? '#059669' : '#78716C' }}>{Math.round(pct)}%</span>
                     </div>
                     <div className="h-2 bg-stone-100 rounded-full overflow-hidden">
                       <motion.div
                         className="h-full rounded-full"
-                        style={{ background: done ? '#059669' : '#C2703D' }}
+                        style={{ background: done ? '#059669' : '#FF5A35' }}
                         initial={{ width: 0 }} animate={{ width: `${pct}%` }}
                         transition={{ duration: 0.9, ease: 'easeOut', delay: 0.4 + i * 0.06 }}
                       />
