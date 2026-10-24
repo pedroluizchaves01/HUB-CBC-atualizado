@@ -152,13 +152,7 @@ export default function AdminDashboard({
     return (
       <button
         onClick={() => goTab(tab)}
-        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-all text-[13px] rounded-xl cursor-pointer"
-        style={{
-          fontWeight: active ? 700 : 500,
-          color: active ? '#18181b' : '#94a3b8',
-          background: active ? 'rgba(24,24,27,0.08)' : 'transparent',
-          borderLeft: active ? '2px solid #18181b' : '2px solid transparent',
-        }}
+        className={`obra-nav-btn w-full flex items-center gap-2.5 px-3 py-2.5 text-left text-[13px] rounded-2xl cursor-pointer ${active ? 'obra-nav-btn-active' : ''}`}
       >
         <Icon size={15} className="flex-shrink-0" />
         <span className="flex-1 min-w-0 truncate">{label}</span>
@@ -1464,19 +1458,26 @@ export default function AdminDashboard({
   };
 
   return (
-    <div className="theme-obras min-h-screen bg-[#F4F6FA] text-[#0F172A] flex flex-col md:flex-row font-sans selection:bg-[#18181b]/15 relative overflow-hidden theme-light">
+    <div className="theme-obras min-h-screen bg-[#F4F6FA] text-[#0F172A] flex flex-col md:flex-row font-sans selection:bg-[#18181b]/15 relative overflow-hidden theme-light md:p-3 md:gap-4">
       {/* Motor de automação de Demandas: roda no servidor (src/lib/server/demandAutomation.ts),
           independente de qualquer admin estar logado. Nada a montar aqui no cliente. */}
       <div className="grid-bg"></div>
-      
+
       {/* Decorative ambient background glows */}
       <div className="bg-glow-orange top-[-100px] left-[-50px] opacity-25"></div>
       <div className="bg-glow-purple bottom-[150px] left-[150px] opacity-15"></div>
 
-      {/* SIDE NAV BAR - Elegant & Minimalist Sidebar — esconde/mostra (igual ao Estúdio de Projetos) */}
-      <aside className={`w-64 bg-[#090D16]/90 backdrop-blur-md text-[#F8FAFC] flex-shrink-0 flex flex-col justify-between p-6 z-30 border-r border-white/5 print:hidden fixed md:sticky top-0 left-0 h-screen overflow-y-auto transition-transform ${
-        sidebarOpen ? 'translate-x-0' : '-translate-x-full md:hidden'
+      {/* SIDE NAV BAR — cartão flutuante arredondado, mesma linguagem visual dos
+          cartões da seleção de ambiente e do menu do Estúdio de Projetos (não mais
+          um painel escuro colado na borda, cortado reto). Esconde/mostra igual. */}
+      <aside className={`obra-sidebar w-64 bg-[#090D16]/90 backdrop-blur-md text-[#F8FAFC] flex-shrink-0 flex flex-col z-30 print:hidden fixed md:sticky top-3 left-3 md:top-3 md:left-0 h-[calc(100vh-24px)] overflow-hidden transition-transform rounded-[22px] ${
+        sidebarOpen ? 'translate-x-0' : '-translate-x-[110%] md:hidden'
       }`}>
+      {/* Scroll fica num wrapper interno, não no <aside> que tem os cantos
+          arredondados: a barra de rolagem do navegador não respeita
+          border-radius do próprio elemento com overflow, então ficava
+          vazando pra fora do balão. */}
+      <div className="obra-sidebar-scroll flex-1 flex flex-col justify-between overflow-y-auto p-5">
         <div className="space-y-8">
           
           {/* Logo and branding — mesmo cartão branco do Estúdio de Projetos */}
@@ -1565,6 +1566,7 @@ export default function AdminDashboard({
             </div>
           )}
         </div>
+      </div>
       </aside>
 
       {/* Overlay escuro no mobile quando o menu está aberto por cima do conteúdo */}
@@ -1573,8 +1575,10 @@ export default function AdminDashboard({
       {/* MAIN CONTAINER */}
       <div className="flex-grow flex flex-col min-h-screen overflow-y-auto relative z-10">
 
-        {/* Top bar for general branding info */}
-        <header className="bg-[#090D16]/40 border-b border-white/5 px-6 py-4 flex items-center justify-between flex-shrink-0 backdrop-blur-md print:hidden">
+        {/* Top bar — cartão flutuante arredondado, mesma linguagem visual do
+            menu e dos cartões de seleção de ambiente (em vez da barra reta,
+            colada na borda, que destoava do resto do design). */}
+        <header className="obra-header bg-[#090D16]/40 mx-3 mt-3 md:mx-0 md:mr-3 md:mt-3 px-6 py-4 flex items-center justify-between flex-shrink-0 backdrop-blur-md print:hidden rounded-[20px]">
           <div className="flex items-center gap-3">
             <button onClick={() => setSidebarOpen(v => !v)} title={sidebarOpen ? 'Esconder menu' : 'Mostrar menu'}
               className="w-9 h-9 rounded-full bg-white flex items-center justify-center flex-shrink-0 hover:bg-stone-50 transition-colors" style={{ boxShadow: '0 3px 12px rgba(0,0,0,0.06)' }}>
