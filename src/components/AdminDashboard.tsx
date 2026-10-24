@@ -39,7 +39,10 @@ import {
   Settings,
   Database,
   FileSignature,
-  Kanban
+  Kanban,
+  Menu,
+  ArrowLeftRight,
+  Home
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { PlanningMaterials } from './PlanningMaterials';
@@ -75,6 +78,10 @@ interface AdminDashboardProps {
   contracts: Contract[];
   users: User[];
   onLogout: () => void;
+  /** Vai para o ambiente de Projetos. Opcional por retrocompatibilidade. */
+  onSwitchEnvironment?: () => void;
+  /** Vai para a tela de seleção de ambiente. Opcional por retrocompatibilidade. */
+  onGoToSelect?: () => void;
   onAddClient: (client: Client, pass: string) => Promise<void>;
   onEditClient: (client: Client, pass?: string) => Promise<void>;
   onDeleteClient: (id: string) => Promise<void>;
@@ -104,6 +111,8 @@ export default function AdminDashboard({
   contracts,
   users,
   onLogout,
+  onSwitchEnvironment,
+  onGoToSelect,
   onAddClient,
   onEditClient,
   onDeleteClient,
@@ -122,6 +131,40 @@ export default function AdminDashboard({
 }: AdminDashboardProps) {
   // Navigation State
   const [activeTab, setActiveTab] = useState<TabType>(role === 'marketing' ? 'marketing' : 'resumo');
+  // Menu lateral esconde/mostra — igual ao Estúdio de Projetos: começa aberto em telas
+  // grandes (desktop) e fechado em telas pequenas (mobile), alternável nos dois tamanhos.
+  const [sidebarOpen, setSidebarOpen] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(min-width: 768px)').matches : true
+  );
+  // Troca de aba do menu: no mobile, fecha o menu sozinho ao escolher (sem isso o
+  // usuário tinha que fechar na mão depois de navegar — ruim em tela pequena).
+  const goTab = (tab: TabType) => {
+    setActiveTab(tab);
+    if (typeof window !== 'undefined' && !window.matchMedia('(min-width: 768px)').matches) {
+      setSidebarOpen(false);
+    }
+  };
+  // Item de menu — mesmo visual/comportamento do NavButton do Estúdio de Projetos
+  // (ícone + rótulo, sem seta, marcação simples de ativo), em vez do estilo anterior
+  // (uppercase mono + seta à direita).
+  const NavBtn = ({ tab, Icon, label }: { tab: TabType; Icon: React.ComponentType<any>; label: string }) => {
+    const active = activeTab === tab;
+    return (
+      <button
+        onClick={() => goTab(tab)}
+        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-all text-[13px] rounded-xl cursor-pointer"
+        style={{
+          fontWeight: active ? 700 : 500,
+          color: active ? '#18181b' : '#94a3b8',
+          background: active ? 'rgba(24,24,27,0.08)' : 'transparent',
+          borderLeft: active ? '2px solid #18181b' : '2px solid transparent',
+        }}
+      >
+        <Icon size={15} className="flex-shrink-0" />
+        <span className="flex-1 min-w-0 truncate">{label}</span>
+      </button>
+    );
+  };
   const [selectedDashboardProjId, setSelectedDashboardProjId] = useState<string | null>(null);
   const [selectedDashboardClientId, setSelectedDashboardClientId] = useState<string | null>(null);
   const [selectedDocProjectId, setSelectedDocProjectId] = useState<string>('all');
@@ -1421,7 +1464,7 @@ export default function AdminDashboard({
   };
 
   return (
-    <div className="theme-obras min-h-screen bg-[#F4F6FA] text-[#0F172A] flex flex-col md:flex-row font-sans selection:bg-[#FF5A35]/15 relative overflow-hidden theme-light">
+    <div className="theme-obras min-h-screen bg-[#F4F6FA] text-[#0F172A] flex flex-col md:flex-row font-sans selection:bg-[#18181b]/15 relative overflow-hidden theme-light">
       {/* Motor de automação de Demandas: roda no servidor (src/lib/server/demandAutomation.ts),
           independente de qualquer admin estar logado. Nada a montar aqui no cliente. */}
       <div className="grid-bg"></div>
@@ -1430,36 +1473,38 @@ export default function AdminDashboard({
       <div className="bg-glow-orange top-[-100px] left-[-50px] opacity-25"></div>
       <div className="bg-glow-purple bottom-[150px] left-[150px] opacity-15"></div>
 
-      {/* SIDE NAV BAR - Elegant & Minimalist Sidebar */}
-      <aside className="w-full md:w-64 bg-[#090D16]/90 backdrop-blur-md text-[#F8FAFC] flex-shrink-0 flex flex-col justify-between p-6 z-20 border-r border-white/5 print:hidden">
+      {/* SIDE NAV BAR - Elegant & Minimalist Sidebar — esconde/mostra (igual ao Estúdio de Projetos) */}
+      <aside className={`w-64 bg-[#090D16]/90 backdrop-blur-md text-[#F8FAFC] flex-shrink-0 flex flex-col justify-between p-6 z-30 border-r border-white/5 print:hidden fixed md:sticky top-0 left-0 h-screen overflow-y-auto transition-transform ${
+        sidebarOpen ? 'translate-x-0' : '-translate-x-full md:hidden'
+      }`}>
         <div className="space-y-8">
           
-          {/* Logo and branding */}
-          <div className="relative">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#FF5A35] to-[#7C3AED] text-white flex items-center justify-center font-bold text-xs shadow-lg shadow-[#FF5A35]/20">
+          {/* Logo and branding — mesmo cartão branco do Estúdio de Projetos */}
+          <div>
+            <div className="flex items-center gap-2.5 p-2.5 bg-white rounded-2xl" style={{ boxShadow: '0 3px 12px rgba(0,0,0,0.08)' }}>
+              <div className="w-8 h-8 rounded-[11px] bg-gradient-to-br from-[#18181b] to-[#1E1E1E] flex items-center justify-center font-bold text-xs flex-shrink-0" style={{ color: '#fff' }}>
                 CBC
               </div>
-              <div>
-                <h1 className="font-sans font-bold text-xs tracking-[0.12em] uppercase text-white leading-tight">
-                  CHAVES BRITES CORREA
-                </h1>
-                <p className="font-sans text-[length:var(--ui-text-xs)] tracking-[0.2em] uppercase text-slate-400 mt-0.5">
-                  ARQUITETURA &amp; ENGENHARIA
-                </p>
-              </div>
+              <span className="flex flex-col leading-tight min-w-0">
+                <b className="text-[13px] truncate" style={{ fontWeight: 700, color: '#18181b' }}>Centro de Obras</b>
+                <span className="text-[10px] truncate" style={{ color: '#8a8a92' }}>Chaves Brites Correa</span>
+              </span>
             </div>
-            <div className="w-full h-[1px] bg-white/5 mt-6"></div>
+            {onGoToSelect && (
+              <button onClick={onGoToSelect} className="text-[11px] mt-2 hover:underline flex items-center gap-1.5 px-1" style={{ color: '#8a8a92', fontWeight: 600 }}>
+                ← Tela de seleção
+              </button>
+            )}
           </div>
 
           {/* User profile identifier */}
-          <div className="bg-white/[0.02] border border-white/5 p-4 rounded-2xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-2 h-2 rounded-full bg-[#FF5A35] animate-ping m-3"></div>
-            <div className="absolute top-0 right-0 w-2 h-2 rounded-full bg-[#FF5A35] m-3"></div>
-            <span className="text-[length:var(--ui-text-xs)] font-mono uppercase tracking-wider text-slate-500 block">
+          <div className="p-3.5 bg-white rounded-2xl relative overflow-hidden" style={{ boxShadow: '0 3px 12px rgba(0,0,0,0.06)' }}>
+            <div className="absolute top-0 right-0 w-2 h-2 rounded-full bg-[#18181b] animate-ping m-3"></div>
+            <div className="absolute top-0 right-0 w-2 h-2 rounded-full bg-[#18181b] m-3"></div>
+            <span className="text-[9px] uppercase tracking-[0.16em] block" style={{ color: '#8a8a92', fontWeight: 700 }}>
               {role === 'marketing' ? 'Sessão Marketing' : 'Sessão Administrador'}
             </span>
-            <span className="text-[length:var(--ui-text-xs)] font-mono text-white font-bold mt-1.5 block truncate">
+            <span className="text-[13px] font-bold mt-1 block truncate" style={{ color: '#18181b' }}>
               {role === 'marketing' ? 'TIME DE MARKETING' : 'CHAVES BRITES CORREA'}
             </span>
             <span className="text-[length:var(--ui-text-xs)] text-slate-400 block mt-0.5">
@@ -1467,248 +1512,94 @@ export default function AdminDashboard({
             </span>
           </div>
 
-          {/* Navigation Links */}
+          {/* Navigation Links — itens no mesmo estilo do NavButton de Projetos */}
           <nav className="space-y-1">
-            <span className="text-[length:var(--ui-text-xs)] font-mono text-slate-500 uppercase tracking-widest block mb-2 px-2">Menu do Painel</span>
-            
+            <p className="px-2 text-[9px] uppercase tracking-[0.16em] mb-1" style={{ color: '#8a8a92', fontWeight: 700 }}>Menu do Painel</p>
+
             {role !== 'marketing' && (
               <>
-                <button
-                  id="nav_btn_resumo"
-                  onClick={() => setActiveTab('resumo')}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-mono uppercase tracking-wider transition-all rounded-xl text-left cursor-pointer ${
-                    activeTab === 'resumo' 
-                      ? 'bg-gradient-to-r from-[#FF5A35]/15 to-[#7C3AED]/5 text-white border-l-2 border-[#FF5A35]' 
-                      : 'text-slate-400 hover:text-white hover:bg-white/[0.02]'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <TrendingUp size={14} className={activeTab === 'resumo' ? 'text-[#FF5A35]' : 'text-slate-400'} />
-                    <span className={activeTab === 'resumo' ? 'font-bold' : ''}>Painel Resumo</span>
-                  </div>
-                  <ChevronRight size={12} className="opacity-40" />
-                </button>
-
-                <button
-                  id="nav_btn_clientes"
-                  onClick={() => setActiveTab('clientes')}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-mono uppercase tracking-wider transition-all rounded-xl text-left cursor-pointer ${
-                    activeTab === 'clientes' 
-                      ? 'bg-gradient-to-r from-[#FF5A35]/15 to-[#7C3AED]/5 text-white border-l-2 border-[#FF5A35]' 
-                      : 'text-slate-400 hover:text-white hover:bg-white/[0.02]'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Users size={14} className={activeTab === 'clientes' ? 'text-[#FF5A35]' : 'text-slate-400'} />
-                    <span className={activeTab === 'clientes' ? 'font-bold' : ''}>Clientes ({clients.length})</span>
-                  </div>
-                  <ChevronRight size={12} className="opacity-40" />
-                </button>
-
-                <button
-                  id="nav_btn_projetos"
-                  onClick={() => setActiveTab('projetos')}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-mono uppercase tracking-wider transition-all rounded-xl text-left cursor-pointer ${
-                    activeTab === 'projetos' 
-                      ? 'bg-gradient-to-r from-[#FF5A35]/15 to-[#7C3AED]/5 text-white border-l-2 border-[#FF5A35]' 
-                      : 'text-slate-400 hover:text-white hover:bg-white/[0.02]'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Briefcase size={14} className={activeTab === 'projetos' ? 'text-[#FF5A35]' : 'text-slate-400'} />
-                    <span className={activeTab === 'projetos' ? 'font-bold' : ''}>Obras / Projetos ({projects.length})</span>
-                  </div>
-                  <ChevronRight size={12} className="opacity-40" />
-                </button>
-
-                <button
-                  id="nav_btn_escritorio"
-                  onClick={() => setActiveTab('escritorio')}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-mono uppercase tracking-wider transition-all rounded-xl text-left cursor-pointer ${
-                    activeTab === 'escritorio' 
-                      ? 'bg-gradient-to-r from-[#FF5A35]/15 to-[#7C3AED]/5 text-white border-l-2 border-[#FF5A35]' 
-                      : 'text-slate-400 hover:text-white hover:bg-white/[0.02]'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Building size={14} className={activeTab === 'escritorio' ? 'text-[#FF5A35]' : 'text-slate-400'} />
-                    <span className={activeTab === 'escritorio' ? 'font-bold' : ''}>Gestão do Escritório</span>
-                  </div>
-                  <ChevronRight size={12} className="opacity-40" />
-                </button>
+                <NavBtn tab="resumo" Icon={TrendingUp} label="Painel Resumo" />
+                <NavBtn tab="clientes" Icon={Users} label={`Clientes (${clients.length})`} />
+                <NavBtn tab="projetos" Icon={Briefcase} label={`Obras / Projetos (${projects.length})`} />
+                <NavBtn tab="escritorio" Icon={Building} label="Gestão do Escritório" />
               </>
             )}
 
-            <button
-              id="nav_btn_marketing"
-              onClick={() => setActiveTab('marketing')}
-              className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-mono uppercase tracking-wider transition-all rounded-xl text-left cursor-pointer ${
-                activeTab === 'marketing' 
-                  ? 'bg-gradient-to-r from-[#FF5A35]/15 to-[#7C3AED]/5 text-white border-l-2 border-[#FF5A35]' 
-                  : 'text-slate-400 hover:text-white hover:bg-white/[0.02]'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Megaphone size={14} className={activeTab === 'marketing' ? 'text-[#FF5A35]' : 'text-slate-400'} />
-                <span className={activeTab === 'marketing' ? 'font-bold' : ''}>Marketing Digital</span>
-              </div>
-              <ChevronRight size={12} className="opacity-40" />
-            </button>
+            <NavBtn tab="marketing" Icon={Megaphone} label="Marketing Digital" />
 
             {role !== 'marketing' && (
               <>
-                <div className="pt-4 pb-1">
-                  <span className="text-[length:var(--ui-text-xs)] font-mono text-slate-500 uppercase tracking-widest block mb-1 px-2">Módulos de Trabalho</span>
-                </div>
-
-                <button
-                  id="nav_btn_classe_admin"
-                  onClick={() => setActiveTab('classe_administrativo')}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-mono uppercase tracking-wider transition-all rounded-xl text-left cursor-pointer ${
-                    activeTab === 'classe_administrativo' 
-                      ? 'bg-gradient-to-r from-[#FF5A35]/15 to-[#7C3AED]/5 text-white border-l-2 border-[#FF5A35] font-bold' 
-                      : 'text-slate-400 hover:text-white hover:bg-white/[0.02]'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <FileText size={14} className={activeTab === 'classe_administrativo' ? 'text-[#FF5A35]' : 'text-slate-400'} />
-                    <span>1. Administrativo</span>
-                  </div>
-                  <ChevronRight size={12} className="opacity-40" />
-                </button>
-
-                <button
-                  id="nav_btn_classe_planejamento"
-                  onClick={() => setActiveTab('classe_planejamento')}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-mono uppercase tracking-wider transition-all rounded-xl text-left cursor-pointer ${
-                    activeTab === 'classe_planejamento' 
-                      ? 'bg-gradient-to-r from-[#FF5A35]/15 to-[#7C3AED]/5 text-white border-l-2 border-[#FF5A35] font-bold' 
-                      : 'text-slate-400 hover:text-white hover:bg-white/[0.02]'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Sliders size={14} className={activeTab === 'classe_planejamento' ? 'text-[#FF5A35]' : 'text-slate-400'} />
-                    <span>2. Planejamento</span>
-                  </div>
-                  <ChevronRight size={12} className="opacity-40" />
-                </button>
-
-                <button
-                  id="nav_btn_classe_acompanhamento"
-                  onClick={() => setActiveTab('classe_acompanhamento')}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-mono uppercase tracking-wider transition-all rounded-xl text-left cursor-pointer ${
-                    activeTab === 'classe_acompanhamento' 
-                      ? 'bg-gradient-to-r from-[#FF5A35]/15 to-[#7C3AED]/5 text-white border-l-2 border-[#FF5A35] font-bold' 
-                      : 'text-slate-400 hover:text-white hover:bg-white/[0.02]'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <TrendingUp size={14} className={activeTab === 'classe_acompanhamento' ? 'text-[#FF5A35]' : 'text-slate-400'} />
-                    <span>3. Acompanhamento</span>
-                  </div>
-                  <ChevronRight size={12} className="opacity-40" />
-                </button>
-
-                <button
-                  id="nav_btn_contratos"
-                  onClick={() => setActiveTab('contratos')}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-mono uppercase tracking-wider transition-all rounded-xl text-left cursor-pointer ${
-                    activeTab === 'contratos' 
-                      ? 'bg-gradient-to-r from-[#FF5A35]/15 to-[#7C3AED]/5 text-white border-l-2 border-[#FF5A35] font-bold' 
-                      : 'text-slate-400 hover:text-white hover:bg-white/[0.02]'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <FileSignature size={14} className={activeTab === 'contratos' ? 'text-[#FF5A35]' : 'text-slate-400'} />
-                    <span>4. Contratos</span>
-                  </div>
-                  <ChevronRight size={12} className="opacity-40" />
-                </button>
-
-                <button
-                  id="nav_btn_medicoes"
-                  onClick={() => setActiveTab('medicoes')}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-mono uppercase tracking-wider transition-all rounded-xl text-left cursor-pointer ${
-                    activeTab === 'medicoes' 
-                      ? 'bg-gradient-to-r from-[#FF5A35]/15 to-[#7C3AED]/5 text-white border-l-2 border-[#FF5A35] font-bold' 
-                      : 'text-slate-400 hover:text-white hover:bg-white/[0.02]'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <FileText size={14} className={activeTab === 'medicoes' ? 'text-[#FF5A35]' : 'text-slate-400'} />
-                    <span>5. Medições</span>
-                  </div>
-                  <ChevronRight size={12} className="opacity-40" />
-                </button>
-
-                <button
-                  id="nav_btn_demandas"
-                  onClick={() => setActiveTab('demandas')}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-mono uppercase tracking-wider transition-all rounded-xl text-left cursor-pointer ${
-                    activeTab === 'demandas' 
-                      ? 'bg-gradient-to-r from-[#FF5A35]/15 to-[#7C3AED]/5 text-white border-l-2 border-[#FF5A35] font-bold' 
-                      : 'text-slate-400 hover:text-white hover:bg-white/[0.02]'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Kanban size={14} className={activeTab === 'demandas' ? 'text-[#FF5A35]' : 'text-slate-400'} />
-                    <span>6. Demandas</span>
-                  </div>
-                  <ChevronRight size={12} className="opacity-40" />
-                </button>
+                <p className="px-2 text-[9px] uppercase tracking-[0.16em] mb-1 mt-4" style={{ color: '#8a8a92', fontWeight: 700 }}>Módulos de Trabalho</p>
+                <NavBtn tab="classe_administrativo" Icon={FileText} label="1. Administrativo" />
+                <NavBtn tab="classe_planejamento" Icon={Sliders} label="2. Planejamento" />
+                <NavBtn tab="classe_acompanhamento" Icon={TrendingUp} label="3. Acompanhamento" />
+                <NavBtn tab="contratos" Icon={FileSignature} label="4. Contratos" />
+                <NavBtn tab="medicoes" Icon={FileText} label="5. Medições" />
+                <NavBtn tab="demandas" Icon={Kanban} label="6. Demandas" />
               </>
             )}
           </nav>
 
           {role !== 'marketing' && (
-            <div className="mt-6 pt-4 border-t border-white/5 space-y-1">
-              <span className="text-[length:var(--ui-text-xs)] font-mono text-slate-500 uppercase tracking-widest block mb-2 px-2">Configuração do Sistema</span>
-              <button
-                id="nav_btn_telegram"
-                onClick={() => setActiveTab('telegram')}
-                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-mono uppercase tracking-wider transition-all rounded-xl text-left cursor-pointer ${
-                  activeTab === 'telegram' 
-                    ? 'bg-gradient-to-r from-[#FF5A35]/15 to-[#7C3AED]/5 text-white border-l-2 border-[#FF5A35]' 
-                    : 'text-slate-400 hover:text-white hover:bg-white/[0.02]'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Database size={14} className={activeTab === 'telegram' ? 'text-[#FF5A35]' : 'text-slate-400'} />
-                  <span className={activeTab === 'telegram' ? 'font-bold' : ''}>Banco de Dados</span>
-                </div>
-                <ChevronRight size={12} className="opacity-40" />
-              </button>
+            <div className="mt-4 pt-3 border-t" style={{ borderColor: 'rgba(0,0,0,0.06)' }}>
+              <p className="px-2 text-[9px] uppercase tracking-[0.16em] mb-1" style={{ color: '#8a8a92', fontWeight: 700 }}>Configuração do Sistema</p>
+              <NavBtn tab="telegram" Icon={Database} label="Banco de Dados" />
             </div>
           )}
 
         </div>
 
-        {/* Bottom signout */}
-        <div className="mt-8 pt-6 border-t border-white/5">
+        {/* Rodapé — troca de ambiente + sair, mesmo padrão do Estúdio de Projetos */}
+        <div className="pt-2">
           <button
-            id="admin_logout_btn"
             onClick={onLogout}
-            className="w-full flex items-center gap-2.5 text-slate-400 hover:text-white text-xs font-mono uppercase tracking-wider py-2 px-1 transition-all text-left cursor-pointer"
+            className="w-full flex items-center gap-2.5 text-[12px] py-2 px-1 transition-all text-left cursor-pointer hover:underline"
+            style={{ color: '#8a8a92', fontWeight: 600 }}
           >
-            <LogOut size={14} className="text-slate-400 hover:text-white" />
+            <LogOut size={13} />
             <span>Encerrar Painel</span>
           </button>
-          <p className="text-[length:var(--ui-text-xs)] font-mono text-slate-600 uppercase tracking-widest mt-4">CBC OFFICE TOOL v1.0</p>
+          {onSwitchEnvironment && (
+            <div className="flex items-center gap-1 mt-1">
+              <button onClick={onSwitchEnvironment} className="flex-1 text-[10px] uppercase px-2 py-1.5 rounded-lg hover:bg-black/5" style={{ color: '#8a8a92', fontWeight: 700 }}>Projeto</button>
+            </div>
+          )}
         </div>
       </aside>
 
+      {/* Overlay escuro no mobile quando o menu está aberto por cima do conteúdo */}
+      {sidebarOpen && <div className="fixed inset-0 bg-black/30 z-20 md:hidden" onClick={() => setSidebarOpen(false)} />}
+
       {/* MAIN CONTAINER */}
       <div className="flex-grow flex flex-col min-h-screen overflow-y-auto relative z-10">
-        
+
         {/* Top bar for general branding info */}
         <header className="bg-[#090D16]/40 border-b border-white/5 px-6 py-4 flex items-center justify-between flex-shrink-0 backdrop-blur-md print:hidden">
-          <div>
-            <span className="text-[length:var(--ui-text-xs)] font-mono text-slate-500 uppercase tracking-widest block">Ambiente compartilhado</span>
-            <h2 className="text-xs font-bold text-white uppercase tracking-wider">Centro de Custo &amp; Gestão de Obras</h2>
+          <div className="flex items-center gap-3">
+            <button onClick={() => setSidebarOpen(v => !v)} title={sidebarOpen ? 'Esconder menu' : 'Mostrar menu'}
+              className="w-9 h-9 rounded-full bg-white flex items-center justify-center flex-shrink-0 hover:bg-stone-50 transition-colors" style={{ boxShadow: '0 3px 12px rgba(0,0,0,0.06)' }}>
+              <Menu size={16} style={{ color: '#52525b' }} />
+            </button>
+            <div>
+              <span className="text-[length:var(--ui-text-xs)] font-mono text-slate-500 uppercase tracking-widest block">Ambiente compartilhado</span>
+              <h2 className="text-xs font-bold uppercase tracking-wider" style={{ color: '#18181b' }}>Centro de Custo &amp; Gestão de Obras</h2>
+            </div>
           </div>
-          <div className="flex items-center gap-4 text-xs">
+          <div className="flex items-center gap-1 text-xs">
+            {onSwitchEnvironment && (
+              <button onClick={onSwitchEnvironment} className="rounded-full px-4 py-2 flex items-center gap-1.5 bg-white hover:bg-stone-50 transition-colors" style={{ color: '#18181b', fontWeight: 600, boxShadow: '0 3px 12px rgba(0,0,0,0.06)' }}>
+                <ArrowLeftRight size={13} /> Projeto
+              </button>
+            )}
+            {onGoToSelect && (
+              <button onClick={onGoToSelect} className="px-3 py-2 hover:underline flex items-center gap-1.5" style={{ color: '#52525b', fontWeight: 600 }}>
+                <Home size={13} /> Início
+              </button>
+            )}
+            <button onClick={onLogout} className="px-3 py-2 hover:underline flex items-center gap-1.5" style={{ color: '#52525b', fontWeight: 600 }}>
+              <LogOut size={13} /> Sair
+            </button>
             {role !== 'marketing' && <NotificationBell />}
-            <span className="font-mono text-slate-400 uppercase text-[length:var(--ui-text-xs)] px-2.5 py-1 bg-white/5 border border-white/10 rounded-full">TIME CORPORATIVO</span>
           </div>
         </header>
 
@@ -1735,7 +1626,7 @@ export default function AdminDashboard({
                       setClientSuccess(null);
                       setActiveTab('clientes');
                     }}
-                    className="bg-[#1E1E1E] text-white px-3.5 py-2 text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest hover:bg-stone-800 transition-all cursor-pointer border border-stone-900 flex items-center gap-1.5"
+                    className="ui-btn-glow text-white px-3.5 py-2 text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest transition-all cursor-pointer flex items-center gap-1.5"
                   >
                     <span>+ Cadastrar Novo Cliente</span>
                   </button>
@@ -1758,7 +1649,7 @@ export default function AdminDashboard({
                       });
                       setActiveTab('projetos');
                     }}
-                    className="bg-white text-stone-900 px-3.5 py-2 text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest hover:bg-stone-100 transition-all cursor-pointer border border-stone-300 flex items-center gap-1.5"
+                    className="ui-btn-glow-ghost text-stone-900 px-3.5 py-2 text-[length:var(--ui-text-xs)] font-mono uppercase tracking-widest transition-all cursor-pointer flex items-center gap-1.5"
                   >
                     <span>+ Cadastrar Nova Obra/Projeto</span>
                   </button>

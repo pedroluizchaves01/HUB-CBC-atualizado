@@ -43,10 +43,10 @@ const PORT = 3000;
 // Confia no proxy reverso (nginx) para IP correto no rate limit
 app.set("trust proxy", 1);
 
-// Cabeçalhos de segurança. CSP desabilitada aqui (o app tem estilos/inline próprios);
-// se quiser CSP estrita, configure diretiva a diretiva.
+// Cabeçalhos de segurança. CSP estrita apenas em produção — em dev o Vite injeta
+// script inline + usa WebSocket (HMR) que a CSP de produção bloquearia (tela branca).
 app.use(helmet({
-  contentSecurityPolicy: {
+  contentSecurityPolicy: process.env.NODE_ENV === "production" ? {
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'"],
@@ -57,7 +57,7 @@ app.use(helmet({
       objectSrc: ["'none'"],
       frameAncestors: ["'none'"],
     },
-  },
+  } : false,
   crossOriginEmbedderPolicy: false,
 }));
 app.use(cookieParser());

@@ -334,7 +334,8 @@ body {
 /* --- THEME LIGHT (LOGGED-IN PREMIUM OFF-WHITE / SAAS STYLE) --- */
 /* ============================================================== */
 .theme-light {
-  background-color: #F4F6FA !important;
+  background: linear-gradient(160deg, #cfd3da 0%, #e7e9ed 45%, #c9ccd4 100%) !important;
+  background-attachment: fixed !important;
   color: #0F172A !important;
 }
 
@@ -349,13 +350,14 @@ body {
 
 /* Soft atmospheric glowing spots (Convox SaaS theme style) */
 .theme-light .bg-glow-orange {
-  background: radial-gradient(circle, rgba(255, 90, 53, 0.08) 0%, rgba(255, 90, 53, 0) 70%) !important;
-  opacity: 0.8 !important;
+  background: radial-gradient(circle, rgba(255, 90, 53, 0.14) 0%, rgba(255, 90, 53, 0) 70%) !important;
+  opacity: 0.9 !important;
 }
 
+/* Era roxo; a sessão de Obras agora é preto/branco com destaque laranja (sem roxo). */
 .theme-light .bg-glow-purple {
-  background: radial-gradient(circle, rgba(124, 58, 237, 0.06) 0%, rgba(124, 58, 237, 0) 70%) !important;
-  opacity: 0.8 !important;
+  background: radial-gradient(circle, rgba(10, 10, 12, 0.12) 0%, rgba(10, 10, 12, 0) 70%) !important;
+  opacity: 0.9 !important;
 }
 
 /* Milky translucent glass cards in light mode */
@@ -366,12 +368,12 @@ body {
 .theme-light section[class*="bg-white"],
 .theme-light div[class*="bg-[#FAF9F6]"],
 .theme-light div[class*="bg-[#F8F7F4]"] {
-  background-color: rgba(255, 255, 255, 0.75) !important;
+  background-color: rgba(255, 255, 255, 0.62) !important;
   background-image: none !important;
-  backdrop-filter: blur(20px) !important;
-  -webkit-backdrop-filter: blur(20px) !important;
-  border: 1px solid rgba(15, 23, 42, 0.06) !important;
-  box-shadow: 0 10px 40px -10px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.02) !important;
+  backdrop-filter: blur(24px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(160%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.5) !important;
+  box-shadow: 0 10px 40px -10px rgba(15, 23, 42, 0.12), 0 1px 3px rgba(15, 23, 42, 0.04), inset 0 1px 0 rgba(255,255,255,0.6) !important;
   color: #1E293B !important;
   border-radius: 1.25rem !important;
 }
@@ -421,18 +423,18 @@ body {
 }
 
 .theme-light aside button[class*="bg-gradient-to-r"] {
-  background: linear-gradient(to right, rgba(255, 90, 53, 0.08), rgba(124, 58, 237, 0.02)) !important;
-  color: #FF5A35 !important;
-  border-left: 2px solid #FF5A35 !important;
+  background: rgba(24, 24, 27, 0.06) !important;
+  color: #18181b !important;
+  border-left: 2px solid #18181b !important;
 }
 
 .theme-light aside button[class*="bg-gradient-to-r"] span {
-  color: #FF5A35 !important;
+  color: #18181b !important;
   font-weight: 700 !important;
 }
 
 .theme-light aside button[class*="bg-gradient-to-r"] svg {
-  color: #FF5A35 !important;
+  color: #18181b !important;
 }
 
 /* Headers inside layouts */
@@ -490,12 +492,12 @@ body {
 .theme-light button[class*="bg-emerald-700"],
 .theme-light button[class*="bg-emerald-800"],
 .theme-light button[class*="bg-emerald-900"] {
-  background: linear-gradient(135deg, rgba(255, 90, 53, 0.09) 0%, rgba(255, 90, 53, 0.03) 100%) !important;
-  backdrop-filter: blur(8px) !important;
-  -webkit-backdrop-filter: blur(8px) !important;
-  border: 1px solid rgba(255, 90, 53, 0.18) !important;
-  color: #FF5A35 !important;
-  box-shadow: 0 4px 20px -4px rgba(255, 90, 53, 0.08) !important;
+  background: linear-gradient(135deg, rgba(24, 24, 27, 0.92) 0%, rgba(0, 0, 0, 0.96) 100%) !important;
+  backdrop-filter: blur(10px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(140%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 20px -4px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.12) !important;
   text-shadow: none !important;
   font-weight: 600 !important;
   border-radius: 0.75rem !important;
@@ -510,11 +512,11 @@ body {
 .theme-light button[class*="bg-emerald-700"]:hover,
 .theme-light button[class*="bg-emerald-800"]:hover,
 .theme-light button[class*="bg-emerald-900"]:hover {
-  background: linear-gradient(135deg, rgba(255, 90, 53, 0.15) 0%, rgba(255, 90, 53, 0.06) 100%) !important;
-  border-color: rgba(255, 90, 53, 0.3) !important;
-  box-shadow: 0 6px 24px -2px rgba(255, 90, 53, 0.18), 0 0 0 3px rgba(255, 90, 53, 0.04) !important;
+  background: linear-gradient(135deg, rgba(40, 40, 44, 0.95) 0%, rgba(0, 0, 0, 1) 100%) !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+  box-shadow: 0 10px 28px -2px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255,255,255,0.16) !important;
   transform: translateY(-1px) !important;
-  color: #E04824 !important;
+  color: #ffffff !important;
 }
 
 /* Dark badges/panels/table rows (non-button) that must keep white text for contrast
@@ -545,8 +547,8 @@ body {
 .theme-light button[class*="border-stone-300"]:hover,
 .theme-light button[class*="border-white/10"]:hover {
   background-color: rgba(255, 255, 255, 0.9) !important;
-  border-color: rgba(255, 90, 53, 0.25) !important;
-  color: #FF5A35 !important;
+  border-color: rgba(24, 24, 27, 0.25) !important;
+  color: #18181b !important;
 }
 
 /* Form Inputs in Light Mode */
@@ -564,9 +566,9 @@ body {
 }
 
 .theme-light input:focus, .theme-light select:focus, .theme-light textarea:focus {
-  border-color: #FF5A35 !important;
+  border-color: #18181b !important;
   background-color: #FFFFFF !important;
-  box-shadow: 0 0 0 3px rgba(255, 90, 53, 0.1) !important;
+  box-shadow: 0 0 0 3px rgba(24, 24, 27, 0.1) !important;
 }
 
 /* Table rows and borders inside Light Mode */
@@ -655,35 +657,35 @@ div#root:nth-of-type(1) > div#login_container:nth-of-type(1) > div#root:nth-of-t
 
 
 /* ============================================================
-   AMBIENTE DE PROJETOS — TEMA VIOLETA (design v2 "Estúdio")
-   Glassmorphism claro: fundo lilás com gradientes, superfícies
-   brancas translúcidas, acento violeta (#6c4df6/#4f2fd4),
-   cantos arredondados e sombras roxas suaves.
+   AMBIENTE DE PROJETOS — TEMA MONOCROMÁTICO (design v2 "Estúdio")
+   Glassmorphism claro: fundo cinza-claro com gradientes, superfícies
+   brancas translúcidas, acento preto/cinza-escuro (#18181b/#000000),
+   cantos arredondados, botões com gradiente + vidro desfocado.
    Fonte: Plus Jakarta Sans.
    ============================================================ */
 
 .projeto-violet {
-  --v-accent: #6c4df6;
-  --v-accent-2: #4f2fd4;
-  --v-accent-grad: linear-gradient(140deg, #7d5bf8, #4f2fd4);
-  --v-bg: #efecfc;
-  --v-text: #1b1830;
-  --v-text-soft: #5a5570;
-  --v-text-mute: #837f99;
+  --v-accent: #18181b;
+  --v-accent-2: #000000;
+  --v-accent-grad: linear-gradient(140deg, #3f3f46, #000000);
+  --v-bg: #f2f2f3;
+  --v-text: #18181b;
+  --v-text-soft: #52525b;
+  --v-text-mute: #8a8a92;
   --v-surface: #ffffff;
-  --v-surface-tint: #f7f5fe;
-  --v-border: rgba(108,77,246,0.08);
-  --v-shadow: 0 6px 24px rgba(70,50,150,0.08);
-  --v-shadow-sm: 0 3px 14px rgba(70,50,150,0.06);
+  --v-surface-tint: #f7f7f8;
+  --v-border: rgba(0,0,0,0.08);
+  --v-shadow: 0 6px 24px rgba(0,0,0,0.08);
+  --v-shadow-sm: 0 3px 14px rgba(0,0,0,0.06);
   --v-radius: 20px;
   /* chips de estado */
   --v-ok-bg: #e8f7ee;   --v-ok-fg: #12805a;
   --v-warn-bg: #fff2dc; --v-warn-fg: #b06d05;
-  --v-mute-bg: #f0edfd; --v-mute-fg: #6b6785;
+  --v-mute-bg: #f0f0f1; --v-mute-fg: #58585f;
   background:
-    radial-gradient(900px 500px at 12% 0%, #dcd6fb 0%, transparent 60%),
-    radial-gradient(800px 500px at 88% 10%, #e7dcfb 0%, transparent 55%),
-    linear-gradient(160deg, #f2effd, #eae6fb);
+    radial-gradient(900px 500px at 12% 0%, #e4e4e7 0%, transparent 60%),
+    radial-gradient(800px 500px at 88% 10%, #ececee 0%, transparent 55%),
+    linear-gradient(160deg, #f6f6f7, #ebebed);
   background-attachment: fixed;
   color: var(--v-text);
   font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
@@ -712,7 +714,7 @@ div#root:nth-of-type(1) > div#login_container:nth-of-type(1) > div#root:nth-of-t
 .projeto-violet [class*="text-stone-"],
 .projeto-violet [class*="text-slate-"] { color: var(--v-text-soft) !important; }
 
-/* Superfícies: cards claros translúcidos com sombra roxa */
+/* Superfícies: cards claros translúcidos com sombra neutra */
 .projeto-violet .v-card {
   background: #ffffff !important;
   border: 1px solid var(--v-border);
@@ -722,25 +724,35 @@ div#root:nth-of-type(1) > div#login_container:nth-of-type(1) > div#root:nth-of-t
 .projeto-violet .v-glass {
   background: rgba(255,255,255,0.72);
   backdrop-filter: blur(14px);
-  border: 1px solid rgba(108,77,246,0.10);
+  border: 1px solid rgba(0,0,0,0.08);
   border-radius: 22px;
-  box-shadow: 0 8px 30px rgba(70,50,150,0.08);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.08);
 }
 .projeto-violet .v-tint { background: var(--v-surface-tint); border-radius: 14px; }
 
-/* Botão primário violeta */
+/* Botão primário — preto/branco com gradiente + vidro desfocado (glassmorphism) */
 .projeto-violet .v-btn {
-  border: 0; cursor: pointer; font-family: inherit; font-weight: 700;
-  border-radius: 14px; background: linear-gradient(140deg, #7d5bf8, #4f2fd4) !important; color: #fff !important;
-  box-shadow: 0 8px 22px rgba(108,77,246,0.35);
-  transition: transform .12s, box-shadow .12s;
+  border: 1px solid rgba(255,255,255,0.08); cursor: pointer; font-family: inherit; font-weight: 700;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(63,63,70,0.92), rgba(0,0,0,0.96)) !important;
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  color: #fff !important;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.12);
+  transition: transform .12s, box-shadow .12s, background .12s;
 }
 .projeto-violet .v-btn * { color: #fff !important; }
-.projeto-violet .v-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 26px rgba(108,77,246,0.45); }
+.projeto-violet .v-btn:hover {
+  transform: translateY(-1px);
+  background: linear-gradient(135deg, rgba(82,82,91,0.95), rgba(0,0,0,1)) !important;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.16);
+}
 .projeto-violet .v-btn-ghost {
-  border: 0; cursor: pointer; font-family: inherit; font-weight: 600;
-  border-radius: 999px; background: #fff; color: var(--v-text) !important;
-  box-shadow: 0 2px 8px rgba(70,50,150,0.10);
+  border: 1px solid rgba(0,0,0,0.08); cursor: pointer; font-family: inherit; font-weight: 600;
+  border-radius: 999px; background: rgba(255,255,255,0.6); color: var(--v-text) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 
 /* Chips de estado */
@@ -751,14 +763,14 @@ div#root:nth-of-type(1) > div#login_container:nth-of-type(1) > div#root:nth-of-t
 
 /* Item de navegação ativo */
 .projeto-violet .v-nav-active {
-  background: #ece7fd !important;
+  background: #ececee !important;
   color: var(--v-accent-2) !important;
   border-radius: 12px;
   font-weight: 700;
 }
 .projeto-violet .v-nav-active * { color: var(--v-accent-2) !important; }
-.projeto-violet .v-nav-item { color: #4a4663 !important; border-radius: 12px; }
-.projeto-violet .v-nav-item:hover { background: rgba(108,77,246,0.06) !important; }
+.projeto-violet .v-nav-item { color: #46464c !important; border-radius: 12px; }
+.projeto-violet .v-nav-item:hover { background: rgba(0,0,0,0.05) !important; }
 .projeto-violet .v-nav-mute { color: var(--v-text-mute) !important; }
 
 /* Inputs */
@@ -767,26 +779,26 @@ div#root:nth-of-type(1) > div#login_container:nth-of-type(1) > div#root:nth-of-t
 .projeto-violet select {
   background: #fff !important;
   color: var(--v-text) !important;
-  border: 1px solid rgba(108,77,246,0.15) !important;
+  border: 1px solid rgba(0,0,0,0.14) !important;
   border-radius: 12px !important;
 }
 .projeto-violet input::placeholder,
 .projeto-violet textarea::placeholder { color: var(--v-text-mute) !important; }
 
 /* Barra de progresso */
-.projeto-violet .v-track { height: 8px; border-radius: 999px; background: #e6e1fb !important; overflow: hidden; }
-.projeto-violet .v-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #7d5bf8, #4f2fd4) !important; }
+.projeto-violet .v-track { height: 8px; border-radius: 999px; background: #e4e4e7 !important; overflow: hidden; }
+.projeto-violet .v-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #3f3f46, #000000) !important; }
 
 /* Sidebar */
 .projeto-violet .v-sidebar {
   background: rgba(255,255,255,0.72);
   backdrop-filter: blur(14px);
-  border-right: 1px solid rgba(108,77,246,0.10);
-  box-shadow: 0 8px 30px rgba(70,50,150,0.08);
+  border-right: 1px solid rgba(0,0,0,0.08);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.08);
 }
 
 /* Cartões coloridos (métricas do térmico) mantêm gradiente, ganham raio suave */
-.projeto-violet .v-metric { border-radius: 18px; color: #fff !important; box-shadow: 0 5px 20px rgba(70,50,150,0.18); }
+.projeto-violet .v-metric { border-radius: 18px; color: #fff !important; box-shadow: 0 5px 20px rgba(0,0,0,0.18); }
 .projeto-violet .v-metric * { color: #fff !important; }
 
 .projeto-violet img { filter: none !important; }
@@ -796,19 +808,223 @@ div#root:nth-of-type(1) > div#login_container:nth-of-type(1) > div#root:nth-of-t
   .projeto-violet .v-shell { grid-template-columns: 1fr !important; }
 }
 
-/* Utilitárias extras do tema violeta (usadas nas peças convertidas) */
+/* Utilitárias extras do tema (usadas nas peças convertidas) */
 .projeto-violet .v-card-border { background: #fff !important; border: 1px solid var(--v-border); border-radius: 18px; box-shadow: var(--v-shadow); }
-.projeto-violet .v-btn-solid { background: linear-gradient(140deg, #7d5bf8, #4f2fd4) !important; color: #fff !important; border-radius: 12px; font-weight: 700; box-shadow: 0 6px 18px rgba(108,77,246,0.30); }
+.projeto-violet .v-btn-solid {
+  background: linear-gradient(135deg, rgba(63,63,70,0.92), rgba(0,0,0,0.96)) !important;
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  color: #fff !important; border-radius: 12px; font-weight: 700;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.12);
+}
 .projeto-violet .v-btn-solid * { color: #fff !important; }
 .projeto-violet .text-vsoft, .projeto-violet .text-vsoft * { color: var(--v-text-soft) !important; }
 .projeto-violet .text-vmute, .projeto-violet .text-vmute * { color: var(--v-text-mute) !important; }
-.projeto-violet .v-track-bg { background: #eeeafd !important; }
+.projeto-violet .v-track-bg { background: #ececee !important; }
 /* modais/overlays no tema claro */
 .projeto-violet .fixed.inset-0 { color: var(--v-text); }
 
-/* Gradiente violeta forçado (para elementos onde a variável inline pode não resolver) */
-.projeto-violet .v-grad { background: linear-gradient(140deg, #7d5bf8, #4f2fd4) !important; color: #fff !important; }
+/* Gradiente preto/branco forçado (para elementos onde a variável inline pode não resolver) */
+.projeto-violet .v-grad {
+  background: linear-gradient(135deg, rgba(63,63,70,0.92), rgba(0,0,0,0.96)) !important;
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  color: #fff !important;
+}
 .projeto-violet .v-grad * { color: #fff !important; }
+
+/* Balão de chat do "remetente atual" (fundo preto/gradiente): precisa de mais
+   especificidade que a regra genérica ".projeto-violet div{color:...!important}"
+   acima, senão o texto herda a cor escura padrão do tema e fica ilegível. */
+.projeto-violet .v-bubble-mine,
+.projeto-violet .v-bubble-mine * { color: #fff !important; }
+
+/* Tela de seleção de ambiente: fica fora de qualquer tema (.theme-light/
+   .projeto-violet/.theme-obras), então h1-h6/p/span caem nas regras globais
+   de "modo escuro sem escopo" (força branco/cinza com !important) e o texto
+   fica ilegível ou com a cor errada sobre o cartão de vidro claro. Cada
+   elemento define sua cor via a variável --ec (inline, sempre vence); esta
+   regra só precisa ter mais especificidade que a global pra repassar --ec. */
+/* Linha de varredura sutil — efeito "tecnológico" na tela de Login, uma
+   linha clara que desce lentamente pela tela e some, em loop. */
+.scan-line {
+  top: 0;
+  height: 2px;
+  background: linear-gradient(to right, transparent, rgba(255,255,255,0.25), transparent);
+  animation: scan-sweep 7s ease-in-out infinite;
+  z-index: 1;
+}
+/* Variante para fundo claro (Login agora é predominantemente branco/cinza). */
+.scan-line-light {
+  background: linear-gradient(to right, transparent, rgba(24,24,27,0.12), transparent);
+}
+
+/* Botão "Entrar no Painel" — preto sólido, com um brilho diagonal que varre
+   o botão ao passar o mouse (efeito "premium" sutil) e um fio de laranja na
+   base como único acento de cor no botão principal. */
+.login-submit-btn:hover {
+  background: #000 !important;
+  box-shadow: 0 14px 30px -6px rgba(0,0,0,0.4) !important;
+}
+.login-submit-shine {
+  position: absolute;
+  top: 0; left: -60%;
+  width: 40%; height: 100%;
+  background: linear-gradient(115deg, transparent, rgba(255,255,255,0.18), transparent);
+  transform: skewX(-20deg);
+  transition: left 0.6s ease;
+  pointer-events: none;
+}
+.login-submit-btn:hover .login-submit-shine { left: 130%; }
+
+/* Anel fino girando devagar ao redor do selo "CBC" — detalhe técnico sutil. */
+.login-badge-ring {
+  background: conic-gradient(from 0deg, #FF5A35, transparent 25%, transparent 75%, #18181b);
+  animation: login-ring-spin 6s linear infinite;
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+}
+@keyframes login-ring-spin { to { transform: rotate(360deg); } }
+
+/* Cursor piscando ao lado do título, efeito "terminal". */
+.login-cursor {
+  color: #FF5A35;
+  animation: login-cursor-blink 1.1s step-end infinite;
+  font-weight: 400;
+}
+@keyframes login-cursor-blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
+
+/* Campos de usuário/senha — estilo minimalista com ícone e sublinhado,
+   diferente dos campos em caixa usados no resto do sistema (visual novo
+   proposto para esta tela). */
+.login-field-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1.5px solid rgba(0,0,0,0.12);
+  transition: border-color 0.25s;
+}
+.login-field-group:focus-within {
+  border-bottom-color: #18181b;
+}
+.login-field-icon { flex-shrink: 0; }
+.login-field-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  outline: none;
+  font-size: 14px;
+  color: #18181b;
+  font-family: inherit;
+}
+.login-field-input::placeholder { color: #a1a1aa; }
+
+/* Campo em caixa, borda fina arredondada — estilo da referência (ícone + input
+   dentro de um retângulo com borda, em vez do sublinhado usado antes). */
+.login-boxed-field {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 13px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,0.12);
+  background: #fff;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.login-boxed-field:focus-within {
+  border-color: #18181b;
+  box-shadow: 0 0 0 3px rgba(24,24,27,0.07);
+}
+.login-boxed-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  outline: none;
+  font-size: 14px;
+  color: #18181b;
+  font-family: inherit;
+}
+.login-boxed-input::placeholder { color: #c4c4c9; }
+
+/* Selo "liquid glass" com o nome da empresa — vidro translúcido com brilho
+   diagonal que varre devagar em loop, simulando reflexo líquido na superfície. */
+.login-liquid-badge {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(255,255,255,0.85), rgba(255,255,255,0.45));
+  backdrop-filter: blur(10px) saturate(180%);
+  -webkit-backdrop-filter: blur(10px) saturate(180%);
+  border: 1px solid rgba(255,255,255,0.8);
+  box-shadow: 0 4px 14px -4px rgba(15,23,42,0.12), inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 2px rgba(0,0,0,0.04);
+}
+.login-liquid-badge::before {
+  content: '';
+  position: absolute;
+  top: 0; left: -45%;
+  width: 45%; height: 100%;
+  background: linear-gradient(115deg, transparent, rgba(255,255,255,0.85), transparent);
+  transform: skewX(-20deg);
+  animation: login-liquid-shine 4.5s ease-in-out infinite;
+}
+@keyframes login-liquid-shine {
+  0%, 15% { left: -45%; }
+  65%, 100% { left: 130%; }
+}
+
+/* Nome da empresa — mesmo brilho diagonal do botão "Entrar", mas recortado na
+   própria fonte (texto vira o "vidro" em vez de um balão atrás dele). */
+.login-brand-shine {
+  background-image: linear-gradient(100deg, #18181b 35%, #18181b 46%, #ffffff 50%, #18181b 54%, #18181b 65%);
+  background-size: 260% 100%;
+  background-position: 100% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent !important;
+  transition: background-position 0.9s ease;
+}
+.login-brand-shine:hover { background-position: 0% 0; }
+
+/* Emblema "HUB CBC" — placa preta com gradiente e brilho que varre sozinho em
+   loop, pra se diferenciar claramente do resto do texto (é a marca, não um
+   título comum). */
+.login-brand-badge {
+  background: linear-gradient(135deg, #3f3f46, #000000);
+  box-shadow: 0 10px 26px -8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.14);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.login-brand-badge .login-submit-shine { animation: login-badge-shine 3.5s ease-in-out infinite; left: -60%; }
+@keyframes login-badge-shine {
+  0%, 20% { left: -60%; }
+  55%, 100% { left: 140%; }
+}
+
+/* Placa de vidro atrás do nome da empresa — glassmorphism: fundo translúcido
+   desfocado, borda clara e um leve brilho interno no topo. */
+.login-brand-glass {
+  background: rgba(255,255,255,0.35);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border: 1px solid rgba(255,255,255,0.6);
+  box-shadow: 0 8px 24px -8px rgba(15,23,42,0.12), inset 0 1px 0 rgba(255,255,255,0.7);
+}
+@keyframes scan-sweep {
+  0% { top: 0%; opacity: 0; }
+  8% { opacity: 1; }
+  50% { top: 100%; opacity: 0.6; }
+  92% { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+
+.env-select h1, .env-select h2, .env-select h3, .env-select h4, .env-select h5, .env-select h6,
+.env-select p, .env-select span,
+.login-screen h1, .login-screen h2, .login-screen h3, .login-screen h4, .login-screen h5, .login-screen h6,
+.login-screen p, .login-screen span {
+  color: var(--ec, inherit) !important;
+}
 
 /* Força bg-white e superfícies claras no tema violeta */
 .projeto-violet .bg-white { background: #ffffff !important; }
@@ -820,7 +1036,7 @@ div#root:nth-of-type(1) > div#login_container:nth-of-type(1) > div#root:nth-of-t
 .projeto-violet .ib-ok, .projeto-violet .ib-ok *, .projeto-violet .ib-ok-text { color: var(--v-ok-fg) !important; }
 /* Botões do briefing: o tema escuro global pinta texto de botões claros de branco */
 .projeto-violet .ib-root button:not(.v-grad):not(.v-btn):not(.v-nav-active):not(.ib-warn-text) { color: var(--v-text) !important; }
-.projeto-violet .ib-hover:hover { background: rgba(108,77,246,0.06) !important; }
+.projeto-violet .ib-hover:hover { background: rgba(0,0,0,0.05) !important; }
 .projeto-violet .ib-range { accent-color: var(--v-accent); height: 32px; border: 0 !important; background: transparent !important; }
 
 /* ============================================================
@@ -872,19 +1088,20 @@ div#root:nth-of-type(1) > div#login_container:nth-of-type(1) > div#root:nth-of-t
   --ui-mute-bg: #f1f0ee; --ui-mute-fg: #6b6863;
 }
 
-/* ---- Tema: Obras/Admin (identidade laranja + quase-preto) ---- */
+/* ---- Tema: Obras/Admin — mesma paleta preto/branco de Projetos por enquanto
+   (pedido explícito: trazer a paleta de Projetos para cá e ajustar depois). ---- */
 .theme-obras {
-  --ui-accent: #FF5A35;
-  --ui-accent-2: #E8590C;
-  --ui-accent-grad: linear-gradient(140deg, #FF7A52, #E8590C);
-  --ui-text: #1E1E1E;
-  --ui-text-soft: #57534e;
-  --ui-text-mute: #8a8580;
+  --ui-accent: #18181b;
+  --ui-accent-2: #000000;
+  --ui-accent-grad: linear-gradient(140deg, #3f3f46, #000000);
+  --ui-text: #18181b;
+  --ui-text-soft: #52525b;
+  --ui-text-mute: #8a8a92;
   --ui-surface: #ffffff;
-  --ui-surface-tint: #F4F4F3;
-  --ui-border: rgba(30,30,30,0.10);
-  --ui-shadow: 0 6px 24px rgba(30,20,10,0.08);
-  --ui-shadow-sm: 0 3px 14px rgba(30,20,10,0.06);
+  --ui-surface-tint: #f7f7f8;
+  --ui-border: rgba(0,0,0,0.08);
+  --ui-shadow: 0 6px 24px rgba(0,0,0,0.08);
+  --ui-shadow-sm: 0 3px 14px rgba(0,0,0,0.06);
 }
 
 /* ---- Tema: Projetos (ponte para as variáveis violeta já existentes,
@@ -916,8 +1133,18 @@ div#root:nth-of-type(1) > div#login_container:nth-of-type(1) > div#root:nth-of-t
 .ui-btn:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 2px; }
 .ui-btn-sm { padding: 8px 14px; font-size: var(--ui-text-sm); }
 .ui-btn-md { padding: 11px 20px; font-size: var(--ui-text-base); }
-.ui-btn-primary { background: var(--ui-accent-grad); color: #fff; box-shadow: 0 6px 18px color-mix(in srgb, var(--ui-accent) 35%, transparent); }
-.ui-btn-primary:hover:not(:disabled) { transform: translateY(-1px); }
+.ui-btn-primary {
+  background: var(--ui-accent-grad);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.14);
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--ui-accent) 35%, transparent), inset 0 1px 0 rgba(255,255,255,0.18);
+}
+.ui-btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--ui-accent) 45%, transparent), inset 0 1px 0 rgba(255,255,255,0.22);
+}
 .ui-btn-secondary { background: var(--ui-surface); color: var(--ui-text); border: 1px solid var(--ui-border); }
 .ui-btn-secondary:hover:not(:disabled) { background: var(--ui-surface-tint); }
 .ui-btn-ghost { background: transparent; color: var(--ui-text-soft); }
@@ -925,6 +1152,32 @@ div#root:nth-of-type(1) > div#login_container:nth-of-type(1) > div#root:nth-of-t
 .ui-btn-danger { background: var(--ui-danger-fg); color: #fff; }
 .ui-btn-danger:hover:not(:disabled) { opacity: .9; }
 .ui-btn-full { width: 100%; }
+
+/* Variante "solta" (sem o padding/tamanho fixo do .ui-btn) do mesmo tratamento
+   visual: gradiente do acento do tema + vidro desfocado. Usada em botões que
+   já têm seu próprio padding/texto, fora do componente Button compartilhado. */
+.ui-btn-glow {
+  background: var(--ui-accent-grad);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 0;
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--ui-accent) 35%, transparent), inset 0 1px 0 rgba(255,255,255,0.18);
+  transition: transform .12s, box-shadow .12s;
+}
+.ui-btn-glow:hover { transform: translateY(-1px); box-shadow: 0 10px 26px color-mix(in srgb, var(--ui-accent) 45%, transparent), inset 0 1px 0 rgba(255,255,255,0.22); }
+
+/* Par "fantasma" do acima — vidro claro desfocado, para a ação secundária ao lado da primária. */
+.ui-btn-glow-ghost {
+  background: rgba(255,255,255,0.6);
+  border: 1px solid var(--ui-border);
+  border-radius: 0;
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+  transition: transform .12s, box-shadow .12s, background .12s;
+}
+.ui-btn-glow-ghost:hover { background: rgba(255,255,255,0.85); transform: translateY(-1px); }
 
 /* Card */
 .ui-card {

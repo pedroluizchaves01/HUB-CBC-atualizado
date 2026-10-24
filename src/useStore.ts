@@ -283,6 +283,17 @@ export function useStore() {
     await removeDoc('contracts', contractId);
   };
 
+  // DEV ONLY — entra direto como um usuário de INITIAL_USERS sem passar pelo backend
+  // (não existe em produção; import.meta.env.DEV é false no build). Útil para trabalhar
+  // no visual das telas sem precisar de DATABASE_URL configurada localmente.
+  const devLogin = (userId: string) => {
+    if (!import.meta.env.DEV) return;
+    const user = INITIAL_USERS.find(u => u.id === userId);
+    if (!user) return;
+    setSessionToken('dev-bypass-token', false);
+    setCurrentUser(user);
+  };
+
   return {
     users,
     clients,
@@ -292,6 +303,7 @@ export function useStore() {
     contracts,
     currentUser,
     login,
+    devLogin,
     logout,
     addClient,
     editClient,

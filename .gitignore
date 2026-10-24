@@ -11,3 +11,5 @@ telegram-config.json
 # Credencial da service account do Firebase — segredo de servidor
 service-account*.json
 firebase-service-account*.json
+# Config local do Claude Code (preview_start) — não faz parte do app
+.claude/

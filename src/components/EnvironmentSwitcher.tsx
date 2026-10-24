@@ -71,7 +71,14 @@ export default function EnvironmentSwitcher({ current, onGoProjeto, onGoObra, on
 
       <button
         onClick={() => setOpen(o => !o)}
-        className={`flex items-center gap-2 px-4 py-2.5 rounded-full shadow-lg text-white text-sm font-bold transition-transform hover:scale-105 ${current === 'obra' ? 'bg-[#C2703D]' : 'bg-[#3E7C8B]'}`}
+        className="flex items-center gap-2 px-4 py-2.5 rounded-full text-white text-sm font-bold transition-transform hover:scale-105"
+        style={{
+          background: 'linear-gradient(135deg, #3f3f46, #000000)',
+          border: '1px solid rgba(255,255,255,0.14)',
+          backdropFilter: 'blur(10px) saturate(140%)',
+          WebkitBackdropFilter: 'blur(10px) saturate(140%)',
+          boxShadow: '0 8px 22px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.14)',
+        }}
         title="Trocar de ambiente"
       >
         <ArrowLeftRight size={16} />

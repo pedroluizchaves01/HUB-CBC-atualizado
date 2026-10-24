@@ -26,6 +26,7 @@ export default function App() {
     transactions,
     currentUser,
     login,
+    devLogin,
     logout: rawLogout,
     addClient,
     editClient,
@@ -56,7 +57,7 @@ export default function App() {
   // If no user is logged in, show the clean login page
   if (!currentUser) {
     const handleLoginAttempt = (username: string, pb: string, rememberMe: boolean) => login(username, pb, rememberMe);
-    return <Login onLogin={handleLoginAttempt} />;
+    return <Login onLogin={handleLoginAttempt} onDevLogin={devLogin} />;
   }
 
   // Após o login, a pessoa escolhe entre os ambientes Projeto e Obra.
@@ -95,7 +96,6 @@ export default function App() {
   // Admin & Marketing View
   if (currentUser.role === 'admin' || currentUser.role === 'marketing') {
     return (
-      <>
       <AdminDashboard
         role={currentUser.role}
         currentUserId={currentUser.id}
@@ -106,6 +106,8 @@ export default function App() {
         documents={documents}
         contracts={contracts}
         onLogout={logout}
+        onSwitchEnvironment={() => setEnv('projeto')}
+        onGoToSelect={() => setEnv(null)}
         onAddClient={addClient}
         onEditClient={editClient}
         onDeleteClient={deleteClient}
@@ -122,13 +124,6 @@ export default function App() {
         onEditContract={editContract}
         onDeleteContract={deleteContract}
       />
-      <EnvironmentSwitcher
-        current="obra"
-        onGoProjeto={() => setEnv('projeto')}
-        onGoObra={() => setEnv('obra')}
-        onGoSelect={() => setEnv(null)}
-      />
-      </>
     );
   }
 
