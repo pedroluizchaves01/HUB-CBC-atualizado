@@ -99,12 +99,13 @@ export default function EnvironmentSelect({ userName, onSelect, onLogout }: Prop
       {/* Topo */}
       <header className="flex items-center justify-between px-6 md:px-10 py-6 z-10 relative">
         <div className="flex items-center gap-3">
-          <span className="w-9 h-9 rounded-xl flex items-center justify-center text-sm flex-shrink-0 text-white" style={{
+          <span className="w-9 h-9 rounded-xl flex items-center justify-center text-sm flex-shrink-0" style={{
             background: 'linear-gradient(135deg, #3f3f46, #000000)',
             border: '1px solid rgba(255,255,255,0.14)',
             fontWeight: 800,
             boxShadow: '0 6px 16px rgba(0,0,0,0.25)',
-          }}>C</span>
+            '--ec': '#fff',
+          } as React.CSSProperties}>C</span>
           <div className="leading-tight">
             <p className="text-[10px] font-mono uppercase tracking-[0.2em]" style={{ '--ec': '#8a8a92' } as React.CSSProperties}>Chaves Brites Correa</p>
             <p className="text-sm" style={{ '--ec': '#52525b' } as React.CSSProperties}>

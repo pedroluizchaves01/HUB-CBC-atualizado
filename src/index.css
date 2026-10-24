@@ -437,12 +437,68 @@ body {
   color: #18181b !important;
 }
 
+/* Menu da Obra (AdminDashboard): cartão flutuante arredondado, mesma
+   linguagem visual dos cartões da seleção de ambiente — em vez do painel
+   escuro colado na borda, cortado reto, que havia antes. */
+.obra-sidebar {
+  border: 1px solid rgba(0,0,0,0.06) !important;
+  box-shadow: 0 20px 45px -16px rgba(15,23,42,0.18), inset 0 1px 0 rgba(255,255,255,0.6);
+}
+
+/* Rolagem do menu — fina, discreta e arredondada, no lugar da barra padrão do
+   navegador (grossa e quadrada, destoando do resto do visual). Fica no
+   wrapper INTERNO (.obra-sidebar-scroll), não no <aside> com cantos
+   arredondados — a barra do navegador não respeita border-radius do próprio
+   elemento com overflow, então antes ficava vazando pra fora do balão. */
+.obra-sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0,0,0,0.18) transparent;
+}
+.obra-sidebar-scroll::-webkit-scrollbar { width: 6px; }
+.obra-sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+.obra-sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.16);
+  border-radius: 999px;
+}
+.obra-sidebar-scroll::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.28); }
+
+/* Itens do menu — duas classes próprias (em vez de depender só de estilo
+   inline) porque a regra legada `.theme-light aside button { color:... }`
+   acima tem !important e vence qualquer color inline no estado ativo. */
+.theme-light .obra-nav-btn {
+  color: #94a3b8 !important;
+  font-weight: 500 !important;
+  background: transparent;
+  border-left: 2px solid transparent;
+  transition: background 0.2s, color 0.2s, transform 0.15s;
+}
+.theme-light .obra-nav-btn:hover {
+  background: rgba(24,24,27,0.05) !important;
+  color: #3f3f46 !important;
+  transform: translateX(1px);
+}
+.theme-light .obra-nav-btn-active,
+.theme-light .obra-nav-btn-active:hover {
+  color: #18181b !important;
+  font-weight: 700 !important;
+  background: rgba(24,24,27,0.08) !important;
+  border-left: 2px solid #18181b;
+}
+
 /* Headers inside layouts */
 .theme-light header {
   background-color: rgba(255, 255, 255, 0.5) !important;
   border-bottom: 1px solid rgba(15, 23, 42, 0.05) !important;
   backdrop-filter: blur(12px) !important;
   -webkit-backdrop-filter: blur(12px) !important;
+}
+/* Cabeçalho da Obra: cartão flutuante, não uma barra colada na borda — troca
+   o border-bottom reto (herdado da regra genérica acima) por uma borda
+   inteira + sombra, consistentes com o menu lateral e os cartões da tela de
+   seleção de ambiente. */
+.theme-light .obra-header {
+  border: 1px solid rgba(15, 23, 42, 0.06) !important;
+  box-shadow: 0 10px 28px -14px rgba(15, 23, 42, 0.18);
 }
 
 .theme-light header h2, .theme-light header h1 {
@@ -927,28 +983,39 @@ div#root:nth-of-type(1) > div#login_container:nth-of-type(1) > div#root:nth-of-t
 .login-boxed-field {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 9px 13px;
+  gap: 10px;
+  padding: 12px 15px;
   border-radius: 12px;
-  border: 1px solid rgba(0,0,0,0.12);
-  background: #fff;
+  border: 1px solid rgba(0,0,0,0.12) !important;
+  background: #fff !important;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 .login-boxed-field:focus-within {
-  border-color: #18181b;
+  border-color: #18181b !important;
   box-shadow: 0 0 0 3px rgba(24,24,27,0.07);
 }
-.login-boxed-input {
+/* Seletor composto (duas classes) de propósito: a regra legada e não-escopada
+   `input[type="text"]:focus, input[type="password"]:focus {...}` (bloco
+   "CONVOX PREMIUM SAAS STYLING MAPS" mais acima neste arquivo) combina um
+   elemento com um pseudo-classe, então empata em especificidade com uma única
+   classe e vence por !important + ordem; só uma seletor de duas classes supera
+   isso de forma confiável. Sem isso o texto digitado fica branco sobre fundo
+   branco aqui. */
+.login-boxed-field .login-boxed-input,
+.login-boxed-field .login-boxed-input:focus {
   flex: 1;
   min-width: 0;
-  background: transparent;
-  border: 0;
-  outline: none;
-  font-size: 14px;
-  color: #18181b;
-  font-family: inherit;
+  background: transparent !important;
+  border: 0 !important;
+  outline: none !important;
+  font-size: 14px !important;
+  line-height: 1.3;
+  color: #18181b !important;
+  font-family: inherit !important;
+  padding: 0 !important;
+  box-shadow: none !important;
 }
-.login-boxed-input::placeholder { color: #c4c4c9; }
+.login-boxed-field .login-boxed-input::placeholder { color: #c4c4c9 !important; }
 
 /* Selo "liquid glass" com o nome da empresa — vidro translúcido com brilho
    diagonal que varre devagar em loop, simulando reflexo líquido na superfície. */
