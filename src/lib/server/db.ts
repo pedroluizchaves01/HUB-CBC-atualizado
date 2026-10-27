@@ -31,29 +31,46 @@ function tableName(collection: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Cache de coleções em memória
+// Cache de coleções em memória, invalidado por VERSÃO do banco
 // ---------------------------------------------------------------------------
-// Antes, cada polling do frontend (a cada 8s, por aba) relia TODAS as tabelas inteiras
-// no Postgres — centenas de GB de tráfego de saída do Supabase por mês para ~8 MB de
-// dados. Agora a leitura completa de uma coleção fica em memória e só volta ao banco quando:
-//   (a) alguma gravação nesta mesma instância altera a coleção (invalidação imediata), ou
-//   (b) passa CACHE_TTL_MS (cobre alterações feitas fora do backend: seeds, painel do Supabase).
+// Cada tabela c_* tem um gatilho que incrementa sua linha em `cbc_table_versions` a cada
+// INSERT/UPDATE/DELETE/TRUNCATE — venha a alteração do backend, de um script ou do painel
+// do Supabase. O servidor guarda a leitura completa de cada coleção em memória e só volta
+// a ler a tabela quando a versão dela no banco muda.
 //
-// PREMISSA: o backend roda em UMA instância (Coolify). Com várias réplicas, cada uma teria
-// o próprio cache e veria gravações das outras só após o TTL.
+// Para saber se algo mudou, o servidor lê a tabela de versões inteira (34 linhas, poucos
+// bytes) no máximo uma vez a cada VERSION_CHECK_INTERVAL_MS, e só quando alguém precisa
+// dos dados. Com o sistema parado, nada é lido.
+//
+// Rede de segurança: se a checagem de versões falhar (ex.: tabela ausente), cada coleção
+// volta a ser relida no máximo a cada MAX_CACHE_AGE_MS. Gravações feitas pelo próprio
+// backend continuam invalidando o cache na hora, em qualquer caso.
+//
+// PREMISSA: o backend roda em UMA instância (Coolify). Mesmo com mais de uma, as versões
+// do banco fariam cada réplica perceber as gravações das outras em até 30 s.
 
-const CACHE_TTL_MS = 5 * 60_000;
+const VERSION_CHECK_INTERVAL_MS = 30_000;
+const MAX_CACHE_AGE_MS = 6 * 60 * 60_000;
+const VERSIONS_TABLE = "cbc_table_versions";
 // Identifica este processo: versões de antes de um restart nunca coincidem com as novas.
 const BOOT_ID = Date.now().toString(36);
 
 interface CacheEntry {
   rows: Array<{ id: string; data: any }>;
   loadedAt: number;
+  /** Versão da tabela no banco no momento da leitura; null = desconhecida. */
+  dbVersion: string | null;
 }
 
 const collectionCache = new Map<string, CacheEntry>();
 const inflightLoads = new Map<string, Promise<CacheEntry>>();
 const collectionVersions = new Map<string, number>();
+
+// Última fotografia da tabela de versões (nome da tabela → versão).
+let dbVersionsSnapshot: Map<string, string> | null = null;
+let dbVersionsCheckedAt = 0;
+let dbVersionsInflight: Promise<Map<string, string> | null> | null = null;
+let dbVersionsWarned = false;
 
 function bumpVersion(collection: string): void {
   collectionVersions.set(collection, (collectionVersions.get(collection) || 0) + 1);
@@ -66,16 +83,59 @@ function invalidateCollection(collection: string): void {
 }
 
 /**
- * Versão atual de uma coleção. Muda a cada gravação e a cada recarga pelo TTL.
- * O /api/data-bundle usa isso para não reenviar coleções que o navegador já tem.
+ * Versão atual de uma coleção (para o navegador). Muda a cada gravação e a cada
+ * recarga causada por alteração externa. O /api/data-bundle usa isso para não
+ * reenviar coleções que o navegador já tem.
  */
 export function getCollectionVersion(collection: string): string {
   return `${BOOT_ID}.${collectionVersions.get(collection) || 0}`;
 }
 
+/**
+ * Versões atuais de todas as tabelas no banco, com no máximo uma consulta a cada
+ * VERSION_CHECK_INTERVAL_MS. Retorna null se a checagem falhar (o cache usa o teto de idade).
+ */
+async function getDbVersions(): Promise<Map<string, string> | null> {
+  if (dbVersionsSnapshot && Date.now() - dbVersionsCheckedAt < VERSION_CHECK_INTERVAL_MS) {
+    return dbVersionsSnapshot;
+  }
+  if (dbVersionsInflight) return dbVersionsInflight;
+  dbVersionsInflight = (async () => {
+    try {
+      await ensureSchema();
+      const r = await getPool().query(`SELECT table_name, version::text AS version FROM ${VERSIONS_TABLE}`);
+      dbVersionsSnapshot = new Map(r.rows.map((row: any) => [row.table_name, row.version]));
+      dbVersionsCheckedAt = Date.now();
+      dbVersionsWarned = false;
+      return dbVersionsSnapshot;
+    } catch (e: any) {
+      if (!dbVersionsWarned) {
+        console.warn("[cache] Checagem de versões falhou; usando teto de 6 h:", e?.message || e);
+        dbVersionsWarned = true;
+      }
+      dbVersionsSnapshot = null;
+      return null;
+    } finally {
+      dbVersionsInflight = null;
+    }
+  })();
+  return dbVersionsInflight;
+}
+
+async function isCacheFresh(collection: string, cached: CacheEntry): Promise<boolean> {
+  if (Date.now() - cached.loadedAt >= MAX_CACHE_AGE_MS) return false;
+  const versions = await getDbVersions();
+  if (!versions || cached.dbVersion === null) return true; // sem versões: vale o teto de idade
+  const current = versions.get(tableName(collection)) ?? "0";
+  // "<=" e não "===": a fotografia de versões pode ser até 30 s mais antiga que esta
+  // leitura (ex.: logo após uma gravação do próprio backend). Só uma versão MAIOR no
+  // banco indica alteração que o cache ainda não tem.
+  return BigInt(current) <= BigInt(cached.dbVersion);
+}
+
 async function loadCollectionRows(collection: string): Promise<CacheEntry> {
   const cached = collectionCache.get(collection);
-  if (cached && Date.now() - cached.loadedAt < CACHE_TTL_MS) return cached;
+  if (cached && (await isCacheFresh(collection, cached))) return cached;
 
   // Várias requisições simultâneas pedindo a mesma coleção compartilham UMA consulta.
   const pending = inflightLoads.get(collection);
@@ -85,11 +145,20 @@ async function loadCollectionRows(collection: string): Promise<CacheEntry> {
   const load = (async () => {
     await ensureSchema();
     const t = tableName(collection);
+    // A versão é lida ANTES dos dados: se algo mudar entre as duas leituras, a próxima
+    // checagem vê uma versão maior e relê — nunca fica um cache velho marcado como novo.
+    let dbVersion: string | null = null;
+    try {
+      const v = await getPool().query(
+        `SELECT version::text AS version FROM ${VERSIONS_TABLE} WHERE table_name = $1`, [t]
+      );
+      dbVersion = v.rows[0]?.version ?? "0";
+    } catch { /* sem tabela de versões: segue com teto de idade */ }
     const r = await getPool().query(`SELECT id, data FROM ${t}`);
-    const entry: CacheEntry = { rows: r.rows, loadedAt: Date.now() };
+    const entry: CacheEntry = { rows: r.rows, loadedAt: Date.now(), dbVersion };
     // Só guarda se ninguém gravou na coleção durante a consulta (evita cache velho).
     if ((collectionVersions.get(collection) || 0) === versionAtStart) {
-      if (cached) bumpVersion(collection); // recarga pelo TTL: o conteúdo pode ter mudado
+      if (cached) bumpVersion(collection); // recarga por mudança externa: avisa os navegadores
       collectionCache.set(collection, entry);
     }
     return entry;
@@ -132,6 +201,26 @@ export function ensureSchema(): Promise<void> {
     const p = getPool();
     const client = await p.connect();
     try {
+      // Tabela de versões + função do gatilho (ver "Cache ... por VERSÃO" acima).
+      await client.query(
+        `CREATE TABLE IF NOT EXISTS ${VERSIONS_TABLE} (
+           table_name TEXT PRIMARY KEY,
+           version    BIGINT NOT NULL DEFAULT 0,
+           updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+         )`
+      );
+      await client.query(`ALTER TABLE ${VERSIONS_TABLE} ENABLE ROW LEVEL SECURITY`);
+      await client.query(
+        `CREATE OR REPLACE FUNCTION cbc_bump_table_version() RETURNS trigger
+           LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $fn$
+         BEGIN
+           INSERT INTO ${VERSIONS_TABLE} (table_name, version, updated_at)
+                VALUES (TG_TABLE_NAME, 1, now())
+           ON CONFLICT (table_name)
+             DO UPDATE SET version = ${VERSIONS_TABLE}.version + 1, updated_at = now();
+           RETURN NULL;
+         END $fn$`
+      );
       for (const col of ALLOWED_COLLECTIONS) {
         const t = tableName(col);
         await client.query(
@@ -143,10 +232,16 @@ export function ensureSchema(): Promise<void> {
         // Segurança: tabelas nunca ficam expostas à API pública do Supabase (PostgREST).
         // O backend conecta como dono das tabelas e não é afetado pelo RLS.
         await client.query(`ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`);
+        // Gatilho por COMANDO (não por linha): um custo fixo mínimo por gravação.
+        await client.query(
+          `CREATE OR REPLACE TRIGGER cbc_version_bump
+             AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON ${t}
+             FOR EACH STATEMENT EXECUTE FUNCTION cbc_bump_table_version()`
+        );
         await client.query(
           `DO $$ BEGIN
              IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-               EXECUTE 'REVOKE ALL ON ${t} FROM anon, authenticated';
+               EXECUTE 'REVOKE ALL ON ${t}, ${VERSIONS_TABLE} FROM anon, authenticated';
              END IF;
            END $$`
         );
