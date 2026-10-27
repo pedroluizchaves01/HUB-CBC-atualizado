@@ -19,7 +19,7 @@ import { requireAuth, requireRole } from "./src/lib/server/authMiddleware";
 import * as dataService from "./src/lib/server/dataService";
 import { writeAuditLog } from "./src/lib/server/auditService";
 import * as telegram from "./src/lib/server/telegramServer";
-import { isDbConfigured, ensureSchema } from "./src/lib/server/db";
+import { isDbConfigured, ensureSchema, getCollectionVersion, purgeOldNotifications } from "./src/lib/server/db";
 import { startDemandAutomationScheduler } from "./src/lib/server/demandAutomation";
 import { notifyChange } from "./src/lib/server/notificationService";
 import * as whatsapp from "./src/lib/server/whatsappServer";
@@ -174,29 +174,41 @@ app.post("/api/users/upsert", requireAuth, requireRole("admin"), async (req, res
 // Toda leitura/escrita exige sessão. O navegador nunca acessa o Firestore direto.
 // ==========================================
 // Busca AGRUPADA: devolve várias coleções em UMA requisição (?names=a,b,c).
-// Reduz o polling do frontend de ~15 requisições/8s para 1 requisição/8s.
 // Coleções às quais o usuário não tem acesso são simplesmente omitidas da resposta
 // (o frontend mantém o estado atual delas) — sem derrubar o lote inteiro.
+//
+// Busca CONDICIONAL: o navegador envia as versões que já tem (?v=x,y,z, na mesma ordem de
+// names). Coleções cuja versão não mudou NÃO são reenviadas — um polling sem alterações
+// responde só o mapa de versões, com poucos bytes.
+// A versão de cada coleção inclui a de "projects", porque o filtro de clientes depende dela.
 app.get("/api/data-bundle", requireAuth, async (req, res) => {
   try {
     const u = req.sessionUser!;
     const names = String(req.query.names || "")
       .split(",").map((s) => s.trim()).filter(Boolean);
-    if (names.length === 0) return res.json({ collections: {} });
+    const known = String(req.query.v || "").split(",");
+    if (names.length === 0) return res.json({ collections: {}, versions: {} });
     if (names.length > 40) return res.status(400).json({ error: "Muitas coleções no lote." });
 
+    const projectsVersion = getCollectionVersion("projects");
     const collections: Record<string, any[]> = {};
+    const versions: Record<string, string> = {};
     const errors: Record<string, string> = {};
-    await Promise.all(names.map(async (name) => {
+    await Promise.all(names.map(async (name, i) => {
       try {
+        // Notificações são por usuário: a versão também carrega o id do destinatário.
+        const version = `${getCollectionVersion(name)}-${projectsVersion}-${name === "notifications" ? u.id : ""}`;
+        versions[name] = version;
+        if (known[i] && known[i] === version) return; // navegador já tem esta versão
         collections[name] = await dataService.listCollectionForUser(name, {
           role: u.role, clientId: u.clientId, userId: u.id,
         });
       } catch (e: any) {
+        delete versions[name];
         errors[name] = e?.message || "erro";
       }
     }));
-    return res.json({ collections, errors });
+    return res.json({ collections, versions, errors });
   } catch (e: any) {
     return res.status(500).json({ error: e?.message || "Erro ao listar coleções." });
   }
@@ -299,9 +311,8 @@ app.post("/api/notifications/mark-read", requireAuth, async (req, res) => {
     const targets = Array.isArray(ids) && ids.length > 0
       ? mine.filter((n: any) => ids.includes(n.id))
       : mine.filter((n: any) => !n.read);
-    for (const n of targets) {
-      await dataService.setDocById("notifications", n.id, { ...n, read: true });
-    }
+    // Uma única transação gravando só o campo `read` (merge), em vez de um upsert por item.
+    await dataService.batchSet("notifications", targets.map((n: any) => ({ id: n.id, data: { read: true } })));
     return res.json({ success: true, updated: targets.length });
   } catch (e: any) {
     return res.status(400).json({ error: e.message || "Erro ao marcar notificações como lidas." });
@@ -1827,6 +1838,19 @@ async function startServer() {
   } catch (e: any) {
     console.error("[cora] Falha ao iniciar o agendador:", e?.message || e);
   }
+
+  // Limpeza diária de notificações antigas (lidas > 30 dias, qualquer uma > 90 dias),
+  // para a tabela não crescer sem limite. Primeira execução 1 min após o boot.
+  const runNotificationPurge = async () => {
+    try {
+      const removed = await purgeOldNotifications();
+      if (removed > 0) console.log(`[notifications] ${removed} notificações antigas removidas.`);
+    } catch (e: any) {
+      console.error("[notifications] Falha na limpeza:", e?.message || e);
+    }
+  };
+  setTimeout(() => { void runNotificationPurge(); }, 60_000);
+  setInterval(() => { void runNotificationPurge(); }, 24 * 60 * 60_000);
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);

@@ -19,7 +19,12 @@ export enum OperationType {
   LIST = "list", GET = "get", WRITE = "write",
 }
 
-const POLL_INTERVAL_MS = 8000;
+// Intervalo do polling com a aba visível e o usuário ativo. Era 8s; com a busca
+// condicional (só o que mudou volta do servidor), 20s mantém a sensação de tempo real.
+const POLL_INTERVAL_MS = 20_000;
+// Sem interação (mouse, teclado, toque, rolagem) por este tempo, o polling pausa.
+// Ele retoma na primeira interação, com uma busca imediata.
+const IDLE_AFTER_MS = 10 * 60_000;
 const WRITE_RETRIES = 4;            // tentativas totais de gravação
 const RETRY_BASE_DELAY_MS = 1000;   // 1s, 2s, 4s...
 
@@ -125,6 +130,8 @@ interface CollectionEntry {
   subscribers: Subscriber[];
   lastSerialized: string;
   localStorageKey?: string;
+  /** Versão (do servidor) dos dados que esta aba já tem; vazia = ainda não recebeu. */
+  version: string;
 }
 
 const registry = new Map<string, CollectionEntry>();
@@ -133,11 +140,42 @@ let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let pollInFlight = false;
 let consecutiveFailures = 0;
 let stoppedByAuth = false;
+let pausedForInactivity = false;
+let lastActivityAt = Date.now();
+
+function isTabHidden(): boolean {
+  try { return typeof document !== "undefined" && document.visibilityState === "hidden"; } catch { return false; }
+}
+
+function isUserIdle(): boolean {
+  return Date.now() - lastActivityAt > IDLE_AFTER_MS;
+}
 
 function schedulePoll(delay: number) {
   if (pollTimer) clearTimeout(pollTimer);
   pollTimer = setTimeout(runPoll, delay);
 }
+
+/** Retoma o polling (com busca imediata) se ele estava pausado por aba oculta/inatividade. */
+function resumeIfPaused() {
+  if (!pausedForInactivity || stoppedByAuth || registry.size === 0) return;
+  if (isTabHidden() || isUserIdle()) return;
+  pausedForInactivity = false;
+  schedulePoll(0);
+}
+
+// Aba oculta ou usuário parado = nenhuma requisição. Antes, uma aba esquecida aberta
+// gerava ~10.800 buscas por dia, cada uma relendo o banco inteiro.
+try {
+  document.addEventListener("visibilitychange", resumeIfPaused);
+  const onActivity = () => {
+    lastActivityAt = Date.now();
+    resumeIfPaused();
+  };
+  for (const ev of ["mousemove", "mousedown", "keydown", "touchstart", "scroll", "wheel"]) {
+    window.addEventListener(ev, onActivity, { passive: true, capture: true });
+  }
+} catch { /* ambiente sem DOM */ }
 
 /** Agenda um poll quase imediato (usado após gravações bem-sucedidas). */
 function schedulePollSoon() {
@@ -147,16 +185,28 @@ function schedulePollSoon() {
 
 async function runPoll() {
   if (pollInFlight || stoppedByAuth || registry.size === 0) return;
+  if (isTabHidden() || isUserIdle()) {
+    // Não agenda o próximo ciclo: resumeIfPaused() retoma quando a aba volta ou há interação.
+    pausedForInactivity = true;
+    return;
+  }
   pollInFlight = true;
   const names = Array.from(registry.keys());
+  const knownVersions = names.map((n) => registry.get(n)?.version || "");
   try {
-    const resp = await apiGet(`/api/data-bundle?names=${encodeURIComponent(names.join(","))}`);
+    const resp = await apiGet(
+      `/api/data-bundle?names=${encodeURIComponent(names.join(","))}` +
+      `&v=${encodeURIComponent(knownVersions.join(","))}`
+    );
     const collections: Record<string, any[]> = resp?.collections || {};
+    const versions: Record<string, string> = resp?.versions || {};
     for (const name of names) {
       const entry = registry.get(name);
       if (!entry) continue;
       const items = collections[name];
-      if (!Array.isArray(items)) continue; // coleção negada/com erro: mantém estado atual
+      // Ausente = versão inalterada (nada a fazer) ou coleção negada/com erro (mantém estado).
+      if (!Array.isArray(items)) continue;
+      if (versions[name]) entry.version = versions[name];
       const serialized = JSON.stringify(items);
       if (serialized !== entry.lastSerialized) {
         entry.lastSerialized = serialized;
@@ -198,6 +248,8 @@ async function runPoll() {
 export function restartDataSync() {
   stoppedByAuth = false;
   consecutiveFailures = 0;
+  pausedForInactivity = false;
+  lastActivityAt = Date.now();
   if (registry.size > 0) schedulePoll(0);
 }
 
@@ -216,7 +268,7 @@ export const subscribeCollection = (
 
   let entry = registry.get(collectionName);
   if (!entry) {
-    entry = { subscribers: [], lastSerialized: "", localStorageKey };
+    entry = { subscribers: [], lastSerialized: "", localStorageKey, version: "" };
     registry.set(collectionName, entry);
   }
   if (localStorageKey && !entry.localStorageKey) entry.localStorageKey = localStorageKey;
