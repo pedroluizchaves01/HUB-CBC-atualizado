@@ -2,7 +2,7 @@
 // Camada de dados do "backend guardião": todo CRUD do Firestore passa por aqui, via Admin SDK.
 // O frontend NUNCA acessa o Firestore direto — chama os endpoints /api/data/* que usam este módulo.
 
-import { getAdminDb } from "./db";
+import { getAdminDb, listNotificationsForRecipient } from "./db";
 
 // Allowlist de coleções permitidas. Qualquer coleção fora desta lista é rejeitada,
 // para o endpoint genérico não virar um acesso arbitrário ao banco.
@@ -132,14 +132,16 @@ export async function listCollectionForUser(collection: string, req: Requester):
     throw new Error("Acesso negado.");
   }
 
-  const all = await listCollection(collection);
-
   // 'notifications' é sempre filtrada pelo destinatário, mesmo para admin — cada um só
-  // enxerga as próprias notificações, nunca as dos outros dois sócios.
+  // enxerga as próprias notificações, nunca as dos outros dois sócios. O filtro roda no
+  // Postgres (índice em recipientUserId), limitado às 100 mais recentes.
   if (collection === "notifications") {
     if (!req.userId) return [];
-    return all.filter((n: any) => n.recipientUserId === req.userId);
+    const rows = await listNotificationsForRecipient(req.userId, 100);
+    return rows.map((r) => ({ id: r.id, ...r.data }));
   }
+
+  const all = await listCollection(collection);
 
   if (req.role !== "client") return all;
 

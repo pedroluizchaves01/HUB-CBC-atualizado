@@ -30,6 +30,76 @@ function tableName(collection: string): string {
   return `c_${collection.toLowerCase()}`;
 }
 
+// ---------------------------------------------------------------------------
+// Cache de coleções em memória
+// ---------------------------------------------------------------------------
+// Antes, cada polling do frontend (a cada 8s, por aba) relia TODAS as tabelas inteiras
+// no Postgres — centenas de GB de tráfego de saída do Supabase por mês para ~8 MB de
+// dados. Agora a leitura completa de uma coleção fica em memória e só volta ao banco quando:
+//   (a) alguma gravação nesta mesma instância altera a coleção (invalidação imediata), ou
+//   (b) passa CACHE_TTL_MS (cobre alterações feitas fora do backend: seeds, painel do Supabase).
+//
+// PREMISSA: o backend roda em UMA instância (Coolify). Com várias réplicas, cada uma teria
+// o próprio cache e veria gravações das outras só após o TTL.
+
+const CACHE_TTL_MS = 5 * 60_000;
+// Identifica este processo: versões de antes de um restart nunca coincidem com as novas.
+const BOOT_ID = Date.now().toString(36);
+
+interface CacheEntry {
+  rows: Array<{ id: string; data: any }>;
+  loadedAt: number;
+}
+
+const collectionCache = new Map<string, CacheEntry>();
+const inflightLoads = new Map<string, Promise<CacheEntry>>();
+const collectionVersions = new Map<string, number>();
+
+function bumpVersion(collection: string): void {
+  collectionVersions.set(collection, (collectionVersions.get(collection) || 0) + 1);
+}
+
+/** Descarta o cache de uma coleção após uma gravação e avança sua versão. */
+function invalidateCollection(collection: string): void {
+  collectionCache.delete(collection);
+  bumpVersion(collection);
+}
+
+/**
+ * Versão atual de uma coleção. Muda a cada gravação e a cada recarga pelo TTL.
+ * O /api/data-bundle usa isso para não reenviar coleções que o navegador já tem.
+ */
+export function getCollectionVersion(collection: string): string {
+  return `${BOOT_ID}.${collectionVersions.get(collection) || 0}`;
+}
+
+async function loadCollectionRows(collection: string): Promise<CacheEntry> {
+  const cached = collectionCache.get(collection);
+  if (cached && Date.now() - cached.loadedAt < CACHE_TTL_MS) return cached;
+
+  // Várias requisições simultâneas pedindo a mesma coleção compartilham UMA consulta.
+  const pending = inflightLoads.get(collection);
+  if (pending) return pending;
+
+  const versionAtStart = collectionVersions.get(collection) || 0;
+  const load = (async () => {
+    await ensureSchema();
+    const t = tableName(collection);
+    const r = await getPool().query(`SELECT id, data FROM ${t}`);
+    const entry: CacheEntry = { rows: r.rows, loadedAt: Date.now() };
+    // Só guarda se ninguém gravou na coleção durante a consulta (evita cache velho).
+    if ((collectionVersions.get(collection) || 0) === versionAtStart) {
+      if (cached) bumpVersion(collection); // recarga pelo TTL: o conteúdo pode ter mudado
+      collectionCache.set(collection, entry);
+    }
+    return entry;
+  })().finally(() => {
+    inflightLoads.delete(collection);
+  });
+  inflightLoads.set(collection, load);
+  return load;
+}
+
 function getPool(): Pool {
   if (pool) return pool;
   const url = process.env.DATABASE_URL;
@@ -39,7 +109,8 @@ function getPool(): Pool {
     // Supabase exige TLS; não validamos a CA (o pooler usa cert gerenciado).
     ssl: { rejectUnauthorized: false },
     max: 8,
-    idleTimeoutMillis: 30_000,
+    // Mantém conexões ociosas por 5 min para não reabrir sessão no pooler a cada ciclo.
+    idleTimeoutMillis: 300_000,
     connectionTimeoutMillis: 15_000,
     // O pooler do Supabase em modo "transaction" não suporta prepared statements
     // nomeados persistentes; o driver `pg` usa statements sem nome por padrão, então
@@ -69,7 +140,22 @@ export function ensureSchema(): Promise<void> {
              data JSONB NOT NULL DEFAULT '{}'::jsonb
            )`
         );
+        // Segurança: tabelas nunca ficam expostas à API pública do Supabase (PostgREST).
+        // O backend conecta como dono das tabelas e não é afetado pelo RLS.
+        await client.query(`ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`);
+        await client.query(
+          `DO $$ BEGIN
+             IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+               EXECUTE 'REVOKE ALL ON ${t} FROM anon, authenticated';
+             END IF;
+           END $$`
+        );
       }
+      // Notificações são sempre lidas por destinatário (ver listNotificationsForRecipient).
+      await client.query(
+        `CREATE INDEX IF NOT EXISTS idx_notifications_recipient
+           ON c_notifications ((data->>'recipientUserId'))`
+      );
     } finally {
       client.release();
     }
@@ -130,12 +216,14 @@ class DocRef {
         [this.id, JSON.stringify(payload)]
       );
     }
+    invalidateCollection(this.collection);
   }
 
   async delete(): Promise<void> {
     await ensureSchema();
     const t = tableName(this.collection);
     await getPool().query(`DELETE FROM ${t} WHERE id = $1`, [this.id]);
+    invalidateCollection(this.collection);
   }
 }
 
@@ -149,14 +237,17 @@ class CollectionRef {
   }
 
   async get(): Promise<{ docs: QueryDocSnapshot[]; empty: boolean }> {
-    await ensureSchema();
-    const t = tableName(this.collection);
-    const r = await getPool().query(`SELECT id, data FROM ${t}`);
-    const docs = r.rows.map((row) => ({
-      id: row.id,
-      data: () => row.data,
-      ref: new DocRef(this.collection, row.id),
-    }));
+    tableName(this.collection); // valida o nome antes de usar o cache
+    const { rows } = await loadCollectionRows(this.collection);
+    // Cada chamador recebe uma CÓPIA: nenhum código altera o cache por referência.
+    const docs = rows.map((row) => {
+      const data = structuredClone(row.data);
+      return {
+        id: row.id,
+        data: () => data,
+        ref: new DocRef(this.collection, row.id),
+      };
+    });
     return { docs, empty: docs.length === 0 };
   }
 
@@ -212,6 +303,7 @@ class Batch {
         }
       }
       await client.query("COMMIT");
+      for (const c of new Set(this.ops.map((o) => o.ref.collection))) invalidateCollection(c);
     } catch (e) {
       await client.query("ROLLBACK");
       throw e;
@@ -228,6 +320,45 @@ class Database {
   batch(): Batch {
     return new Batch();
   }
+}
+
+/**
+ * Notificações de UM destinatário, filtradas no próprio Postgres (com índice), mais
+ * recentes primeiro. Evita baixar as notificações de todos os usuários a cada polling.
+ * Não passa pelo cache de coleção: a consulta já é pequena e indexada.
+ */
+export async function listNotificationsForRecipient(
+  recipientUserId: string,
+  limit = 100,
+): Promise<Array<{ id: string; data: any }>> {
+  await ensureSchema();
+  const r = await getPool().query(
+    `SELECT id, data FROM c_notifications
+      WHERE data->>'recipientUserId' = $1
+      ORDER BY CASE WHEN data->>'createdAt' ~ '^\\d{4}-\\d{2}-\\d{2}'
+                    THEN data->>'createdAt' END DESC NULLS LAST
+      LIMIT $2`,
+    [recipientUserId, limit]
+  );
+  return r.rows;
+}
+
+/**
+ * Limpeza periódica: remove notificações lidas há mais de 30 dias e não lidas há mais
+ * de 90 dias. Retorna quantas foram apagadas.
+ */
+export async function purgeOldNotifications(): Promise<number> {
+  await ensureSchema();
+  const r = await getPool().query(
+    `DELETE FROM c_notifications
+      WHERE (data->>'createdAt') ~ '^\\d{4}-\\d{2}-\\d{2}'
+        AND (
+          ((data->>'read')::boolean IS TRUE AND (data->>'createdAt')::timestamptz < now() - interval '30 days')
+          OR (data->>'createdAt')::timestamptz < now() - interval '90 days'
+        )`
+  );
+  if ((r.rowCount || 0) > 0) invalidateCollection("notifications");
+  return r.rowCount || 0;
 }
 
 const singletonDb = new Database();
