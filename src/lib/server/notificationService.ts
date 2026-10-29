@@ -49,6 +49,22 @@ function getEntityLabel(collection: string, data: any): string {
   return COLLECTION_LABELS[collection] || collection;
 }
 
+// Atualizações seguidas do mesmo registro pelo mesmo autor (ex.: salvamento automático)
+// geram UMA notificação por janela, não uma por salvamento. Criação e exclusão sempre notificam.
+const UPDATE_NOTIFY_WINDOW_MS = 10 * 60_000;
+const lastUpdateNotified = new Map<string, number>();
+
+function shouldThrottleUpdate(key: string): boolean {
+  const now = Date.now();
+  const last = lastUpdateNotified.get(key);
+  if (last !== undefined && now - last < UPDATE_NOTIFY_WINDOW_MS) return true;
+  lastUpdateNotified.set(key, now);
+  if (lastUpdateNotified.size > 5000) {
+    for (const [k, t] of lastUpdateNotified) if (now - t >= UPDATE_NOTIFY_WINDOW_MS) lastUpdateNotified.delete(k);
+  }
+  return false;
+}
+
 interface Actor {
   id: string;
   name: string;
@@ -92,6 +108,7 @@ export async function notifyChange(
       if (assigneeUser) recipients.push(assigneeUser);
     }
     if (recipients.length === 0) return;
+    if (action === "update" && shouldThrottleUpdate(`${actor.id}|${collection}|${entityId}|${assigneeId || ""}`)) return;
 
     for (const recipient of recipients) {
       const isAssignee = assigneeId !== null && recipient.id === assigneeId && action !== "delete";
