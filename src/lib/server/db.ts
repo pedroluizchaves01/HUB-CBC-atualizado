@@ -44,7 +44,8 @@ function tableName(collection: string): string {
 //
 // Rede de segurança: se a checagem de versões falhar (ex.: tabela ausente), cada coleção
 // volta a ser relida no máximo a cada MAX_CACHE_AGE_MS. Gravações feitas pelo próprio
-// backend continuam invalidando o cache na hora, em qualquer caso.
+// backend atualizam o cache na hora (no lugar, sem reler a tabela — ver applyLocalWrite;
+// na dúvida, descartam o cache), em qualquer caso.
 //
 // PREMISSA: o backend roda em UMA instância (Coolify). Mesmo com mais de uma, as versões
 // do banco fariam cada réplica perceber as gravações das outras em até 30 s.
@@ -80,6 +81,77 @@ function bumpVersion(collection: string): void {
 function invalidateCollection(collection: string): void {
   collectionCache.delete(collection);
   bumpVersion(collection);
+}
+
+// Quanto cada gravação avança a versão da tabela (ver applyLocalWrite).
+const UPSERT_VERSION_STEP = 2;
+const DELETE_VERSION_STEP = 1;
+
+/**
+ * Após gravar/excluir UM documento, atualiza o cache em memória no lugar em vez de
+ * descartá-lo — assim a próxima leitura não precisa baixar a tabela inteira do banco
+ * (era a principal fonte de egress: cada salvamento automático de um projeto relia
+ * toda a c_arch_projects).
+ *
+ * Só aplica no lugar se a versão da tabela no banco avançou EXATAMENTE o que esta
+ * gravação avança (`versionStep`) desde a leitura em cache — ou seja, a única alteração
+ * foi esta. Atenção: um upsert (INSERT ... ON CONFLICT DO UPDATE) dispara os gatilhos de
+ * comando de INSERT E de UPDATE, então avança 2; um DELETE avança 1. Qualquer outra situação
+ * (gravação concorrente, alteração externa, cache trocado durante a espera, checagem
+ * falhou) descarta o cache, como antes. A versão para os navegadores só avança depois
+ * que o cache já reflete a gravação, para nenhum navegador guardar dado velho com
+ * a versão nova.
+ *
+ * change = null → exclusão; senão o payload gravado (merge = mescla rasa, igual ao `||` do JSONB).
+ */
+async function applyLocalWrite(
+  collection: string,
+  id: string,
+  change: { payload: any; merge: boolean } | null,
+  versionStep: number,
+): Promise<void> {
+  const cached = collectionCache.get(collection);
+  try {
+    if (!cached || cached.dbVersion === null) {
+      collectionCache.delete(collection);
+      return;
+    }
+    let newVersion: string | null = null;
+    try {
+      const v = await getPool().query(
+        `SELECT version::text AS version FROM ${VERSIONS_TABLE} WHERE table_name = $1`,
+        [tableName(collection)]
+      );
+      newVersion = v.rows[0]?.version ?? null;
+    } catch { /* sem versão confiável: descarta abaixo */ }
+
+    if (
+      newVersion === null ||
+      collectionCache.get(collection) !== cached ||
+      BigInt(newVersion) !== BigInt(cached.dbVersion) + BigInt(versionStep)
+    ) {
+      collectionCache.delete(collection);
+      return;
+    }
+
+    let rows: Array<{ id: string; data: any }>;
+    if (change === null) {
+      rows = cached.rows.filter((r) => r.id !== id);
+    } else {
+      // Mesmo formato que o Postgres devolveria (undefined some, Date vira string...).
+      const stored = JSON.parse(JSON.stringify(change.payload));
+      const idx = cached.rows.findIndex((r) => r.id === id);
+      const data = change.merge && idx >= 0 ? { ...cached.rows[idx].data, ...stored } : stored;
+      rows = cached.rows.slice();
+      if (idx >= 0) rows[idx] = { id, data };
+      else rows.push({ id, data });
+    }
+    collectionCache.set(collection, { rows, loadedAt: cached.loadedAt, dbVersion: newVersion });
+  } catch {
+    collectionCache.delete(collection);
+  } finally {
+    bumpVersion(collection);
+  }
 }
 
 /**
@@ -282,8 +354,17 @@ class DocRef {
   constructor(public readonly collection: string, public id: string) {}
 
   async get(): Promise<DocSnapshot> {
-    await ensureSchema();
     const t = tableName(this.collection);
+    // Coleção já em cache e em dia: responde da memória (sem ida ao banco). Antes, cada
+    // gravação pela API lia o documento atual direto do banco.
+    const cached = collectionCache.get(this.collection);
+    if (cached && (await isCacheFresh(this.collection, cached))) {
+      const row = cached.rows.find((r) => r.id === this.id);
+      if (!row) return { id: this.id, exists: false, data: () => undefined };
+      const data = structuredClone(row.data);
+      return { id: this.id, exists: true, data: () => data };
+    }
+    await ensureSchema();
     const r = await getPool().query(`SELECT data FROM ${t} WHERE id = $1`, [this.id]);
     if (r.rowCount === 0) {
       return { id: this.id, exists: false, data: () => undefined };
@@ -311,14 +392,14 @@ class DocRef {
         [this.id, JSON.stringify(payload)]
       );
     }
-    invalidateCollection(this.collection);
+    await applyLocalWrite(this.collection, this.id, { payload, merge }, UPSERT_VERSION_STEP);
   }
 
   async delete(): Promise<void> {
     await ensureSchema();
     const t = tableName(this.collection);
     await getPool().query(`DELETE FROM ${t} WHERE id = $1`, [this.id]);
-    invalidateCollection(this.collection);
+    await applyLocalWrite(this.collection, this.id, null, DELETE_VERSION_STEP);
   }
 }
 

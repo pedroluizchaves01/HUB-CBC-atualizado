@@ -225,6 +225,22 @@ app.get("/api/data/:collection", requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * Uma gravação em arch_projects mudou algo que as cobranças por etapa olham (estado das
+ * etapas ou o vínculo com obra/cliente)? A gravação é uma mescla rasa: campo ausente no
+ * payload = campo inalterado.
+ */
+function phaseStatesChanged(existing: any, payload: any): boolean {
+  if (!existing || !payload || typeof payload !== "object") return true;
+  for (const k of ["obraId", "clientId"]) {
+    if (k in payload && payload[k] !== existing[k]) return true;
+  }
+  if (!("phases" in payload)) return false;
+  const states = (phases: any) =>
+    JSON.stringify(Array.isArray(phases) ? phases.map((p: any) => [p?.key, p?.state]) : null);
+  return states(payload.phases) !== states(existing.phases);
+}
+
 app.put("/api/data/:collection/:id", requireAuth, fileUploadJson, async (req, res) => {
   try {
     const u = req.sessionUser!;
@@ -253,7 +269,8 @@ app.put("/api/data/:collection/:id", requireAuth, fileUploadJson, async (req, re
     }
     await dataService.setDocById(req.params.collection, req.params.id, payload);
     // Etapa de projeto mudou (aprovada/entregue)? Reavalia na hora as cobranças que dependem dela.
-    if (req.params.collection === "arch_projects") void cora.runBillingSweep();
+    // Só quando o estado de alguma etapa mudou: salvar respostas de briefing não afeta cobranças.
+    if (req.params.collection === "arch_projects" && phaseStatesChanged(existing, payload)) void cora.runBillingSweep();
     void writeAuditLog({
       actorId: u.id, actorRole: u.role, action: existing ? "update" : "create",
       collection: req.params.collection, docId: req.params.id, ip: req.ip,

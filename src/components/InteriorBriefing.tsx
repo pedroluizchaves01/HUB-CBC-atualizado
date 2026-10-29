@@ -63,6 +63,8 @@ function PageTitle({ eyebrow, title, subtitle }: { eyebrow: string; title: strin
 // Salvamento automático
 // ===========================================================================
 
+const AUTOSAVE_DELAY_MS = 5000;
+
 function useAutosave(onSave: () => Promise<any> | void, deps: unknown[], enabled: boolean) {
   const [state, setState] = useState<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle');
   const first = useRef(true);
@@ -81,9 +83,18 @@ function useAutosave(onSave: () => Promise<any> | void, deps: unknown[], enabled
     if (!enabled) return;
     setState('pending');
     if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(flush, 1200);
+    // 5 s sem digitar (era 1,2 s): cada salvamento grava o projeto inteiro no banco.
+    timer.current = setTimeout(flush, AUTOSAVE_DELAY_MS);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
+
+  // Aba escondida/fechada: grava o que estiver pendente.
+  useEffect(() => {
+    const onHide = () => { if (document.visibilityState === 'hidden' && timer.current) void flush(); };
+    document.addEventListener('visibilitychange', onHide);
+    return () => document.removeEventListener('visibilitychange', onHide);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Ao sair da página, grava o que estiver pendente.
   useEffect(() => () => { if (timer.current) { clearTimeout(timer.current); void saveRef.current(); } }, []);
